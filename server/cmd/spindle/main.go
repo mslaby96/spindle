@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,11 +11,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/mslaby96/spindle/server/internal/auth"
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
 )
 
@@ -35,8 +39,10 @@ func main() {
 		err = serve(cfg, log)
 	case "healthcheck":
 		err = healthcheck(cfg)
+	case "reset-password":
+		err = resetPassword(cfg, os.Args[2:])
 	default:
-		err = fmt.Errorf("unknown command %q (expected serve or healthcheck)", cmd)
+		err = fmt.Errorf("unknown command %q (expected serve, healthcheck or reset-password)", cmd)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -57,9 +63,24 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 	defer d.Close()
 
+	authSvc := auth.New(d)
+	code, err := authSvc.PrepareSetup(ctx)
+	if err != nil {
+		return err
+	}
+	if code != "" {
+		log.Info("no account yet: open Spindle in the browser and enter this setup code", "code", code)
+	}
+
 	srv := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           httpapi.New(d, log),
+		Addr: cfg.ListenAddr,
+		Handler: httpapi.New(httpapi.Deps{
+			Config:  cfg,
+			DB:      d,
+			Auth:    authSvc,
+			Devices: devices.NewStore(d),
+			Log:     log,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)
@@ -94,5 +115,28 @@ func healthcheck(cfg *config.Config) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unhealthy: %s", resp.Status)
 	}
+	return nil
+}
+
+func resetPassword(cfg *config.Config, args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: spindle reset-password <username>")
+	}
+	ctx := context.Background()
+	d, err := db.Open(ctx, filepath.Join(cfg.DataDir, "spindle.db"))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+
+	fmt.Fprint(os.Stderr, "New password: ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return err
+	}
+	if err := auth.New(d).ResetPassword(ctx, args[0], strings.TrimRight(line, "\r\n")); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, "Password changed. All sessions were logged out.")
 	return nil
 }
