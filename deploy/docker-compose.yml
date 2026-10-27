@@ -1,0 +1,15 @@
+services:
+  spindle:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: spindle
+    restart: unless-stopped
+    ports:
+      - "${SPINDLE_PORT:-8080}:8080"
+    env_file: .env
+    volumes:
+      - spindle-data:/data
+
+volumes:
+  spindle-data:

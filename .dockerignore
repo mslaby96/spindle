@@ -1,0 +1,6 @@
+.git
+data
+deploy/.env
+web/node_modules
+docs
+firmware
