@@ -1,9 +1,15 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import type { CatalogMode, Tag } from "./client";
+
 export type TagSeen = { device_id: number; uid: string };
+export type CatalogTag = { device_id: number; tag: Tag; new: boolean };
 
 export const nowPlayingKey = ["now-playing"] as const;
+export const catalogModeKey = ["catalog", "mode"] as const;
+export const catalogCurrentKey = ["catalog", "current"] as const;
+export const unassignedKey = ["tags", "unassigned"] as const;
 
 const RETRY_MS = 3000;
 
@@ -16,14 +22,24 @@ export function useLiveEvents(enabled: boolean) {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
 
+    const on = <T,>(type: string, handle: (data: T) => void) =>
+      source!.addEventListener(type, (e) => handle(JSON.parse((e as MessageEvent).data) as T));
+
     const connect = () => {
       source = new EventSource("/api/events");
-      source.addEventListener("tag_seen", (e) => {
-        const data = JSON.parse((e as MessageEvent).data) as TagSeen;
-        queryClient.setQueryData<Record<number, TagSeen>>(nowPlayingKey, (prev) => ({
-          ...prev,
-          [data.device_id]: data,
-        }));
+      on<TagSeen>("tag_seen", (data) =>
+        queryClient.setQueryData<Record<number, TagSeen>>(nowPlayingKey, (prev) => ({ ...prev, [data.device_id]: data })),
+      );
+      on<CatalogMode>("catalog_mode", (data) => queryClient.setQueryData(catalogModeKey, data));
+      on<CatalogTag>("catalog_tag", (data) => {
+        queryClient.setQueryData(catalogCurrentKey, data);
+        queryClient.invalidateQueries({ queryKey: unassignedKey });
+      });
+      on<Tag>("tag_assigned", (tag) => {
+        queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
+          prev && prev.tag.uid === tag.uid ? { ...prev, tag } : prev,
+        );
+        queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
       source.onerror = () => {
         if (source?.readyState === EventSource.CLOSED && !stopped) {

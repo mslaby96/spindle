@@ -7,8 +7,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T = void>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T = void>(
+  path: string,
+  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
+): Promise<T> {
   const res = await fetch(path, {
+    signal: init.signal,
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
     headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -39,3 +43,57 @@ export type Device = {
 
 export const meKey = ["me"] as const;
 export const setupKey = ["setup"] as const;
+
+export type Album = {
+  id: number;
+  discogs_master_id?: number;
+  discogs_release_id?: number;
+  title: string;
+  artist: string;
+  year?: number;
+  genres: string[];
+  styles: string[];
+  cover_color?: string;
+  has_cover: boolean;
+  duration_sec?: number;
+  duration_status: string;
+};
+
+export type Release = {
+  id: number;
+  album_id: number;
+  discogs_release_id: number;
+  title: string;
+  country?: string;
+  year?: number;
+  label?: string;
+  catno?: string;
+  format?: string;
+};
+
+export type Tag = { id: number; uid: string; album?: Album; release?: Release; created_at: number };
+
+export type SearchResult = {
+  kind: "master" | "release";
+  id: number;
+  artist: string;
+  title: string;
+  year?: string;
+  country?: string;
+  format?: string[];
+  thumb?: string;
+  catno?: string;
+};
+
+export type Version = {
+  id: number;
+  title: string;
+  label: string;
+  catno: string;
+  country: string;
+  released: string;
+  format: string;
+  thumb: string;
+};
+
+export type CatalogMode = { active: boolean; until?: string };

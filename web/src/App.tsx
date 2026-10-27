@@ -3,6 +3,7 @@ import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-rou
 
 import { api, ApiError, meKey, setupKey, type Me } from "./api/client";
 import { useLiveEvents } from "./api/events";
+import { CatalogPage } from "./pages/CatalogPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NowPlayingPage } from "./pages/NowPlayingPage";
@@ -16,6 +17,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAccount />}>
         <Route index element={<NowPlayingPage />} />
+        <Route path="catalog" element={<CatalogPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
@@ -52,6 +54,7 @@ function Layout({ me }: { me: Me }) {
           <NavLink to="/" end>
             Now playing
           </NavLink>
+          <NavLink to="/catalog">Catalogue</NavLink>
           <NavLink to="/devices">Stands</NavLink>
           <NavLink to="/settings">{me.username}</NavLink>
         </nav>

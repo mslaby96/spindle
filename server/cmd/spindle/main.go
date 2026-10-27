@@ -97,6 +97,13 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 		resolver.LastFM = lastfm.New(cfg.LastFMKey, userAgent)
 	}
 	go resolver.Run(ctx)
+	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
+	router := &presence.Router{
+		Mode:      mode,
+		Catalog:   mode,
+		Sessions:  presence.NewAnnouncer(bus),
+		Tolerance: cfg.Sessions.AbsenceTolerance,
+	}
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: httpapi.New(httpapi.Deps{
@@ -105,11 +112,12 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Auth:      authSvc,
 			Devices:   devices.NewStore(d),
 			Catalog:   catalogSvc,
+			Mode:      mode,
 			Durations: resolver,
 			Discogs:   discogsClient,
 			Covers:    coverStore,
 			Bus:       bus,
-			Presence:  presence.NewAnnouncer(bus),
+			Presence:  router,
 			Log:       log,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

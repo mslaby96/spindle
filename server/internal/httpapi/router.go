@@ -25,6 +25,7 @@ type Deps struct {
 	Auth      *auth.Service
 	Devices   *devices.Store
 	Catalog   *catalog.Service
+	Mode      *catalog.Mode
 	Discogs   *discogs.Client
 	Covers    *covers.Store
 	Durations *duration.Resolver
@@ -59,6 +60,12 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))
 	s.mux.Handle("GET /api/albums/{id}/cover", s.user(s.cover))
 	s.mux.Handle("PUT /api/albums/{id}/duration", s.user(s.setAlbumDuration))
+
+	s.mux.Handle("GET /api/catalog/mode", s.user(s.catalogMode))
+	s.mux.Handle("PUT /api/catalog/mode", s.user(s.setCatalogMode))
+	s.mux.Handle("GET /api/tags/unassigned", s.user(s.unassignedTags))
+	s.mux.Handle("GET /api/tags/{uid}", s.user(s.tagByUID))
+	s.mux.Handle("POST /api/tags/{uid}/assign", s.user(s.assignTag))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
 
