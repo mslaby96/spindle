@@ -17,6 +17,8 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
 type testEnv struct {
@@ -37,12 +39,15 @@ func newEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bus := events.NewBus()
 	s := New(Deps{
-		Config:  cfg,
-		DB:      d,
-		Auth:    a,
-		Devices: devices.NewStore(d),
-		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Config:   cfg,
+		DB:       d,
+		Auth:     a,
+		Devices:  devices.NewStore(d),
+		Bus:      bus,
+		Presence: presence.NewAnnouncer(bus),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	hs := httptest.NewServer(s)
 	t.Cleanup(func() { hs.Close(); d.Close() })

@@ -10,14 +10,18 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
 type Deps struct {
-	Config  *config.Config
-	DB      *db.DB
-	Auth    *auth.Service
-	Devices *devices.Store
-	Log     *slog.Logger
+	Config   *config.Config
+	DB       *db.DB
+	Auth     *auth.Service
+	Devices  *devices.Store
+	Bus      *events.Bus
+	Presence presence.Handler
+	Log      *slog.Logger
 }
 
 type Server struct {
@@ -40,6 +44,9 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/devices", s.user(s.listDevices))
 	s.mux.Handle("POST /api/devices", s.user(s.createDevice))
 	s.mux.Handle("DELETE /api/devices/{id}", s.user(s.revokeDevice))
+	s.mux.Handle("GET /api/events", s.user(s.events))
+
+	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
 	return s
 }
 

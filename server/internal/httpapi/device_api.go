@@ -1,0 +1,88 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/hex"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/presence"
+)
+
+const reportInterval = 1500 * time.Millisecond
+
+type deviceCtxKey struct{}
+
+func (s *Server) device(h http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "missing device token")
+			return
+		}
+		dev, err := s.Devices.Authenticate(r.Context(), strings.TrimSpace(token))
+		if errors.Is(err, devices.ErrInvalidToken) {
+			writeError(w, http.StatusUnauthorized, "invalid device token")
+			return
+		}
+		if err != nil {
+			s.internal(w, err)
+			return
+		}
+		h(w, r.WithContext(context.WithValue(r.Context(), deviceCtxKey{}, dev)))
+	})
+}
+
+type reportRequest struct {
+	UID *string `json:"uid"`
+	FW  string  `json:"fw"`
+	Seq int64   `json:"seq"`
+}
+
+type reportResponse struct {
+	LED        presence.LED `json:"led"`
+	IntervalMS int64        `json:"interval_ms"`
+}
+
+func (s *Server) report(w http.ResponseWriter, r *http.Request) {
+	dev := r.Context().Value(deviceCtxKey{}).(devices.Device)
+	var req reportRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	uid := ""
+	if req.UID != nil {
+		var ok bool
+		if uid, ok = normalizeUID(*req.UID); !ok {
+			writeError(w, http.StatusBadRequest, "uid must be 4 to 10 bytes of hex")
+			return
+		}
+	}
+	if err := s.Devices.Touch(r.Context(), dev.ID, req.FW); err != nil {
+		s.internal(w, err)
+		return
+	}
+	led, err := s.Presence.Observe(r.Context(), presence.Observation{
+		UserID:   dev.UserID,
+		DeviceID: dev.ID,
+		UID:      uid,
+		At:       time.Now(),
+	})
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, reportResponse{LED: led, IntervalMS: reportInterval.Milliseconds()})
+}
+
+func normalizeUID(s string) (string, bool) {
+	s = strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), ":", ""))
+	b, err := hex.DecodeString(s)
+	if err != nil || len(b) < 4 || len(b) > 10 {
+		return "", false
+	}
+	return s, true
+}

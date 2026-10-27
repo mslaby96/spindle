@@ -19,7 +19,9 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
+	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
 func main() {
@@ -72,14 +74,17 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 		log.Info("no account yet: open Spindle in the browser and enter this setup code", "code", code)
 	}
 
+	bus := events.NewBus()
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: httpapi.New(httpapi.Deps{
-			Config:  cfg,
-			DB:      d,
-			Auth:    authSvc,
-			Devices: devices.NewStore(d),
-			Log:     log,
+			Config:   cfg,
+			DB:       d,
+			Auth:     authSvc,
+			Devices:  devices.NewStore(d),
+			Bus:      bus,
+			Presence: presence.NewAnnouncer(bus),
+			Log:      log,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
