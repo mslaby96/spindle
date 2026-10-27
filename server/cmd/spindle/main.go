@@ -16,13 +16,18 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
+	"github.com/mslaby96/spindle/server/internal/catalog"
 	"github.com/mslaby96/spindle/server/internal/config"
+	"github.com/mslaby96/spindle/server/internal/covers"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
+	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
+
+const userAgent = "Spindle/0.1 +https://github.com/mslaby96/spindle"
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -75,6 +80,8 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 
 	bus := events.NewBus()
+	discogsClient := discogs.New(cfg.DiscogsToken, userAgent)
+	coverStore := &covers.Store{Dir: filepath.Join(cfg.DataDir, "covers")}
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: httpapi.New(httpapi.Deps{
@@ -82,6 +89,9 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			DB:       d,
 			Auth:     authSvc,
 			Devices:  devices.NewStore(d),
+			Catalog:  &catalog.Service{DB: d, Discogs: discogsClient, Covers: coverStore},
+			Discogs:  discogsClient,
+			Covers:   coverStore,
 			Bus:      bus,
 			Presence: presence.NewAnnouncer(bus),
 			Log:      log,

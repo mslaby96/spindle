@@ -1,0 +1,119 @@
+{
+ "id": 1873013,
+ "year": 1973,
+ "artists": [
+  {
+   "name": "Pink Floyd",
+   "anv": "",
+   "join": "",
+   "id": 45467
+  }
+ ],
+ "labels": [
+  {
+   "name": "Harvest",
+   "catno": "SHVL 804",
+   "id": 2564
+  },
+  {
+   "name": "Harvest",
+   "catno": "1E 064 o 05249",
+   "id": 2564
+  }
+ ],
+ "formats": [
+  {
+   "name": "Vinyl",
+   "qty": "1",
+   "descriptions": [
+    "LP",
+    "Album",
+    "Stereo"
+   ],
+   "text": "Gatefold Sleeve, 1st Pressing"
+  }
+ ],
+ "master_id": 10362,
+ "title": "The Dark Side Of The Moon",
+ "country": "UK",
+ "released": "1973-03-24",
+ "genres": [
+  "Rock"
+ ],
+ "styles": [
+  "Prog Rock",
+  "Psychedelic Rock"
+ ],
+ "tracklist": [
+  {
+   "position": "A1",
+   "type_": "track",
+   "title": "Speak To Me",
+   "duration": ""
+  },
+  {
+   "position": "A2",
+   "type_": "track",
+   "title": "Breathe In The Air",
+   "duration": ""
+  },
+  {
+   "position": "A3",
+   "type_": "track",
+   "title": "On The Run",
+   "duration": ""
+  },
+  {
+   "position": "A4",
+   "type_": "track",
+   "title": "Time",
+   "duration": ""
+  },
+  {
+   "position": "A5",
+   "type_": "track",
+   "title": "The Great Gig In The Sky",
+   "duration": ""
+  },
+  {
+   "position": "B1",
+   "type_": "track",
+   "title": "Money",
+   "duration": ""
+  },
+  {
+   "position": "B2",
+   "type_": "track",
+   "title": "Us And Them",
+   "duration": ""
+  },
+  {
+   "position": "B3",
+   "type_": "track",
+   "title": "Any Colour You Like",
+   "duration": ""
+  },
+  {
+   "position": "B4",
+   "type_": "track",
+   "title": "Brain Damage",
+   "duration": ""
+  },
+  {
+   "position": "B5",
+   "type_": "track",
+   "title": "Eclipse",
+   "duration": ""
+  }
+ ],
+ "images": [
+  {
+   "type": "primary",
+   "uri": "https://i.discogs.com/9TFRqx1yW7EkC71l42QR2UEjnSWzcXT5TGDsfWxT4xE/rs:fit/g:sm/q:90/h:600/w:597/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "resource_url": "https://i.discogs.com/9TFRqx1yW7EkC71l42QR2UEjnSWzcXT5TGDsfWxT4xE/rs:fit/g:sm/q:90/h:600/w:597/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "uri150": "https://i.discogs.com/r9Anyhs7ZGkP94yyij_JBYE-fgH7Cl4j6fG-OP1QLdc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "width": 597,
+   "height": 600
+  }
+ ]
+}

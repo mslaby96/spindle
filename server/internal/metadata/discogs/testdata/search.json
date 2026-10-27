@@ -1,0 +1,174 @@
+{
+ "pagination": {
+  "page": 1,
+  "pages": 1,
+  "per_page": 30,
+  "items": 5
+ },
+ "results": [
+  {
+   "country": "UK",
+   "year": "1973",
+   "format": [
+    "Vinyl",
+    "LP",
+    "Album",
+    "Stereo"
+   ],
+   "label": [
+    "Harvest",
+    "Harvest",
+    "EMI",
+    "E.M.I. Records",
+    "The Gramophone Co. Ltd.",
+    "Abbey Road Studios",
+    "The Gramophone Co. Ltd.",
+    "World Copyrights Ltd.",
+    "The Gramophone Co. Ltd.",
+    "EMI Records",
+    "Garrod & Lofthouse Ltd.",
+    "Garrod & Lofthouse Ltd."
+   ],
+   "type": "master",
+   "genre": [
+    "Rock"
+   ],
+   "style": [
+    "Prog Rock",
+    "Psychedelic Rock"
+   ],
+   "id": 10362,
+   "master_id": 10362,
+   "catno": "SHVL 804",
+   "title": "Pink Floyd - The Dark Side Of The Moon",
+   "thumb": "https://i.discogs.com/thumb-10362.jpeg",
+   "cover_image": "https://i.discogs.com/cover-10362.jpeg"
+  },
+  {
+   "country": "Europe",
+   "year": "2016",
+   "format": [
+    "Vinyl",
+    "LP",
+    "Album",
+    "Reissue",
+    "Remastered",
+    "Stereo"
+   ],
+   "label": [
+    "Pink Floyd Records",
+    "Pink Floyd Records",
+    "Pink Floyd Music Ltd.",
+    "Pink Floyd Music Ltd.",
+    "Abbey Road Studios",
+    "Record Industry",
+    "Parlophone Records Ltd.",
+    "Parlophone Records Ltd.",
+    "Warner Music Group",
+    "Pink Floyd Music Publishers Ltd.",
+    "Imagem UK Ltd.",
+    "TRO-Hampshire House Publishing Corp.",
+    "Roger Waters Music Overseas Ltd.",
+    "Muziekuitgeverij Artemis B.V.",
+    "Warner/Chappell Music Publishing Ltd."
+   ],
+   "type": "release",
+   "genre": [
+    "Rock"
+   ],
+   "style": [
+    "Prog Rock",
+    "Psychedelic Rock",
+    "Classic Rock"
+   ],
+   "id": 9287809,
+   "master_id": 10362,
+   "catno": "PFRLP8",
+   "title": "Pink Floyd - The Dark Side Of The Moon",
+   "thumb": "",
+   "cover_image": ""
+  },
+  {
+   "country": "US",
+   "year": "1973",
+   "format": [
+    "Vinyl",
+    "LP",
+    "Album"
+   ],
+   "label": [
+    "Harvest",
+    "Capitol Industries, Inc.",
+    "Abbey Road Studios",
+    "Capitol Records, Inc.",
+    "Capitol Records, Inc.",
+    "Capitol Records, Inc.",
+    "The Gramophone Co. Ltd.",
+    "TRO-Hampshire House Publishing Corp.",
+    "Capitol Studios",
+    "Capitol Records Pressing Plant, Winchester",
+    "TRO-Hampshire House Publishing Corp."
+   ],
+   "type": "release",
+   "genre": [
+    "Rock"
+   ],
+   "style": [
+    "Prog Rock",
+    "Psychedelic Rock"
+   ],
+   "id": 367104,
+   "master_id": 10362,
+   "catno": "SMAS-11163",
+   "title": "Pink Floyd - The Dark Side Of The Moon",
+   "thumb": "",
+   "cover_image": ""
+  },
+  {
+   "country": "Poland",
+   "year": "1983",
+   "format": [
+    "Vinyl",
+    "LP",
+    "Album"
+   ],
+   "label": [
+    "Polskie Nagrania Muza"
+   ],
+   "type": "release",
+   "genre": [
+    "Jazz"
+   ],
+   "style": [
+    "Contemporary Jazz"
+   ],
+   "id": 4455667,
+   "master_id": 0,
+   "catno": "SX 2345",
+   "title": "Zbigniew Seifert (2) - Solo Violin",
+   "thumb": "https://i.discogs.com/thumb-standalone.jpeg",
+   "cover_image": "https://i.discogs.com/cover-standalone.jpeg"
+  },
+  {
+   "country": "US",
+   "year": "2016",
+   "format": [
+    "Vinyl"
+   ],
+   "label": [
+    "Columbia"
+   ],
+   "type": "release",
+   "genre": [
+    "Rock"
+   ],
+   "style": [],
+   "id": 9999001,
+   "master_id": 777,
+   "catno": "C-1",
+   "title": "Some Band - Other Album",
+   "thumb": "https://i.discogs.com/thumb-777.jpeg",
+   "cover_image": "https://i.discogs.com/cover-777.jpeg"
+  }
+ ]
+}

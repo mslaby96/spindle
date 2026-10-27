@@ -14,10 +14,13 @@ import (
 	"testing"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
+	"github.com/mslaby96/spindle/server/internal/catalog"
 	"github.com/mslaby96/spindle/server/internal/config"
+	"github.com/mslaby96/spindle/server/internal/covers"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
@@ -40,11 +43,17 @@ func newEnv(t *testing.T) *testEnv {
 		t.Fatal(err)
 	}
 	bus := events.NewBus()
+	dc := discogs.New("tok", "Spindle/test")
+	dc.BaseURL = fakeDiscogs(t).URL
+	coverStore := &covers.Store{Dir: t.TempDir()}
 	s := New(Deps{
 		Config:   cfg,
 		DB:       d,
 		Auth:     a,
 		Devices:  devices.NewStore(d),
+		Catalog:  &catalog.Service{DB: d, Discogs: dc, Covers: coverStore},
+		Discogs:  dc,
+		Covers:   coverStore,
 		Bus:      bus,
 		Presence: presence.NewAnnouncer(bus),
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),

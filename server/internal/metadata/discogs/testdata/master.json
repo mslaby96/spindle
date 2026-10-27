@@ -1,0 +1,126 @@
+{
+ "id": 10362,
+ "main_release": 1873013,
+ "images": [
+  {
+   "type": "primary",
+   "uri": "https://i.discogs.com/9TFRqx1yW7EkC71l42QR2UEjnSWzcXT5TGDsfWxT4xE/rs:fit/g:sm/q:90/h:600/w:597/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "resource_url": "https://i.discogs.com/9TFRqx1yW7EkC71l42QR2UEjnSWzcXT5TGDsfWxT4xE/rs:fit/g:sm/q:90/h:600/w:597/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "uri150": "https://i.discogs.com/r9Anyhs7ZGkP94yyij_JBYE-fgH7Cl4j6fG-OP1QLdc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg",
+   "width": 597,
+   "height": 600
+  }
+ ],
+ "genres": [
+  "Rock"
+ ],
+ "styles": [
+  "Prog Rock",
+  "Psychedelic Rock"
+ ],
+ "year": 1973,
+ "tracklist": [
+  {
+   "position": "A1",
+   "type_": "track",
+   "title": "Speak To Me",
+   "duration": ""
+  },
+  {
+   "position": "A2",
+   "type_": "track",
+   "title": "Breathe In The Air",
+   "duration": ""
+  },
+  {
+   "position": "A3",
+   "type_": "track",
+   "title": "On The Run",
+   "duration": ""
+  },
+  {
+   "position": "A4",
+   "type_": "track",
+   "title": "Time",
+   "duration": ""
+  },
+  {
+   "position": "A5",
+   "type_": "track",
+   "title": "The Great Gig In The Sky",
+   "extraartists": [
+    {
+     "name": "Clare Torry",
+     "anv": "",
+     "join": "",
+     "role": "Vocals",
+     "tracks": "",
+     "id": 251574,
+     "resource_url": "https://api.discogs.com/artists/251574"
+    }
+   ],
+   "duration": ""
+  },
+  {
+   "position": "B1",
+   "type_": "track",
+   "title": "Money",
+   "extraartists": [
+    {
+     "name": "Dick Parry",
+     "anv": "",
+     "join": "",
+     "role": "Saxophone",
+     "tracks": "",
+     "id": 251575,
+     "resource_url": "https://api.discogs.com/artists/251575"
+    }
+   ],
+   "duration": ""
+  },
+  {
+   "position": "B2",
+   "type_": "track",
+   "title": "Us And Them",
+   "extraartists": [
+    {
+     "name": "Dick Parry",
+     "anv": "",
+     "join": "",
+     "role": "Saxophone",
+     "tracks": "",
+     "id": 251575,
+     "resource_url": "https://api.discogs.com/artists/251575"
+    }
+   ],
+   "duration": ""
+  },
+  {
+   "position": "B3",
+   "type_": "track",
+   "title": "Any Colour You Like",
+   "duration": ""
+  },
+  {
+   "position": "B4",
+   "type_": "track",
+   "title": "Brain Damage",
+   "duration": ""
+  },
+  {
+   "position": "B5",
+   "type_": "track",
+   "title": "Eclipse",
+   "duration": ""
+  }
+ ],
+ "artists": [
+  {
+   "name": "Pink Floyd",
+   "anv": "",
+   "join": "",
+   "id": 45467
+  }
+ ],
+ "title": "The Dark Side Of The Moon"
+}

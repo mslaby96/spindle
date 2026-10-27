@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
+	"github.com/mslaby96/spindle/server/internal/catalog"
 	"github.com/mslaby96/spindle/server/internal/config"
+	"github.com/mslaby96/spindle/server/internal/covers"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/presence"
 	"github.com/mslaby96/spindle/server/internal/webui"
 )
@@ -20,6 +23,9 @@ type Deps struct {
 	DB       *db.DB
 	Auth     *auth.Service
 	Devices  *devices.Store
+	Catalog  *catalog.Service
+	Discogs  *discogs.Client
+	Covers   *covers.Store
 	Bus      *events.Bus
 	Presence presence.Handler
 	Log      *slog.Logger
@@ -46,6 +52,10 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/devices", s.user(s.createDevice))
 	s.mux.Handle("DELETE /api/devices/{id}", s.user(s.revokeDevice))
 	s.mux.Handle("GET /api/events", s.user(s.events))
+
+	s.mux.Handle("GET /api/discogs/search", s.user(s.searchDiscogs))
+	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))
+	s.mux.Handle("GET /api/albums/{id}/cover", s.user(s.cover))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
 

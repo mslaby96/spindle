@@ -1,0 +1,111 @@
+{
+ "pagination": {
+  "page": 1,
+  "pages": 17,
+  "per_page": 3,
+  "items": 51,
+  "urls": {
+   "last": "https://api.discogs.com/masters/10362/versions?format=Vinyl&country=UK&per_page=3&page=17",
+   "next": "https://api.discogs.com/masters/10362/versions?format=Vinyl&country=UK&per_page=3&page=2"
+  }
+ },
+ "filters": {
+  "applied": {
+   "format": [
+    "Vinyl"
+   ],
+   "country": [
+    "UK"
+   ]
+  },
+  "available": {
+   "label": {
+    "Harvest": 48,
+    "Abbey Road Studios": 31,
+    "The Gramophone Co. Ltd.": 29,
+    "Emi Records": 21,
+    "Emi Records Ltd.": 20,
+    "Garrod & Lofthouse Ltd.": 19,
+    "World Copyrights Ltd.": 15,
+    "Emi": 12,
+    "Pink Floyd Music Publishers Ltd.": 6,
+    "Garrod & Lofthouse": 4,
+    "E.M.I. Records": 3,
+    "Pink Floyd Music Publishers": 3,
+    "Trade Platemaking Services": 3,
+    "Capitol Records": 2,
+    "Emi United Kingdom": 2,
+    "'97 Vinyl Collection": 1,
+    "Emi 100": 1,
+    "Golden Anniversary Records": 1,
+    "Parlophone": 1,
+    "Path\u00e9 Marconi": 1,
+    "Path\u00e9 Marconi Emi, Chatou": 1,
+    "Pink Floyd Records": 1,
+    "Record Industry": 1
+   },
+   "released": {
+    "1973": 13,
+    "1974": 3,
+    "1977": 3,
+    "1978": 1,
+    "1982": 1,
+    "1989": 4,
+    "1993": 2,
+    "1997": 3,
+    "2003": 1,
+    "2011": 1,
+    "2015": 1,
+    "2016": 1,
+    "2020": 2
+   }
+  }
+ },
+ "versions": [
+  {
+   "id": 24571544,
+   "label": "Harvest",
+   "country": "UK",
+   "title": "The Dark Side Of The Moon",
+   "major_formats": [
+    "Vinyl"
+   ],
+   "format": "LP, Album, Misprint, Repress",
+   "catno": "SHVL 804",
+   "released": "1973",
+   "status": "Accepted",
+   "resource_url": "https://api.discogs.com/releases/24571544",
+   "thumb": "https://i.discogs.com/goIH_cO9e581t1wyAuf3qcXU2YrK1uQvVu4ip3H3zvs/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI0NTcx/NTQ0LTE2NjM4NDM4/MjgtNzkzMC5qcGVn.jpeg"
+  },
+  {
+   "id": 1873013,
+   "label": "Harvest",
+   "country": "UK",
+   "title": "The Dark Side Of The Moon",
+   "major_formats": [
+    "Vinyl"
+   ],
+   "format": "LP, Album, Stereo",
+   "catno": "SHVL 804, 1E 064 o 05249",
+   "released": "1973",
+   "status": "Accepted",
+   "resource_url": "https://api.discogs.com/releases/1873013",
+   "thumb": "https://i.discogs.com/r9Anyhs7ZGkP94yyij_JBYE-fgH7Cl4j6fG-OP1QLdc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE4NzMw/MTMtMTY2NzIwODk0/MC01NTc3LmpwZWc.jpeg"
+  },
+  {
+   "id": 3047604,
+   "label": "Harvest",
+   "country": "UK",
+   "title": "The Dark Side Of The Moon",
+   "major_formats": [
+    "Vinyl"
+   ],
+   "format": "LP, Album, Stereo",
+   "catno": "SHVL 804, IE 064 o 05249",
+   "released": "1973",
+   "status": "Accepted",
+   "resource_url": "https://api.discogs.com/releases/3047604",
+   "thumb": "https://i.discogs.com/vWJNvBOngaFaA33J0ofGqq_3wFiMUa6sAITkShKe9B4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMwNDc2/MDQtMTcwOTMxNTAz/OC05MDA0LmpwZWc.jpeg"
+  }
+ ]
+}

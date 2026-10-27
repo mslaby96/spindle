@@ -39,6 +39,7 @@ CREATE TABLE albums (
     year INTEGER,
     genres TEXT NOT NULL DEFAULT '[]',
     styles TEXT NOT NULL DEFAULT '[]',
+    cover_url TEXT,
     cover_path TEXT,
     cover_color TEXT,
     cover_status TEXT NOT NULL DEFAULT 'pending'
