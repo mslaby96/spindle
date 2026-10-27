@@ -1,0 +1,9 @@
+{
+  "ssid": "your-wifi",
+  "password": "your-wifi-password",
+  "server": "http://192.168.1.10:8080",
+  "token": "spd_paste_the_token_from_the_app",
+  "pins": {"sck": 2, "mosi": 3, "miso": 4, "cs": 1, "rst": 0, "spi_id": 0},
+  "led_pin": "LED",
+  "watchdog": true
+}

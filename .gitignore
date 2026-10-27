@@ -6,3 +6,4 @@
 /server/internal/webui/dist/*
 !/server/internal/webui/dist/.gitkeep
 .DS_Store
+__pycache__/
