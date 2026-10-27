@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import type { CatalogMode, Tag } from "./client";
+import type { Album, CatalogMode, Tag } from "./client";
 
-export type TagSeen = { device_id: number; uid: string };
+export type NowPlaying = { device_id: number; active: boolean; uid?: string; album?: Album; started_at?: string };
 export type CatalogTag = { device_id: number; tag: Tag; new: boolean };
 
 export const nowPlayingKey = ["now-playing"] as const;
@@ -27,8 +27,11 @@ export function useLiveEvents(enabled: boolean) {
 
     const connect = () => {
       source = new EventSource("/api/events");
-      on<TagSeen>("tag_seen", (data) =>
-        queryClient.setQueryData<Record<number, TagSeen>>(nowPlayingKey, (prev) => ({ ...prev, [data.device_id]: data })),
+      on<NowPlaying>("now_playing", (data) =>
+        queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev = []) => [
+          ...prev.filter((p) => p.device_id !== data.device_id),
+          ...(data.active ? [data] : []),
+        ]),
       );
       on<CatalogMode>("catalog_mode", (data) => queryClient.setQueryData(catalogModeKey, data));
       on<CatalogTag>("catalog_tag", (data) => {
@@ -36,6 +39,9 @@ export function useLiveEvents(enabled: boolean) {
         queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
       on<Tag>("tag_assigned", (tag) => {
+        queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev) =>
+          prev?.map((p) => (p.uid === tag.uid ? { ...p, album: tag.album } : p)),
+        );
         queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
           prev && prev.tag.uid === tag.uid ? { ...prev, tag } : prev,
         );

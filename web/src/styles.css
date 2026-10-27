@@ -71,3 +71,9 @@ button.link { background: none; color: var(--accent); padding: 0; border: 0; tex
 .result img, .result .thumb { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; flex: none; background: var(--line); }
 .result > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .result strong, .result .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now { display: flex; gap: 1.5rem; align-items: center; border-width: 2px; }
+.now h1 { margin: 0 0 0.25rem; }
+.now p { margin: 0.2rem 0; }
+.cover { width: 180px; height: 180px; border-radius: 6px; object-fit: cover; flex: none; background: var(--line); }
+.grow { flex: 1; }
+@media (max-width: 600px) { .now { flex-direction: column; align-items: flex-start; } .cover { width: 100%; height: auto; aspect-ratio: 1; } }

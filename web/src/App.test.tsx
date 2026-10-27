@@ -19,6 +19,7 @@ describe("first run", () => {
       },
       "GET /api/me": () => (created ? [200, me] : [401, { error: "not logged in" }]),
       "GET /api/devices": () => [200, []],
+      "GET /api/now-playing": () => [200, []],
     });
     renderApp();
 
@@ -63,22 +64,44 @@ describe("login", () => {
 });
 
 describe("now playing", () => {
-  it("shows the tag reported by a stand", async () => {
+  it("follows what the stand reports", async () => {
     mockApi({
       "GET /api/setup": () => [200, { needed: false }],
       "GET /api/me": () => [200, me],
       "GET /api/devices": () => [200, [{ id: 3, name: "Living room", created_at: "2026-01-01T00:00:00Z" }]],
+      "GET /api/now-playing": () => [200, []],
     });
     renderApp();
     await screen.findByRole("heading", { name: "Nothing on the stand" });
     await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0));
+    const stream = () => FakeEventSource.instances.at(-1)!;
 
-    act(() => FakeEventSource.instances.at(-1)!.emit("tag_seen", { device_id: 3, uid: "04A1B2C3D4E5F6" }));
-    expect(await screen.findByText("04A1B2C3D4E5F6")).toBeInTheDocument();
-    expect(screen.getByText("Living room")).toBeInTheDocument();
+    act(() =>
+      stream().emit("now_playing", {
+        device_id: 3,
+        active: true,
+        uid: "04A1B2C3D4E5F6",
+        album: { id: 1, title: "The Dark Side Of The Moon", artist: "Pink Floyd", year: 1973, styles: ["Prog Rock"], genres: [], has_cover: true, duration_status: "resolved" },
+        started_at: "2026-03-14T20:00:00Z",
+      }),
+    );
+    expect(await screen.findByRole("heading", { name: "The Dark Side Of The Moon" })).toBeInTheDocument();
+    expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
 
-    act(() => FakeEventSource.instances.at(-1)!.emit("tag_seen", { device_id: 3, uid: "" }));
+    act(() => stream().emit("now_playing", { device_id: 3, active: false }));
     expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();
+  });
+
+  it("offers to assign an unknown sleeve while it plays", async () => {
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "GET /api/now-playing": () => [200, [{ device_id: 3, active: true, uid: "04FFFFFF" }]],
+    });
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "New sleeve" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Search albums")).toBeInTheDocument();
   });
 });
 

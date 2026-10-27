@@ -69,7 +69,7 @@ func TestCatalogFlow(t *testing.T) {
 		if !ok {
 			break
 		}
-		if ev.name == "tag_seen" && strings.Contains(ev.data, "04A1") {
+		if ev.name == "now_playing" && strings.Contains(ev.data, "04A1") {
 			t.Fatalf("leftover sleeve reached listening: %s", ev.data)
 		}
 	}

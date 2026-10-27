@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
 	"github.com/mslaby96/spindle/server/internal/catalog"
@@ -23,6 +24,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
+	"github.com/mslaby96/spindle/server/internal/sessions"
 )
 
 type testEnv struct {
@@ -50,7 +52,8 @@ func newEnv(t *testing.T) *testEnv {
 	resolver := &duration.Resolver{DB: d, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	catalogSvc := &catalog.Service{DB: d, Discogs: dc, Covers: coverStore}
 	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
-	router := &presence.Router{Mode: mode, Catalog: mode, Sessions: presence.NewAnnouncer(bus), Tolerance: cfg.Sessions.AbsenceTolerance}
+	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
+	router := &presence.Router{Mode: mode, Catalog: mode, Sessions: engine, Tolerance: cfg.Sessions.AbsenceTolerance}
 	s := New(Deps{
 		Config:    cfg,
 		DB:        d,
@@ -61,6 +64,7 @@ func newEnv(t *testing.T) *testEnv {
 		Discogs:   dc,
 		Covers:    coverStore,
 		Durations: resolver,
+		Sessions:  engine,
 		Bus:       bus,
 		Presence:  router,
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),

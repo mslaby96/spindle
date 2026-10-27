@@ -16,6 +16,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
+	"github.com/mslaby96/spindle/server/internal/sessions"
 	"github.com/mslaby96/spindle/server/internal/webui"
 )
 
@@ -29,6 +30,7 @@ type Deps struct {
 	Discogs   *discogs.Client
 	Covers    *covers.Store
 	Durations *duration.Resolver
+	Sessions  *sessions.Engine
 	Bus       *events.Bus
 	Presence  presence.Handler
 	Log       *slog.Logger
@@ -55,6 +57,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/devices", s.user(s.createDevice))
 	s.mux.Handle("DELETE /api/devices/{id}", s.user(s.revokeDevice))
 	s.mux.Handle("GET /api/events", s.user(s.events))
+	s.mux.Handle("GET /api/now-playing", s.user(s.nowPlaying))
 
 	s.mux.Handle("GET /api/discogs/search", s.user(s.searchDiscogs))
 	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))

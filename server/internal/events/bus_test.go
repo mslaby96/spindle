@@ -22,8 +22,8 @@ func TestPublishReachesOnlyOwner(t *testing.T) {
 	other, cancelB := b.Subscribe(2)
 	defer cancelB()
 
-	b.Publish(Event{Type: "tag_seen", UserID: 1, Data: "04A1"})
-	if e, ok := receive(t, a); !ok || e.Type != "tag_seen" {
+	b.Publish(Event{Type: "now_playing", UserID: 1, Data: "04A1"})
+	if e, ok := receive(t, a); !ok || e.Type != "now_playing" {
 		t.Fatalf("owner got %+v ok=%v", e, ok)
 	}
 	if e, ok := receive(t, other); ok {

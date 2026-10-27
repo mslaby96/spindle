@@ -92,13 +92,23 @@ func TestReportPublishesToStream(t *testing.T) {
 		t.Fatalf("response %+v", out)
 	}
 	ev, ok := waitEvent(t, stream)
-	if !ok || ev.name != "tag_seen" || !strings.Contains(ev.data, `"uid":"04A1B2C3D4E5F6"`) {
+	if !ok || ev.name != "now_playing" || !strings.Contains(ev.data, `"uid":"04A1B2C3D4E5F6"`) ||
+		!strings.Contains(ev.data, `"active":true`) {
 		t.Fatalf("event %+v ok=%v", ev, ok)
 	}
 
 	e.report(t, token, "04A1B2C3D4E5F6")
 	if ev, ok := waitEvent(t, stream); ok {
 		t.Fatalf("unchanged tag published again: %+v", ev)
+	}
+
+	var current []struct {
+		UID    string
+		Active bool
+	}
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/now-playing", nil).Body).Decode(&current)
+	if len(current) != 1 || current[0].UID != "04A1B2C3D4E5F6" || !current[0].Active {
+		t.Fatalf("now playing %+v", current)
 	}
 }
 

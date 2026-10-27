@@ -28,6 +28,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/lastfm"
 	"github.com/mslaby96/spindle/server/internal/metadata/musicbrainz"
 	"github.com/mslaby96/spindle/server/internal/presence"
+	"github.com/mslaby96/spindle/server/internal/sessions"
 )
 
 const userAgent = "Spindle/0.1 ( https://github.com/mslaby96/spindle )"
@@ -96,12 +97,20 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	if cfg.LastFMKey != "" {
 		resolver.LastFM = lastfm.New(cfg.LastFMKey, userAgent)
 	}
+	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
+	resolver.OnResolved = func(userID, albumID int64) {
+		if err := engine.ClassifyAlbum(ctx, userID, albumID); err != nil {
+			log.Error("classify listens", "album", albumID, "err", err)
+		}
+	}
 	go resolver.Run(ctx)
+	go engine.RunSweeper(ctx, 10*time.Second)
+
 	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
 	router := &presence.Router{
 		Mode:      mode,
 		Catalog:   mode,
-		Sessions:  presence.NewAnnouncer(bus),
+		Sessions:  engine,
 		Tolerance: cfg.Sessions.AbsenceTolerance,
 	}
 	srv := &http.Server{
@@ -114,6 +123,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Catalog:   catalogSvc,
 			Mode:      mode,
 			Durations: resolver,
+			Sessions:  engine,
 			Discogs:   discogsClient,
 			Covers:    coverStore,
 			Bus:       bus,
