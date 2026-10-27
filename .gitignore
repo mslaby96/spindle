@@ -7,3 +7,4 @@
 !/server/internal/webui/dist/.gitkeep
 .DS_Store
 __pycache__/
+*.tsbuildinfo

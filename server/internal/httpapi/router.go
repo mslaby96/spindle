@@ -12,6 +12,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/presence"
+	"github.com/mslaby96/spindle/server/internal/webui"
 )
 
 type Deps struct {
@@ -47,6 +48,8 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/events", s.user(s.events))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
+
+	s.mux.Handle("/", webui.Handler())
 	return s
 }
 
