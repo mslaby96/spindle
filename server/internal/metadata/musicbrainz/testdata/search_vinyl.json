@@ -1,0 +1,75 @@
+{
+ "count": 5,
+ "releases": [
+  {
+   "id": "6151d934-4eb2-3b51-8868-c18440b9864d",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1981",
+   "country": "US",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "12\" Vinyl",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "e541eddf-7c4f-4b7c-a7cd-557f7b19f27a",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2013",
+   "country": "XE",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "12\" Vinyl",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "61288af4-6fdb-42be-b94e-7e7b90258951",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1978",
+   "country": "DE",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "12\" Vinyl",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "8ede3645-4d20-4ca6-a4e3-4e9179115968",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1973",
+   "country": "NZ",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "12\" Vinyl",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "fc941a7d-eb66-4f5d-aa14-01857f997168",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1973",
+   "country": "DE",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "12\" Vinyl",
+     "track-count": 10
+    }
+   ]
+  }
+ ]
+}

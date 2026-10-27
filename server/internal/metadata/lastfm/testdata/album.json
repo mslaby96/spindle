@@ -1,0 +1,20 @@
+{
+ "album": {
+  "name": "The Dark Side of the Moon",
+  "artist": "Pink Floyd",
+  "tracks": {
+   "track": [
+    {"name": "Speak to Me", "duration": 67, "@attr": {"rank": 1}},
+    {"name": "Breathe", "duration": 169, "@attr": {"rank": 2}},
+    {"name": "On the Run", "duration": "225", "@attr": {"rank": 3}},
+    {"name": "Time", "duration": 413, "@attr": {"rank": 4}},
+    {"name": "The Great Gig in the Sky", "duration": 276, "@attr": {"rank": 5}},
+    {"name": "Money", "duration": 382, "@attr": {"rank": 6}},
+    {"name": "Us and Them", "duration": 462, "@attr": {"rank": 7}},
+    {"name": "Any Colour You Like", "duration": 205, "@attr": {"rank": 8}},
+    {"name": "Brain Damage", "duration": 228, "@attr": {"rank": 9}},
+    {"name": "Eclipse", "duration": 123, "@attr": {"rank": 10}}
+   ]
+  }
+ }
+}

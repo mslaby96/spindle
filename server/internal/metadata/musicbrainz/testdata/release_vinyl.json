@@ -1,0 +1,62 @@
+{
+ "id": "6151d934-4eb2-3b51-8868-c18440b9864d",
+ "title": "The Dark Side of the Moon",
+ "media": [
+  {
+   "format": "12\" Vinyl",
+   "track-count": 10,
+   "tracks": [
+    {
+     "position": 1,
+     "title": "Speak to Me",
+     "length": 68346
+    },
+    {
+     "position": 2,
+     "title": "Breathe",
+     "length": 168720
+    },
+    {
+     "position": 3,
+     "title": "On the Run",
+     "length": 230600
+    },
+    {
+     "position": 4,
+     "title": "Time",
+     "length": 409600
+    },
+    {
+     "position": 5,
+     "title": "The Great Gig in the Sky",
+     "length": 284133
+    },
+    {
+     "position": 6,
+     "title": "Money",
+     "length": 382746
+    },
+    {
+     "position": 7,
+     "title": "Us and Them",
+     "length": 469853
+    },
+    {
+     "position": 8,
+     "title": "Any Colour You Like",
+     "length": 206213
+    },
+    {
+     "position": 9,
+     "title": "Brain Damage",
+     "length": 226933
+    },
+    {
+     "position": 10,
+     "title": "Eclipse",
+     "length": 131546
+    }
+   ]
+  }
+ ]
+}

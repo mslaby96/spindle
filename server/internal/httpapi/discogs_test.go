@@ -112,3 +112,33 @@ func TestCoverIsScopedToOwner(t *testing.T) {
 		t.Fatalf("other user's cover: %d", resp.StatusCode)
 	}
 }
+
+func TestSetAlbumDuration(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	res, _ := e.srv.DB.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, created_at) VALUES (1, 5, 'A', 'B', 1)`)
+	id, _ := res.LastInsertId()
+	url := e.http.URL + "/api/albums/" + strconv.FormatInt(id, 10) + "/duration"
+
+	var album struct {
+		DurationSec    *int   `json:"duration_sec"`
+		DurationStatus string `json:"duration_status"`
+	}
+	resp := do(t, c, "PUT", url, map[string]any{"seconds": 2580})
+	json.NewDecoder(resp.Body).Decode(&album)
+	if resp.StatusCode != http.StatusOK || album.DurationStatus != "manual" || *album.DurationSec != 2580 {
+		t.Fatalf("set: %d %+v", resp.StatusCode, album)
+	}
+	resp = do(t, c, "PUT", url, map[string]any{"seconds": nil})
+	album.DurationSec = nil
+	json.NewDecoder(resp.Body).Decode(&album)
+	if resp.StatusCode != http.StatusOK || album.DurationStatus != "pending" || album.DurationSec != nil {
+		t.Fatalf("clear: %d %+v", resp.StatusCode, album)
+	}
+	if resp := do(t, c, "PUT", url, map[string]any{"seconds": -5}); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("negative: %d", resp.StatusCode)
+	}
+	if resp := do(t, c, "PUT", e.http.URL+"/api/albums/999/duration", map[string]any{"seconds": 10}); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing album: %d", resp.StatusCode)
+	}
+}

@@ -14,21 +14,23 @@ import (
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
+	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
 	"github.com/mslaby96/spindle/server/internal/webui"
 )
 
 type Deps struct {
-	Config   *config.Config
-	DB       *db.DB
-	Auth     *auth.Service
-	Devices  *devices.Store
-	Catalog  *catalog.Service
-	Discogs  *discogs.Client
-	Covers   *covers.Store
-	Bus      *events.Bus
-	Presence presence.Handler
-	Log      *slog.Logger
+	Config    *config.Config
+	DB        *db.DB
+	Auth      *auth.Service
+	Devices   *devices.Store
+	Catalog   *catalog.Service
+	Discogs   *discogs.Client
+	Covers    *covers.Store
+	Durations *duration.Resolver
+	Bus       *events.Bus
+	Presence  presence.Handler
+	Log       *slog.Logger
 }
 
 type Server struct {
@@ -56,6 +58,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/discogs/search", s.user(s.searchDiscogs))
 	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))
 	s.mux.Handle("GET /api/albums/{id}/cover", s.user(s.cover))
+	s.mux.Handle("PUT /api/albums/{id}/duration", s.user(s.setAlbumDuration))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
 

@@ -21,6 +21,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
+	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
@@ -46,17 +47,19 @@ func newEnv(t *testing.T) *testEnv {
 	dc := discogs.New("tok", "Spindle/test")
 	dc.BaseURL = fakeDiscogs(t).URL
 	coverStore := &covers.Store{Dir: t.TempDir()}
+	resolver := &duration.Resolver{DB: d, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	s := New(Deps{
-		Config:   cfg,
-		DB:       d,
-		Auth:     a,
-		Devices:  devices.NewStore(d),
-		Catalog:  &catalog.Service{DB: d, Discogs: dc, Covers: coverStore},
-		Discogs:  dc,
-		Covers:   coverStore,
-		Bus:      bus,
-		Presence: presence.NewAnnouncer(bus),
-		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Config:    cfg,
+		DB:        d,
+		Auth:      a,
+		Devices:   devices.NewStore(d),
+		Catalog:   &catalog.Service{DB: d, Discogs: dc, Covers: coverStore},
+		Discogs:   dc,
+		Covers:    coverStore,
+		Durations: resolver,
+		Bus:       bus,
+		Presence:  presence.NewAnnouncer(bus),
+		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	hs := httptest.NewServer(s)
 	t.Cleanup(func() { hs.Close(); d.Close() })

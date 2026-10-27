@@ -1,0 +1,185 @@
+{
+ "count": 10,
+ "releases": [
+  {
+   "id": "8d17f5db-b9d0-4e35-9a06-9e1bffebc5be",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1986",
+   "country": "JP",
+   "track-count": 9,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 9
+    }
+   ]
+  },
+  {
+   "id": "be701edc-c9c7-484a-9ed2-aeef051c19be",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2016",
+   "country": "US",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "ed20c227-4e15-45dd-899f-b417670880ec",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1993",
+   "country": "GB",
+   "track-count": 9,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 9
+    }
+   ]
+  },
+  {
+   "id": "12fb801c-5903-4a99-a10c-7af599fe3986",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2011-09-26",
+   "country": "GB",
+   "track-count": 152,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 10
+    },
+    {
+     "format": "CD",
+     "track-count": 10
+    },
+    {
+     "format": "DVD-Video",
+     "track-count": 30
+    },
+    {
+     "format": "DVD-Video",
+     "track-count": 28
+    },
+    {
+     "format": "Blu-ray",
+     "track-count": 58
+    },
+    {
+     "format": "CD",
+     "track-count": 16
+    }
+   ]
+  },
+  {
+   "id": "25fbfbb4-b1ee-4448-aadf-ae3bc2e2dd27",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1994",
+   "country": "US",
+   "track-count": 9,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 9
+    }
+   ]
+  },
+  {
+   "id": "e9216a3b-ee97-3464-88e3-887796c2c29b",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1985",
+   "country": "US",
+   "track-count": 9,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 9
+    }
+   ]
+  },
+  {
+   "id": "93314fd5-5f6e-422b-9ee5-d8daa9945657",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "1994",
+   "country": "US",
+   "track-count": 9,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 9
+    }
+   ]
+  },
+  {
+   "id": "3081d6e7-bb1c-3d90-ad1f-4e939582e3c0",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2003-03-29",
+   "country": "JP",
+   "track-count": 30,
+   "media": [
+    {
+     "format": "Hybrid SACD (CD layer)",
+     "track-count": 10
+    },
+    {
+     "format": "Hybrid SACD (SACD layer, 2 channels)",
+     "track-count": 10
+    },
+    {
+     "format": "Hybrid SACD (SACD layer, multichannel)",
+     "track-count": 10
+    }
+   ]
+  },
+  {
+   "id": "86dedf29-be03-4d8d-98aa-67389f5447c2",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2013",
+   "country": "XW",
+   "track-count": 24,
+   "media": [
+    {
+     "format": "Digital Media",
+     "track-count": 10
+    },
+    {
+     "format": "Digital Media",
+     "track-count": 10
+    },
+    {
+     "format": "Digital Media",
+     "track-count": 3
+    },
+    {
+     "format": "Digital Media",
+     "track-count": 1
+    }
+   ]
+  },
+  {
+   "id": "586ff28d-c0fc-4a50-ba18-d7152680417d",
+   "score": 100,
+   "title": "The Dark Side of the Moon",
+   "date": "2013",
+   "country": "XE",
+   "track-count": 10,
+   "media": [
+    {
+     "format": "CD",
+     "track-count": 10
+    }
+   ]
+  }
+ ]
+}

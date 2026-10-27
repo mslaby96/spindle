@@ -24,10 +24,13 @@ import (
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
+	"github.com/mslaby96/spindle/server/internal/metadata/duration"
+	"github.com/mslaby96/spindle/server/internal/metadata/lastfm"
+	"github.com/mslaby96/spindle/server/internal/metadata/musicbrainz"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
-const userAgent = "Spindle/0.1 +https://github.com/mslaby96/spindle"
+const userAgent = "Spindle/0.1 ( https://github.com/mslaby96/spindle )"
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -82,19 +85,32 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	bus := events.NewBus()
 	discogsClient := discogs.New(cfg.DiscogsToken, userAgent)
 	coverStore := &covers.Store{Dir: filepath.Join(cfg.DataDir, "covers")}
+	catalogSvc := &catalog.Service{DB: d, Discogs: discogsClient, Covers: coverStore}
+	resolver := &duration.Resolver{
+		DB:           d,
+		Discogs:      discogsClient,
+		MusicBrainz:  musicbrainz.New(userAgent),
+		ResolveCover: catalogSvc.ResolveCover,
+		Log:          log,
+	}
+	if cfg.LastFMKey != "" {
+		resolver.LastFM = lastfm.New(cfg.LastFMKey, userAgent)
+	}
+	go resolver.Run(ctx)
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: httpapi.New(httpapi.Deps{
-			Config:   cfg,
-			DB:       d,
-			Auth:     authSvc,
-			Devices:  devices.NewStore(d),
-			Catalog:  &catalog.Service{DB: d, Discogs: discogsClient, Covers: coverStore},
-			Discogs:  discogsClient,
-			Covers:   coverStore,
-			Bus:      bus,
-			Presence: presence.NewAnnouncer(bus),
-			Log:      log,
+			Config:    cfg,
+			DB:        d,
+			Auth:      authSvc,
+			Devices:   devices.NewStore(d),
+			Catalog:   catalogSvc,
+			Durations: resolver,
+			Discogs:   discogsClient,
+			Covers:    coverStore,
+			Bus:       bus,
+			Presence:  presence.NewAnnouncer(bus),
+			Log:       log,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
