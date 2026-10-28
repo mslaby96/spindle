@@ -43,3 +43,8 @@ export function formatDayMonth(iso: string) {
 export function formatFull(iso: string) {
   return new Date(iso).toLocaleString(locale);
 }
+
+export function formatCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}

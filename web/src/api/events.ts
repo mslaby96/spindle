@@ -3,7 +3,14 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import type { Album, CatalogMode, Tag } from "./client";
 
-export type NowPlaying = { device_id: number; active: boolean; uid?: string; album?: Album; started_at?: string };
+export type NowPlaying = {
+  device_id: number;
+  active: boolean;
+  uid?: string;
+  album?: Album;
+  started_at?: string;
+  ends_at?: string;
+};
 export type CatalogTag = { device_id: number; tag: Tag; new: boolean };
 
 export const nowPlayingKey = ["now-playing"] as const;

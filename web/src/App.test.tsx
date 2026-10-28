@@ -88,6 +88,18 @@ describe("now playing", () => {
     expect(await screen.findByRole("heading", { name: "The Dark Side Of The Moon" })).toBeInTheDocument();
     expect(screen.getByText("Pink Floyd")).toBeInTheDocument();
 
+    act(() =>
+      stream().emit("now_playing", {
+        device_id: 3,
+        active: true,
+        uid: "04A1B2C3D4E5F6",
+        album: { id: 1, title: "The Dark Side Of The Moon", artist: "Pink Floyd", year: 1973, styles: ["Prog Rock"], genres: [], has_cover: true, duration_status: "resolved" },
+        started_at: "2026-03-14T20:00:00Z",
+        ends_at: new Date(Date.now() + 80_000).toISOString(),
+      }),
+    );
+    expect(await screen.findByText(/This listen ends in 1:(19|20) unless you put it back/)).toBeInTheDocument();
+
     act(() => stream().emit("now_playing", { device_id: 3, active: false }));
     expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();
   });

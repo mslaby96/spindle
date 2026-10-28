@@ -42,6 +42,8 @@ const (
 
 	// typicalLP stands in for the album length when no source knows it and the listener still has to be credited.
 	typicalLP = 45 * time.Minute
+	// staleReport is how long without a report of the tag before Current treats the sleeve as off the stand.
+	staleReport = 5 * time.Second
 	// failedLookupGrace is how long a listen waits for a failing album length lookup before the fallback is used.
 	failedLookupGrace = 24 * time.Hour
 )
@@ -66,6 +68,8 @@ type NowPlaying struct {
 	UID       string         `json:"uid,omitempty"`
 	Album     *catalog.Album `json:"album,omitempty"`
 	StartedAt *time.Time     `json:"started_at,omitempty"`
+	// EndsAt is set while the sleeve is off the stand: the listen ends then unless it comes back.
+	EndsAt *time.Time `json:"ends_at,omitempty"`
 }
 
 // Engine turns tag observations into listening sessions. All state lives in the database; the mutex only makes
@@ -79,15 +83,16 @@ type Engine struct {
 	Durations LengthQueue
 	Log       *slog.Logger
 
-	mu sync.Mutex
+	mu   sync.Mutex
+	away map[int64]bool
 }
 
 func (e *Engine) Observe(ctx context.Context, o presence.Observation) (presence.LED, error) {
-	if o.UID == "" {
-		return presence.LEDIdle, nil
-	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if o.UID == "" {
+		return presence.LEDIdle, e.sleeveRemoved(ctx, o)
+	}
 
 	tag, _, err := e.Tags.EnsureTag(ctx, o.UserID, o.UID)
 	if err != nil {
@@ -98,13 +103,21 @@ func (e *Engine) Observe(ctx context.Context, o presence.Observation) (presence.
 		led = presence.LEDKnown
 	}
 
-	var id, tagID int64
+	var id, tagID, startedAt int64
 	err = e.DB.R.QueryRowContext(ctx,
-		`SELECT id, tag_id FROM sessions WHERE device_id = ? AND state = 'active'`, o.DeviceID).Scan(&id, &tagID)
+		`SELECT id, tag_id, started_at FROM sessions WHERE device_id = ? AND state = 'active'`, o.DeviceID).
+		Scan(&id, &tagID, &startedAt)
 	switch {
 	case err == nil && tagID == tag.ID:
-		_, err = e.DB.W.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, o.At.Unix(), id)
-		return led, err
+		if _, err := e.DB.W.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, o.At.Unix(), id); err != nil {
+			return "", err
+		}
+		if e.away[o.DeviceID] {
+			delete(e.away, o.DeviceID)
+			started := time.Unix(startedAt, 0).UTC()
+			e.publish(o.UserID, EventNowPlaying, NowPlaying{DeviceID: o.DeviceID, Active: true, UID: tag.UID, Album: tag.Album, StartedAt: &started})
+		}
+		return led, nil
 	case err == nil:
 		if err := e.close(ctx, o.UserID, id); err != nil {
 			return "", err
@@ -213,11 +226,43 @@ func (e *Engine) Resolve(ctx context.Context, userID, sessionID int64, r Resolut
 	return e.resolve(ctx, userID, sessionID, r)
 }
 
+// sleeveRemoved tells listeners once that the sleeve left the stand and when the listen will end if it stays away.
+func (e *Engine) sleeveRemoved(ctx context.Context, o presence.Observation) error {
+	if e.away[o.DeviceID] {
+		return nil
+	}
+	var uid string
+	var startedAt, lastSeen int64
+	err := e.DB.R.QueryRowContext(ctx, `
+		SELECT t.uid, s.started_at, s.last_seen_at FROM sessions s JOIN tags t ON t.id = s.tag_id
+		WHERE s.device_id = ? AND s.state = 'active'`, o.DeviceID).Scan(&uid, &startedAt, &lastSeen)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	tag, _, err := e.Tags.EnsureTag(ctx, o.UserID, uid)
+	if err != nil {
+		return err
+	}
+	if e.away == nil {
+		e.away = map[int64]bool{}
+	}
+	e.away[o.DeviceID] = true
+	started := time.Unix(startedAt, 0).UTC()
+	ends := time.Unix(lastSeen, 0).Add(e.Cfg.AbsenceTolerance).UTC()
+	e.publish(o.UserID, EventNowPlaying, NowPlaying{DeviceID: o.DeviceID, Active: true, UID: uid, Album: tag.Album,
+		StartedAt: &started, EndsAt: &ends})
+	return nil
+}
+
 func (e *Engine) close(ctx context.Context, userID, id int64) error {
 	var deviceID int64
 	if err := e.DB.R.QueryRowContext(ctx, `SELECT device_id FROM sessions WHERE id = ?`, id).Scan(&deviceID); err != nil {
 		return err
 	}
+	delete(e.away, deviceID)
 	if _, err := e.DB.W.ExecContext(ctx,
 		`UPDATE sessions SET state = 'unclassified', ended_at = last_seen_at WHERE id = ? AND state = 'active'`, id); err != nil {
 		return err
@@ -361,7 +406,7 @@ func (e *Engine) publish(userID int64, typ string, data any) {
 // Current returns what is playing on each of the user's stands right now.
 func (e *Engine) Current(ctx context.Context, userID int64, albums func(context.Context, int64, int64) (catalog.Album, error)) ([]NowPlaying, error) {
 	rows, err := e.DB.R.QueryContext(ctx,
-		`SELECT s.device_id, t.uid, s.album_id, s.started_at FROM sessions s JOIN tags t ON t.id = s.tag_id
+		`SELECT s.device_id, t.uid, s.album_id, s.started_at, s.last_seen_at FROM sessions s JOIN tags t ON t.id = s.tag_id
 		 WHERE s.user_id = ? AND s.state = 'active' ORDER BY s.device_id`, userID)
 	if err != nil {
 		return nil, err
@@ -373,13 +418,17 @@ func (e *Engine) Current(ctx context.Context, userID int64, albums func(context.
 	var list []row
 	for rows.Next() {
 		var r row
-		var started int64
-		if err := rows.Scan(&r.np.DeviceID, &r.np.UID, &r.albumID, &started); err != nil {
+		var started, lastSeen int64
+		if err := rows.Scan(&r.np.DeviceID, &r.np.UID, &r.albumID, &started, &lastSeen); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		t := time.Unix(started, 0).UTC()
 		r.np.Active, r.np.StartedAt = true, &t
+		if seen := time.Unix(lastSeen, 0); e.Now().Sub(seen) > staleReport {
+			ends := seen.Add(e.Cfg.AbsenceTolerance).UTC()
+			r.np.EndsAt = &ends
+		}
 		list = append(list, r)
 	}
 	rows.Close()

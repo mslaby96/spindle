@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
 import { nowPlayingKey, type NowPlaying } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
-import { formatTime } from "../format";
+import { formatCountdown, formatTime } from "../format";
 import { devicesKey } from "./DevicesPage";
 
 export function NowPlayingPage() {
@@ -27,7 +28,11 @@ export function NowPlayingPage() {
   return (
     <section>
       {playing.map((p) => (
-        <article className="card now" key={p.device_id} style={{ borderColor: p.album?.cover_color }}>
+        <article
+          className={p.ends_at ? "card now away" : "card now"}
+          key={p.device_id}
+          style={{ borderColor: p.album?.cover_color }}
+        >
           {p.album ? (
             <>
               <Cover albumId={p.album.id} hasCover={p.album.has_cover} color={p.album.cover_color} />
@@ -39,6 +44,7 @@ export function NowPlayingPage() {
                   {[p.album.year, ...p.album.styles].filter(Boolean).join(" · ")}
                   {p.started_at && ` · since ${formatTime(p.started_at)}`}
                 </p>
+                {p.ends_at && <EndsIn at={p.ends_at} />}
               </div>
             </>
           ) : (
@@ -53,5 +59,21 @@ export function NowPlayingPage() {
         </article>
       ))}
     </section>
+  );
+}
+
+function EndsIn({ at }: { at: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = new Date(at).getTime() - now;
+  return (
+    <p className="ending">
+      {left > 0
+        ? `Sleeve off the stand. This listen ends in ${formatCountdown(left)} unless you put it back.`
+        : "Sleeve off the stand. Wrapping up this listen…"}
+    </p>
   );
 }

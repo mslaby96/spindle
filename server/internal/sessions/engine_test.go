@@ -512,7 +512,7 @@ func TestNowPlayingEvents(t *testing.T) {
 		}
 		break
 	}
-	want := []string{EventNowPlaying, EventNowPlaying, EventInboxChanged}
+	want := []string{EventNowPlaying, EventNowPlaying, EventNowPlaying, EventInboxChanged}
 	if len(types) != len(want) {
 		t.Fatalf("events %v", types)
 	}
@@ -581,4 +581,74 @@ func (e *Engine) List(ctx context.Context, userID int64) ([]Session, error) {
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+func drainEvents(ch <-chan events.Event) []events.Event {
+	var out []events.Event
+	for {
+		select {
+		case e := <-ch:
+			out = append(out, e)
+		default:
+			return out
+		}
+	}
+}
+
+func TestRemovingSleeveAnnouncesWhenListenEnds(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 10*time.Minute)
+	drainEvents(v.events)
+
+	v.see(t, "")
+	removedAt := v.clock.now()
+	v.see(t, "")
+	evs := drainEvents(v.events)
+	if len(evs) != 1 || evs[0].Type != EventNowPlaying {
+		t.Fatalf("events after removal %+v", evs)
+	}
+	np := evs[0].Data.(NowPlaying)
+	want := removedAt.Add(v.e.Cfg.AbsenceTolerance)
+	if !np.Active || np.Album == nil || np.EndsAt == nil || !np.EndsAt.Equal(want) {
+		t.Fatalf("absent event %+v, ends at %v want %v", np, np.EndsAt, want)
+	}
+
+	v.clock.advance(20 * time.Second)
+	v.see(t, tagA)
+	evs = drainEvents(v.events)
+	if len(evs) != 1 || evs[0].Data.(NowPlaying).EndsAt != nil || !evs[0].Data.(NowPlaying).Active {
+		t.Fatalf("events after putting it back %+v", evs)
+	}
+	v.see(t, tagA)
+	if evs := drainEvents(v.events); len(evs) != 0 {
+		t.Fatalf("sleeve still on the stand published again: %+v", evs)
+	}
+}
+
+func TestEmptyStandWithoutListenIsQuiet(t *testing.T) {
+	v := newEnv(t)
+	v.see(t, "")
+	if evs := drainEvents(v.events); len(evs) != 0 {
+		t.Fatalf("events %+v", evs)
+	}
+}
+
+func TestCurrentReportsSleeveOffTheStand(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 5*time.Minute)
+	albums := func(ctx context.Context, user, id int64) (catalog.Album, error) { return v.tags.Album(ctx, user, id) }
+
+	current, err := v.e.Current(context.Background(), 1, albums)
+	if err != nil || len(current) != 1 || current[0].EndsAt != nil {
+		t.Fatalf("while playing %+v %v", current, err)
+	}
+	lastSeen := v.clock.now()
+	v.see(t, "")
+	v.clock.advance(15 * time.Second)
+	current, _ = v.e.Current(context.Background(), 1, albums)
+	if len(current) != 1 || current[0].EndsAt == nil || !current[0].EndsAt.Equal(lastSeen.Add(v.e.Cfg.AbsenceTolerance)) {
+		t.Fatalf("after removal %+v", current)
+	}
 }

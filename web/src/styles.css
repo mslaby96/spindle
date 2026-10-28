@@ -137,3 +137,5 @@ select { font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--line); 
 .bars .label { display: flex; justify-content: space-between; gap: 0.5rem; }
 .bars .track { display: block; height: 8px; }
 .bars .fill { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.now.away { opacity: 0.75; border-style: dashed; }
+.now .ending { color: var(--accent); margin-top: 0.5rem; }
