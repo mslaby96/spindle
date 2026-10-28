@@ -157,6 +157,8 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Log:       log,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 		BaseContext:       func(net.Listener) context.Context { return requests },
 	}
 	srv.RegisterOnShutdown(endRequests)

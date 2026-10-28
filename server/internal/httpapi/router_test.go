@@ -340,3 +340,11 @@ func TestStateChangesNeedIntentHeader(t *testing.T) {
 		t.Fatalf("still logged in after rejected logout: %d", resp.StatusCode)
 	}
 }
+
+func TestSecurityHeaders(t *testing.T) {
+	e := newEnv(t)
+	resp := do(t, e.client(t), "GET", e.http.URL+"/", nil)
+	if resp.Header.Get("X-Frame-Options") != "DENY" || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("headers %v", resp.Header)
+	}
+}
