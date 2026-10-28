@@ -42,6 +42,34 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             report.check_config({"ssid": "home"})
 
+    def test_rejects_settings_that_would_crash_the_hardware_setup(self):
+        valid = {"ssid": "home", "password": "pw", "server": "http://10.0.0.2:8080", "token": "spd_x"}
+        for bad in (
+            {"pins": {"sck": "GP2"}},
+            {"pins": {"clk": 2}},
+            {"pins": [2, 3, 4]},
+            {"led_pin": ["LED"]},
+            {"watchdog": "yes"},
+            {"server": "10.0.0.2:8080"},
+        ):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                report.check_config(dict(valid, **bad))
+
+    def test_optional_settings(self):
+        cfg = report.check_config(
+            {"ssid": "home", "password": "pw", "server": "https://spindle.example", "token": "spd_x",
+             "pins": {"sck": 10, "spi_id": 1}, "led_pin": 15, "watchdog": False}
+        )
+        self.assertEqual(cfg["pins"], {"sck": 10, "spi_id": 1})
+
+
+class RetryTest(unittest.TestCase):
+    def test_backs_off_while_the_server_fails(self):
+        self.assertEqual(report.retry_delay(1500, 0), 1500)
+        self.assertEqual(report.retry_delay(1500, 1), 3000)
+        self.assertEqual(report.retry_delay(1500, 3), 12000)
+        self.assertEqual(report.retry_delay(1500, 50), report.MAX_RETRY_MS)
+
 
 if __name__ == "__main__":
     unittest.main()

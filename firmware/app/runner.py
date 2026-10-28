@@ -29,28 +29,36 @@ def fail_forever(led):
         time.sleep_ms(50)
 
 
+def read_tag(reader):
+    try:
+        return reader.read()
+    except Exception as e:
+        print("reader error:", e)
+        return None
+
+
 def run():
     led = Led()
     try:
         cfg = load_config()
+        from app.net import WiFi, post_json
+        from app.reader import Reader
+
+        if cfg.get("led_pin") is not None:
+            led = Led(cfg["led_pin"])
+        reader = Reader(cfg.get("pins"))
+        wifi = WiFi(cfg["ssid"], cfg["password"])
     except Exception as e:
-        print("config error:", e)
+        print("setup error:", e)
         fail_forever(led)
 
     # The watchdog cannot be stopped once started, so allow turning it off while developing over USB.
     wdt = WDT(timeout=WDT_TIMEOUT_MS) if cfg.get("watchdog", True) else _NoWatchdog()
-
-    from app.net import WiFi, post_json
-    from app.reader import Reader
-
-    if cfg.get("led_pin") is not None:
-        led = Led(cfg["led_pin"])
-    reader = Reader(cfg.get("pins"))
-    wifi = WiFi(cfg["ssid"], cfg["password"])
     debounce = Debouncer()
     url = cfg["server"] + "/api/device/v1/report"
 
     seq = 0
+    failures = 0
     attempted = object()
     interval = report.DEFAULT_INTERVAL_MS
     next_read = time.ticks_ms()
@@ -62,7 +70,7 @@ def run():
         now = time.ticks_ms()
 
         if time.ticks_diff(now, next_read) >= 0:
-            uid = debounce.feed(reader.read())
+            uid = debounce.feed(read_tag(reader))
             next_read = time.ticks_add(now, READ_EVERY_MS)
             if uid != attempted:
                 next_report = now
@@ -79,14 +87,17 @@ def run():
                 status, body = 0, None
             wdt.feed()
             if status == 200:
+                failures = 0
                 state, interval = report.parse(body)
                 led.show(state)
             elif status == 401:
+                failures += 1
                 print("server rejected the device token")
                 led.show("error")
             else:
+                failures += 1
                 led.show("offline")
-            next_report = time.ticks_add(time.ticks_ms(), interval)
+            next_report = time.ticks_add(time.ticks_ms(), report.retry_delay(interval, failures))
 
         led.update()
         time.sleep_ms(20)
