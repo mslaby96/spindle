@@ -1,4 +1,10 @@
+import type { Release } from "./api/client";
+
 const locale = "en-GB";
+
+export function formatPressing(r: Release) {
+  return [r.country, r.year, r.label, r.catno, r.format].filter(Boolean).join(" · ");
+}
 
 export function formatLength(seconds: number) {
   const minutes = Math.round(seconds / 60);

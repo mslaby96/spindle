@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api, type Device } from "../api/client";
+import { api } from "../api/client";
 import { nowPlayingKey, type NowPlaying } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { formatCountdown, formatTime } from "../format";
-import { devicesKey } from "./DevicesPage";
+import { useDevices } from "./DevicesPage";
 
 export function NowPlayingPage() {
   const { data: playing } = useQuery({
     queryKey: nowPlayingKey,
     queryFn: () => api<NowPlaying[]>("/api/now-playing"),
   });
-  const { data: devices } = useQuery({ queryKey: devicesKey, queryFn: () => api<Device[]>("/api/devices") });
+  const { data: devices } = useDevices();
 
   if (!playing || playing.length === 0) {
     return (

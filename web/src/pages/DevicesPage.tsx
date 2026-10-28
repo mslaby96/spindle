@@ -6,9 +6,13 @@ import { formatFull } from "../format";
 
 export const devicesKey = ["devices"] as const;
 
+export function useDevices() {
+  return useQuery({ queryKey: devicesKey, queryFn: () => api<Device[]>("/api/devices") });
+}
+
 export function DevicesPage() {
   const queryClient = useQueryClient();
-  const { data: devices } = useQuery({ queryKey: devicesKey, queryFn: () => api<Device[]>("/api/devices") });
+  const { data: devices } = useDevices();
   const [name, setName] = useState("");
   const [token, setToken] = useState<string | null>(null);
 

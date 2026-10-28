@@ -3,6 +3,7 @@ import time
 from mfrc522 import MFRC522
 
 from app.reader import DEFAULT_PINS
+from app.report import uid_hex
 
 p = DEFAULT_PINS
 PATTERNS = (0x00, 0x55, 0xAA, 0xFF, 0x3C)
@@ -38,7 +39,7 @@ def tag_reads(rc):
             if stat == rc.OK:
                 hits, last = hits + 1, uid
         time.sleep_ms(200)
-    return hits, "".join("{:02X}".format(b) for b in last) if last else "-"
+    return hits, uid_hex(last) if last else "-"
 
 
 print("Hold a tag flat on the reader for the whole test.")

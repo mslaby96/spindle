@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type CatalogMode, type Tag } from "../api/client";
 import { catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
+import { formatPressing } from "../format";
 
 export function CatalogPage() {
   const queryClient = useQueryClient();
@@ -54,7 +55,7 @@ export function CatalogPage() {
               </p>
               {tag.release && (
                 <p className="muted">
-                  {[tag.release.country, tag.release.year, tag.release.label, tag.release.catno].filter(Boolean).join(" · ")}
+                  {formatPressing(tag.release)}
                 </p>
               )}
               <p className="muted">Put the next sleeve on the stand.</p>

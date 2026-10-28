@@ -1,16 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, type SearchResult } from "../api/client";
-
-export function useDebounced<T>(value: T, ms: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
-}
+import { useDebounced } from "../hooks/useDebounced";
 
 export function AlbumSearch({ onPick }: { onPick: (r: SearchResult) => void }) {
   const [query, setQuery] = useState("");

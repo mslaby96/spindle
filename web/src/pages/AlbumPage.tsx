@@ -5,7 +5,7 @@ import { useParams } from "react-router";
 import { api, type AlbumDetail, type DiaryEntry } from "../api/client";
 import { Cover } from "../components/Cover";
 import { formatRating } from "../components/RatingStars";
-import { formatDateTime, formatLength } from "../format";
+import { formatDateTime, formatLength, formatPressing } from "../format";
 
 export function AlbumPage() {
   const id = Number(useParams().id);
@@ -42,7 +42,7 @@ export function AlbumPage() {
           <h2>Your pressing</h2>
           {releases.map((r) => (
             <p key={r.id} className="muted">
-              {[r.country, r.year, r.label, r.catno, r.format].filter(Boolean).join(" · ")}
+              {formatPressing(r)}
             </p>
           ))}
         </>

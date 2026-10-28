@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, type Version } from "../api/client";
-import { useDebounced } from "./AlbumSearch";
+import { useDebounced } from "../hooks/useDebounced";
 
 type Props = {
   masterId: number;
