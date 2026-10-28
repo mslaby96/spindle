@@ -107,6 +107,30 @@ describe("catalogue", () => {
     expect(screen.queryByLabelText("Search albums")).not.toBeInTheDocument();
   });
 
+  it("says saved after assigning a sleeve the stand had seen before", async () => {
+    base({
+      "GET /api/discogs/search?q=seifert": () => [200, [{ kind: "release", id: 4455667, artist: "Zbigniew Seifert", title: "Solo Violin" }]],
+      "POST /api/tags/04A1B2C3/assign": () => [200, { id: 5, uid: "04A1B2C3", album: { ...dsotm, title: "Solo Violin" }, created_at: 1 }],
+    });
+    renderApp("/catalog");
+    await placeSleeve({ device_id: 1, new: false, tag: { id: 5, uid: "04A1B2C3", created_at: 1 } });
+    await userEvent.type(await screen.findByLabelText("Search albums"), "seifert");
+    await userEvent.click(await screen.findByRole("button", { name: /Solo Violin/ }));
+    expect(await screen.findByText(/Saved/)).toBeInTheDocument();
+    expect(screen.queryByText(/Already in your library/)).not.toBeInTheDocument();
+  });
+
+  it("notices when cataloguing switches itself off", async () => {
+    let until = new Date(Date.now() + 300).toISOString();
+    base({
+      "GET /api/catalog/mode": () => (Date.parse(until) > Date.now() ? [200, { active: true, until }] : [200, { active: false }]),
+    });
+    renderApp("/catalog");
+    expect(await screen.findByRole("button", { name: "Stop cataloguing" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start cataloguing" }, { timeout: 3000 })).toBeInTheDocument();
+    until = "";
+  });
+
   it("toggles cataloguing", async () => {
     let active = false;
     const calls = base({

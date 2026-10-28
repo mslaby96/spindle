@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type CatalogMode, type Tag } from "../api/client";
-import { applyAssignedTag, catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
+import { catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 
 export function CatalogPage() {
@@ -11,21 +11,26 @@ export function CatalogPage() {
   const current = useQuery<CatalogTag | null>({ queryKey: catalogCurrentKey, queryFn: () => null, staleTime: Infinity });
   const unassigned = useQuery({ queryKey: unassignedKey, queryFn: () => api<Tag[]>("/api/tags/unassigned") });
   const [editing, setEditing] = useState<string | null>(null);
+  const active = mode.data?.active ?? false;
+  const until = mode.data?.until;
+
+  // The server lets cataloguing lapse quietly, so check again once it is due to end.
+  useEffect(() => {
+    if (!until) return;
+    const t = setTimeout(() => queryClient.invalidateQueries({ queryKey: catalogModeKey }), Date.parse(until) - Date.now() + 500);
+    return () => clearTimeout(t);
+  }, [until, queryClient]);
+  useEffect(() => {
+    if (mode.data && !mode.data.active) queryClient.setQueryData(catalogCurrentKey, null);
+  }, [mode.data, queryClient]);
 
   const toggle = useMutation({
     mutationFn: (active: boolean) => api<CatalogMode>("/api/catalog/mode", { method: "PUT", body: { active } }),
-    onSuccess: (state) => {
-      queryClient.setQueryData(catalogModeKey, state);
-      if (!state.active) queryClient.setQueryData(catalogCurrentKey, null);
-    },
+    onSuccess: (state) => queryClient.setQueryData(catalogModeKey, state),
   });
 
-  function saved(t: Tag) {
-    setEditing(null);
-    applyAssignedTag(queryClient, t);
-  }
+  const saved = () => setEditing(null);
 
-  const active = mode.data?.active ?? false;
   const tag = current.data?.tag;
   const others = unassigned.data?.filter((t) => t.uid !== tag?.uid) ?? [];
 

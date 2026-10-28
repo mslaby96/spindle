@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api, type SearchResult, type Tag } from "../api/client";
-import { unassignedKey } from "../api/events";
+import { applyAssignedTag } from "../api/events";
 import { AlbumSearch } from "./AlbumSearch";
 import { ReleasePicker } from "./ReleasePicker";
 
@@ -14,7 +14,7 @@ export function AssignTag({ uid, onDone }: { uid: string; onDone?: (tag: Tag) =>
     mutationFn: (body: { master_id?: number; release_id?: number }) =>
       api<Tag>(`/api/tags/${uid}/assign`, { body }),
     onSuccess: (tag) => {
-      queryClient.invalidateQueries({ queryKey: unassignedKey });
+      applyAssignedTag(queryClient, tag);
       onDone?.(tag);
     },
   });

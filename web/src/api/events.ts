@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import type { Album, CatalogMode, Tag } from "./client";
+import { meKey, type Album, type CatalogMode, type Tag } from "./client";
 
 export type NowPlaying = {
   device_id: number;
@@ -23,8 +23,20 @@ const RETRY_MS = 3000;
 
 export function applyAssignedTag(queryClient: QueryClient, tag: Tag) {
   queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
-    prev && prev.tag.uid === tag.uid ? { ...prev, tag } : prev,
+    prev && prev.tag.uid === tag.uid ? { ...prev, tag, new: true } : prev,
   );
+  queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev) =>
+    prev?.map((p) => (p.uid === tag.uid ? { ...p, album: tag.album } : p)),
+  );
+  queryClient.invalidateQueries({ queryKey: inboxKey });
+  queryClient.invalidateQueries({ queryKey: unassignedKey });
+}
+
+// Events missed while the stream was down are not replayed, so everything they feed is fetched again.
+function catchUp(queryClient: QueryClient) {
+  for (const queryKey of [nowPlayingKey, inboxKey, catalogModeKey, unassignedKey]) {
+    queryClient.invalidateQueries({ queryKey });
+  }
 }
 
 export function useLiveEvents() {
@@ -34,9 +46,18 @@ export function useLiveEvents() {
     let source: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
+    let opened = false;
 
     const on = <T,>(type: string, handle: (data: T) => void) =>
-      source!.addEventListener(type, (e) => handle(JSON.parse((e as MessageEvent).data) as T));
+      source!.addEventListener(type, (e) => {
+        let data: T;
+        try {
+          data = JSON.parse((e as MessageEvent).data) as T;
+        } catch {
+          return;
+        }
+        handle(data);
+      });
 
     const connect = () => {
       source = new EventSource("/api/events");
@@ -52,17 +73,15 @@ export function useLiveEvents() {
         queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
       on("inbox_changed", () => queryClient.invalidateQueries({ queryKey: inboxKey }));
-      on<Tag>("tag_assigned", (tag) => {
-        queryClient.invalidateQueries({ queryKey: inboxKey });
-        queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev) =>
-          prev?.map((p) => (p.uid === tag.uid ? { ...p, album: tag.album } : p)),
-        );
-        applyAssignedTag(queryClient, tag);
-        queryClient.invalidateQueries({ queryKey: unassignedKey });
-      });
+      on<Tag>("tag_assigned", (tag) => applyAssignedTag(queryClient, tag));
+      source.onopen = () => {
+        if (opened) catchUp(queryClient);
+        opened = true;
+      };
       source.onerror = () => {
         if (source?.readyState === EventSource.CLOSED && !stopped) {
           source.close();
+          queryClient.invalidateQueries({ queryKey: meKey });
           retry = setTimeout(connect, RETRY_MS);
         }
       };

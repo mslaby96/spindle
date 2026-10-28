@@ -50,8 +50,17 @@ function RequireAccount() {
   if (me.error instanceof ApiError && me.error.status === 401) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (!me.data) return <p className="loading">Loading…</p>;
-  return <Layout me={me.data} />;
+  if (me.data) return <Layout me={me.data} />;
+  if (setup.error || me.error) {
+    return (
+      <section className="empty">
+        <h1>Can't reach Spindle</h1>
+        <p className="muted">{(setup.error ?? me.error)?.message}</p>
+        <button onClick={() => (setup.error ? setup.refetch() : me.refetch())}>Try again</button>
+      </section>
+    );
+  }
+  return <p className="loading">Loading…</p>;
 }
 
 function Layout({ me }: { me: Me }) {

@@ -37,10 +37,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("inbox", () => {
   it("confirms a long listen", async () => {
-    const calls = setup(
-      [{ uid: "04A1", album, session: session({ state: "pending_confirmation", listened_sec: 10800, duration_confirmed: false }) }],
-      { "POST /api/sessions/7/resolve": () => [204] },
-    );
+    let cards = [{ uid: "04A1", album, session: session({ state: "pending_confirmation", listened_sec: 10800, duration_confirmed: false }) }];
+    const calls = setup(cards, {
+      "GET /api/inbox": () => [200, cards],
+      "POST /api/sessions/7/resolve": () => {
+        cards = [];
+        return [204];
+      },
+    });
     renderApp("/inbox");
     expect(await screen.findByText(/stayed on the stand for 3 h 0 min, the album is 46 min/)).toBeInTheDocument();
     expect(screen.getByText(/\(unconfirmed\)/)).toBeInTheDocument();
@@ -49,6 +53,7 @@ describe("inbox", () => {
     await waitFor(() =>
       expect(calls.find((c) => c.key === "POST /api/sessions/7/resolve")?.body).toEqual({ resolution: "repeated" }),
     );
+    await waitFor(() => expect(screen.queryByText(/stayed on the stand/)).not.toBeInTheDocument());
   });
 
   it("rates a listen in half stars with a note", async () => {
@@ -76,10 +81,18 @@ describe("inbox", () => {
   });
 
   it("skips a card", async () => {
-    const calls = setup([{ uid: "04A1", album, session: session({}) }], { "POST /api/sessions/7/dismiss": () => [204] });
+    let cards = [{ uid: "04A1", album, session: session({}) }];
+    const calls = setup(cards, {
+      "GET /api/inbox": () => [200, cards],
+      "POST /api/sessions/7/dismiss": () => {
+        cards = [];
+        return [204];
+      },
+    });
     renderApp("/inbox");
     await userEvent.click(await screen.findByRole("button", { name: "Skip" }));
     await waitFor(() => expect(calls.some((c) => c.key === "POST /api/sessions/7/dismiss")).toBe(true));
+    await waitFor(() => expect(screen.queryByText("Kind of Blue")).not.toBeInTheDocument());
   });
 
   it("asks which album an unknown sleeve is", async () => {

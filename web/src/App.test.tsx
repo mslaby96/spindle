@@ -177,3 +177,110 @@ describe("stands", () => {
     expect(screen.queryByText("spd_secret_token")).not.toBeInTheDocument();
   });
 });
+
+describe("expired session", () => {
+  it("sends you to sign in when the server stops accepting the session", async () => {
+    let expired = false;
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => (expired ? [401, { error: "not logged in" }] : [200, me]),
+      "GET /api/now-playing": () => [200, []],
+      "GET /api/devices": () => (expired ? [401, { error: "not logged in" }] : [200, []]),
+    });
+    renderApp();
+    await screen.findByRole("heading", { name: "Nothing on the stand" });
+
+    expired = true;
+    await userEvent.click(screen.getByRole("link", { name: "Stands" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("stops reconnecting the live stream once signed out", async () => {
+    let expired = false;
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => (expired ? [401, { error: "not logged in" }] : [200, me]),
+      "GET /api/now-playing": () => [200, []],
+    });
+    renderApp();
+    await screen.findByRole("heading", { name: "Nothing on the stand" });
+    await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+
+    expired = true;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const first = FakeEventSource.instances[0];
+      act(() => {
+        first.readyState = FakeEventSource.CLOSED;
+        first.onerror?.();
+      });
+      expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(10_000));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(FakeEventSource.instances.length).toBe(1);
+  });
+});
+
+describe("server trouble", () => {
+  it("offers to try again when the server can't be reached", async () => {
+    let down = true;
+    mockApi({
+      "GET /api/setup": () => (down ? [502, { error: "bad gateway" }] : [200, { needed: false }]),
+      "GET /api/me": () => [200, me],
+      "GET /api/now-playing": () => [200, []],
+    });
+    renderApp();
+    expect(await screen.findByText(/Can't reach Spindle/)).toBeInTheDocument();
+
+    down = false;
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();
+  });
+
+  it("catches up on what is playing after the live stream reconnects", async () => {
+    let playing: unknown[] = [];
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "GET /api/now-playing": () => [200, playing],
+    });
+    renderApp();
+    await screen.findByRole("heading", { name: "Nothing on the stand" });
+    await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+    const stream = FakeEventSource.instances[0];
+    act(() => stream.open());
+
+    playing = [
+      {
+        device_id: 1,
+        active: true,
+        uid: "04A1",
+        album: { id: 1, title: "Rumours", artist: "Fleetwood Mac", styles: [], genres: [], has_cover: false, duration_status: "resolved" },
+      },
+    ];
+    act(() => stream.open());
+    expect(await screen.findByRole("heading", { name: "Rumours" })).toBeInTheDocument();
+  });
+});
+
+describe("unknown sleeve", () => {
+  it("shows the album as soon as it is assigned, without waiting for the stream", async () => {
+    const rumours = { id: 1, title: "Rumours", artist: "Fleetwood Mac", styles: [], genres: [], has_cover: false, duration_status: "resolved" };
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "GET /api/inbox": () => [200, []],
+      "GET /api/now-playing": () => [200, [{ device_id: 3, active: true, uid: "04FFFFFF" }]],
+      "GET /api/discogs/search?q=rumours": () => [200, [{ kind: "release", id: 99, artist: "Fleetwood Mac", title: "Rumours" }]],
+      "POST /api/tags/04FFFFFF/assign": () => [200, { id: 5, uid: "04FFFFFF", album: rumours, created_at: 1 }],
+    });
+    renderApp();
+    await userEvent.type(await screen.findByLabelText("Search albums"), "rumours");
+    await userEvent.click(await screen.findByRole("button", { name: /Rumours/ }));
+    expect(await screen.findByRole("heading", { name: "Rumours" })).toBeInTheDocument();
+  });
+});
