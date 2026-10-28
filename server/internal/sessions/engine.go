@@ -291,31 +291,19 @@ func (e *Engine) classify(ctx context.Context, userID, id int64, useFallback boo
 	if !l.albumID.Valid {
 		return nil
 	}
-	if !duration.Settled(l.status.String) {
-		if !useFallback {
-			if e.Durations != nil {
-				e.Durations.Enqueue(userID, l.albumID.Int64)
-			}
-			return nil
+	if !duration.Settled(l.status.String) && !useFallback {
+		if e.Durations != nil {
+			e.Durations.Enqueue(userID, l.albumID.Int64)
 		}
+		return nil
 	}
 
-	length := time.Duration(l.ended-l.started) * time.Second
-	state, plays, confirmed := StateCounted, 1, true
-	switch {
-	case length < e.Cfg.MinDuration:
-		state, plays = StateDiscarded, 0
-	case length > e.longThreshold(l.seconds):
-		state, confirmed = StatePendingConfirmation, false
-	}
-	listened := int64(length / time.Second)
-	if state == StateDiscarded {
-		listened = 0
-	}
+	state, plays, listened := e.judge(time.Duration(l.ended-l.started)*time.Second, l.seconds)
+	confirmed := state != StatePendingConfirmation
 	_, err = e.DB.W.ExecContext(ctx,
 		`UPDATE sessions SET state = ?, play_count = ?, listened_sec = ?, duration_confirmed = ?, classified_at = ?
 		 WHERE id = ? AND state = 'unclassified'`,
-		state, plays, listened, confirmed, e.Now().Unix(), id)
+		state, plays, int64(listened/time.Second), confirmed, e.Now().Unix(), id)
 	if err != nil {
 		return err
 	}
@@ -323,6 +311,17 @@ func (e *Engine) classify(ctx context.Context, userID, id int64, useFallback boo
 		e.publish(userID, EventInboxChanged, nil)
 	}
 	return nil
+}
+
+// judge decides what a finished listen counts as: too short to count, one listen, or too long to count without asking.
+func (e *Engine) judge(length time.Duration, albumSec sql.NullInt64) (State, int, time.Duration) {
+	switch {
+	case length < e.Cfg.MinDuration:
+		return StateDiscarded, 0, 0
+	case length > e.longThreshold(albumSec):
+		return StatePendingConfirmation, 1, length
+	}
+	return StateCounted, 1, length
 }
 
 func (e *Engine) longThreshold(albumSec sql.NullInt64) time.Duration {

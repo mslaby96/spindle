@@ -139,37 +139,39 @@ func (r *Resolver) Resolve(ctx context.Context, userID, albumID int64) error {
 	if err != nil {
 		return err
 	}
-	if Settled(a.status) {
-		r.resolved(userID, albumID)
-		return nil
+	if !Settled(a.status) {
+		source, d, err := r.find(ctx, userID, albumID, a)
+		switch {
+		case d > 0:
+			r.store(ctx, albumID, StatusResolved, &d, source)
+		case err != nil:
+			r.store(ctx, albumID, StatusFailed, nil, "")
+			return err
+		default:
+			r.store(ctx, albumID, StatusNoData, nil, "")
+		}
 	}
+	r.resolved(userID, albumID)
+	return nil
+}
 
+// find returns the first complete album length a source knows, or the errors that kept the sources from answering.
+func (r *Resolver) find(ctx context.Context, userID, albumID int64, a albumInfo) (string, time.Duration, error) {
 	var failures []error
-	expected := 0
-	try := func(source string, d time.Duration, err error) bool {
-		if err != nil {
-			if !errors.Is(err, lastfm.ErrNoKey) && !errors.Is(err, discogs.ErrNotFound) {
-				failures = append(failures, err)
-			}
-			return false
+	answered := func(d time.Duration, err error) bool {
+		if err != nil && !errors.Is(err, lastfm.ErrNoKey) && !errors.Is(err, discogs.ErrNotFound) {
+			failures = append(failures, err)
 		}
-		if d <= 0 {
-			return false
-		}
-		r.store(ctx, albumID, StatusResolved, &d, source)
-		return true
+		return err == nil && d > 0
 	}
 
+	expected := 0
 	if a.masterID.Valid {
 		m, err := r.Discogs.Master(ctx, a.masterID.Int64)
 		d, n, complete := Tracklist(m.Tracklist)
 		expected = n
-		if !complete {
-			d = 0
-		}
-		if try("discogs_master", d, err) {
-			r.resolved(userID, albumID)
-			return nil
+		if answered(d, err) && complete {
+			return "discogs_master", d, nil
 		}
 	}
 	for _, id := range r.releaseIDs(ctx, userID, albumID, a.releaseID) {
@@ -178,36 +180,21 @@ func (r *Resolver) Resolve(ctx context.Context, userID, albumID int64) error {
 		if expected == 0 {
 			expected = n
 		}
-		if !complete {
-			d = 0
-		}
-		if try("discogs_release", d, err) {
-			r.resolved(userID, albumID)
-			return nil
+		if answered(d, err) && complete {
+			return "discogs_release", d, nil
 		}
 	}
 	if r.MusicBrainz != nil {
-		d, err := r.MusicBrainz.AlbumLength(ctx, a.artist, a.title, expected)
-		if try("musicbrainz", d, err) {
-			r.resolved(userID, albumID)
-			return nil
+		if d, err := r.MusicBrainz.AlbumLength(ctx, a.artist, a.title, expected); answered(d, err) {
+			return "musicbrainz", d, nil
 		}
 	}
 	if r.LastFM != nil {
-		d, err := r.LastFM.AlbumLength(ctx, a.artist, a.title)
-		if try("lastfm", d, err) {
-			r.resolved(userID, albumID)
-			return nil
+		if d, err := r.LastFM.AlbumLength(ctx, a.artist, a.title); answered(d, err) {
+			return "lastfm", d, nil
 		}
 	}
-
-	if len(failures) > 0 {
-		r.store(ctx, albumID, StatusFailed, nil, "")
-		return errors.Join(failures...)
-	}
-	r.store(ctx, albumID, StatusNoData, nil, "")
-	r.resolved(userID, albumID)
-	return nil
+	return "", 0, errors.Join(failures...)
 }
 
 func (r *Resolver) releaseIDs(ctx context.Context, userID, albumID int64, standalone sql.NullInt64) []int64 {
