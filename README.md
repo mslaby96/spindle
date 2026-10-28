@@ -84,14 +84,16 @@ The RC522 only reads a few centimetres, so stick the tags in the same spot on ev
 
 ```sh
 cd firmware
-mpremote cp -r app lib :
+mpremote mkdir :lib
+mpremote cp -r app :
+mpremote cp lib/mfrc522.py :lib/
 mpremote cp main.py config.json :
 mpremote reset
 ```
 
 If your MicroPython build doesn't include `requests`, run `mpremote mip install requests` once.
 
-To check the reader before setting everything up, upload `app` and `lib` and run `mpremote run tools/scan.py`. It prints the tag UID whenever a sleeve comes near.
+To check the reader before setting everything up, upload `app` and `lib/mfrc522.py` as above and run `mpremote run tools/scan.py`. It prints the tag UID whenever a sleeve comes near.
 
 While you're tinkering over USB, set `"watchdog": false` in `config.json`. The watchdog can't be stopped once it runs and keeps resetting the board after you interrupt it.
 
