@@ -1,8 +1,9 @@
 const locale = "en-GB";
 
 export function formatLength(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  const minutes = Math.round(seconds / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
   return h ? `${h} h ${m} min` : `${m} min`;
 }
 

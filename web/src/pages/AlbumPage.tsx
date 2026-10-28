@@ -61,7 +61,7 @@ export function AlbumPage() {
 
 function AlbumLength({ albumId, seconds, status, onSaved }: { albumId: number; seconds?: number; status: string; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
-  const [minutes, setMinutes] = useState(seconds ? String(Math.round(seconds / 60)) : "");
+  const [minutes, setMinutes] = useState("");
   const save = useMutation({
     mutationFn: (secs: number | null) => api(`/api/albums/${albumId}/duration`, { method: "PUT", body: { seconds: secs } }),
     onSuccess: () => {
@@ -76,7 +76,13 @@ function AlbumLength({ albumId, seconds, status, onSaved }: { albumId: number; s
     return (
       <p className="muted">
         {label} {status === "manual" && "(set by you)"}{" "}
-        <button className="link" onClick={() => setEditing(true)}>
+        <button
+          className="link"
+          onClick={() => {
+            setMinutes(seconds ? String(Math.round(seconds / 60)) : "");
+            setEditing(true);
+          }}
+        >
           edit
         </button>
       </p>
@@ -84,7 +90,8 @@ function AlbumLength({ albumId, seconds, status, onSaved }: { albumId: number; s
   }
   function submit(e: FormEvent) {
     e.preventDefault();
-    save.mutate(Math.round(Number(minutes) * 60));
+    const secs = Math.round(Number(minutes) * 60);
+    if (secs > 0) save.mutate(secs);
   }
   return (
     <form className="row inline" onSubmit={submit}>
