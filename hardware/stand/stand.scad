@@ -24,7 +24,7 @@ rc_depth = 8;           // board plus components; the pin header must point down
 fit = 0.4;              // clearance around the board
 leg_w = 4;              // legs of the spacer that keeps the board up
 front_wall = 2.5;       // between the sleeve and the reader antenna
-tag_height = 45;        // sticker centre above the bottom edge of the sleeve
+header_band = 12;       // strip at the bottom of the board with the straight pin header, kept inside the base
 antenna_from_top = 20;  // antenna centre measured from the top edge of the board
 
 /* [Label] */
@@ -73,8 +73,11 @@ module rounded_plate(size, r) {
 slot_front = lip_t;
 rest_front = lip_t + slot_w;
 rest_len = rest_height / cos(lean);
-board_top = tag_height + antenna_from_top;
-board_bottom = board_top - rc_h;
+// The header band hangs below the ceiling of the base so the pins and plugs can stick out backwards.
+board_bottom = -(shell + header_band) / cos(lean);
+board_top = board_bottom + rc_h;
+tag_height = board_top - antenna_from_top; // sticker centre above the bottom edge of the sleeve
+echo(str("Sticker centre: ", round(tag_height), " mm above the bottom edge of the sleeve"));
 boss_inset = corner_r + boss_d / 2;
 boss_positions = [
     [boss_inset, boss_inset], [width - boss_inset, boss_inset],
