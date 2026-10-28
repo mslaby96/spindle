@@ -40,9 +40,14 @@ usb_h = 8;
 led_hole_d = 5;
 
 /* [Cover] */
-cover_t = 2.4;
+cover_t = 3;
 screw_d = 2.2;          // for M2.5 self-tapping screws
 boss_d = 7;
+foot_d = 12;
+foot_h = 3;
+head_d = 5.5;           // pan head of the screw, sunk into the foot
+head_h = 2.5;
+pico_recess = 1;
 
 $fn = 48;
 eps = 0.01;
@@ -165,27 +170,29 @@ module body() {
     }
 }
 
+// Printed upside down: the flat top on the bed, the feet facing up.
 module cover() {
     difference() {
-        rounded_plate([width, depth, cover_t], corner_r);
-        for (p = boss_positions)
-            translate([p.x, p.y, -eps]) {
-                cylinder(d = screw_d + 0.6, h = cover_t + 2 * eps);
-                cylinder(d1 = 5.2, d2 = screw_d + 0.6, h = 1.6);
-            }
-    }
-    // cradle that keeps the Pico W in front of the USB opening
-    translate([pico_x - 1.5, pico_y - 1.5, cover_t - 0.2])
-        difference() {
-            cube([pico_w + 3, pico_l + 1.5, 1.7]);
-            translate([1.5, 1.5, -eps]) cube([pico_w, pico_l + 1, 1.7 + 2 * eps]);
+        union() {
+            rounded_plate([width, depth, cover_t], corner_r);
+            for (p = boss_positions)
+                translate([p.x, p.y, -foot_h]) cylinder(d = foot_d, h = foot_h + eps);
         }
+        for (p = boss_positions)
+            translate([p.x, p.y, -foot_h - eps]) {
+                cylinder(d = screw_d + 0.6, h = foot_h + cover_t + 2 * eps);
+                cylinder(d = head_d, h = head_h);
+            }
+        // shallow bed that keeps the Pico W lined up with the USB opening
+        translate([pico_x - 0.5, pico_y - 0.5, cover_t - pico_recess])
+            cube([pico_w + 1, pico_l + 1, pico_recess + eps]);
+    }
 }
 
 if (part == "body") body();
 else if (part == "cover") cover();
 else {
     body();
-    translate([0, 0, -30]) cover();
+    translate([0, 0, -40]) cover();
     %in_rest() translate([(rest_width - 314) / 2, -4.5, 0]) cube([314, 4, 314]);
 }
