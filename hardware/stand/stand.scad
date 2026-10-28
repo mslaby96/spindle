@@ -31,6 +31,10 @@ label_size = 8;
 label_depth = 1;
 label_font = "Liberation Sans:style=Bold";
 
+/* [Reader mark] */
+mark_depth = 0.6;
+mark_stroke = 1.8;
+
 /* [Electronics bay] */
 shell = 3.5;
 pico_l = 51.5;
@@ -89,9 +93,10 @@ module base() {
     rounded_box([width, depth, base_h], corner_r);
 }
 
+// reaches well below the base's rounded top edge so the front reads as one flat face
 module lip() {
-    translate([0, 0, base_h - corner_r])
-        rounded_box([width, lip_t, lip_h + corner_r], min(corner_r, lip_t / 2 - eps));
+    translate([0, 0, base_h - 2 * corner_r])
+        rounded_box([width, lip_t, lip_h + 2 * corner_r], min(corner_r, lip_t / 2 - eps));
 }
 
 module rest() {
@@ -139,6 +144,28 @@ module label_cut() {
                 text(label, size = label_size, font = label_font, halign = "center", valign = "center");
 }
 
+module arc(r, w, half_angle) {
+    intersection() {
+        difference() {
+            circle(r + w / 2);
+            circle(r - w / 2);
+        }
+        polygon([[0, 0], [2 * r * cos(half_angle), 2 * r * sin(half_angle)],
+                 [2 * r, 0], [2 * r * cos(half_angle), -2 * r * sin(half_angle)]]);
+    }
+}
+
+// contactless symbol over the antenna, so it's clear where the sticker should land
+module reader_mark() {
+    in_rest()
+        translate([rest_width / 2 - 8, mark_depth, tag_height])
+            rotate([90, 0, 0])
+                linear_extrude(mark_depth + eps) {
+                    circle(d = mark_stroke * 1.6);
+                    for (r = [6, 10.5, 15]) arc(r, mark_stroke, 42);
+                }
+}
+
 module bosses() {
     for (p = boss_positions)
         translate([p.x, p.y, 0])
@@ -161,6 +188,7 @@ module body() {
         led_hole();
         centre_mark();
         label_cut();
+        reader_mark();
         // keep the backrest from poking below the base
         translate([-1, -1, -50]) cube([width + 2, depth + 2, 50]);
     }
