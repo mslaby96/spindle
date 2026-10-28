@@ -13,6 +13,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { NowPlayingPage } from "./pages/NowPlayingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { StatsPage } from "./pages/StatsPage";
 
 export function App() {
   return (
@@ -25,6 +26,7 @@ export function App() {
         <Route path="library" element={<LibraryPage />} />
         <Route path="albums/:id" element={<AlbumPage />} />
         <Route path="diary" element={<DiaryPage />} />
+        <Route path="stats" element={<StatsPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -69,6 +71,7 @@ function Layout({ me }: { me: Me }) {
           </NavLink>
           <NavLink to="/library">Library</NavLink>
           <NavLink to="/diary">Diary</NavLink>
+          <NavLink to="/stats">Stats</NavLink>
           <NavLink to="/catalog">Catalogue</NavLink>
           <NavLink to="/devices">Stands</NavLink>
           <NavLink to="/settings">{me.username}</NavLink>

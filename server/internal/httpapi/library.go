@@ -121,3 +121,35 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (s *Server) topStats(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	period, measure := q.Get("period"), q.Get("measure")
+	if period == "" {
+		period = "30d"
+	}
+	if measure == "" {
+		measure = "plays"
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	top, err := s.Stats.Top(r.Context(), userID(r), period, measure, limit)
+	if errors.Is(err, stats.ErrBadQuery) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, top)
+}
+
+func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
+	weeks, _ := strconv.Atoi(r.URL.Query().Get("weeks"))
+	list, err := s.Stats.Timeline(r.Context(), userID(r), weeks)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}

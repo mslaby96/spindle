@@ -72,6 +72,8 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/library", s.user(s.library))
 	s.mux.Handle("GET /api/library/forgotten", s.user(s.forgotten))
 	s.mux.Handle("GET /api/diary", s.user(s.diary))
+	s.mux.Handle("GET /api/stats/top", s.user(s.topStats))
+	s.mux.Handle("GET /api/stats/timeline", s.user(s.timeline))
 	s.mux.Handle("GET /api/albums/{id}", s.user(s.albumDetail))
 
 	s.mux.Handle("GET /api/discogs/search", s.user(s.searchDiscogs))

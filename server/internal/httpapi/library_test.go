@@ -84,3 +84,25 @@ func TestEditAndDeleteListen(t *testing.T) {
 		t.Fatalf("library after delete %+v", items)
 	}
 }
+
+func TestStatsEndpoints(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	e.listen(t, "counted", 40)
+	var top struct {
+		Summary struct{ Plays int }
+		Albums  []struct{ Title string }
+	}
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/stats/top?period=all&measure=time", nil).Body).Decode(&top)
+	if top.Summary.Plays != 1 || len(top.Albums) != 1 || top.Albums[0].Title != "Kind of Blue" {
+		t.Fatalf("top %+v", top)
+	}
+	if resp := do(t, c, "GET", e.http.URL+"/api/stats/top?period=forever", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad period: %d", resp.StatusCode)
+	}
+	var weeks []struct{ Start string }
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/stats/timeline?weeks=8", nil).Body).Decode(&weeks)
+	if len(weeks) != 8 {
+		t.Fatalf("weeks %+v", weeks)
+	}
+}
