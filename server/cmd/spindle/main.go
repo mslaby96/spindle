@@ -30,6 +30,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/musicbrainz"
 	"github.com/mslaby96/spindle/server/internal/presence"
 	"github.com/mslaby96/spindle/server/internal/sessions"
+	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
 const userAgent = "Spindle/0.1 ( https://github.com/mslaby96/spindle )"
@@ -126,6 +127,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Durations: resolver,
 			Sessions:  engine,
 			Inbox:     &inbox.Inbox{DB: d, Bus: bus, Now: time.Now},
+			Stats:     &stats.Stats{DB: d, Now: time.Now, Loc: cfg.Location},
 			Discogs:   discogsClient,
 			Covers:    coverStore,
 			Bus:       bus,

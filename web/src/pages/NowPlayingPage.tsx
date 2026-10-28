@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type Device } from "../api/client";
 import { nowPlayingKey, type NowPlaying } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
+import { Cover } from "../components/Cover";
+import { formatTime } from "../format";
 import { devicesKey } from "./DevicesPage";
 
 export function NowPlayingPage() {
@@ -28,18 +30,14 @@ export function NowPlayingPage() {
         <article className="card now" key={p.device_id} style={{ borderColor: p.album?.cover_color }}>
           {p.album ? (
             <>
-              {p.album.has_cover ? (
-                <img className="cover" src={`/api/albums/${p.album.id}/cover`} alt="" />
-              ) : (
-                <div className="cover" style={{ background: p.album.cover_color }} />
-              )}
+              <Cover albumId={p.album.id} hasCover={p.album.has_cover} color={p.album.cover_color} />
               <div>
                 {showStand && <p className="muted">{devices?.find((d) => d.id === p.device_id)?.name}</p>}
                 <h1>{p.album.title}</h1>
                 <p>{p.album.artist}</p>
                 <p className="muted">
                   {[p.album.year, ...p.album.styles].filter(Boolean).join(" · ")}
-                  {p.started_at && ` · since ${new Date(p.started_at).toLocaleTimeString("en-GB", { timeStyle: "short" })}`}
+                  {p.started_at && ` · since ${formatTime(p.started_at)}`}
                 </p>
               </div>
             </>

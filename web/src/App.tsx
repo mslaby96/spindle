@@ -3,9 +3,12 @@ import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from "react-rou
 
 import { api, ApiError, meKey, setupKey, type Me } from "./api/client";
 import { useLiveEvents } from "./api/events";
+import { AlbumPage } from "./pages/AlbumPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { DevicesPage } from "./pages/DevicesPage";
+import { DiaryPage } from "./pages/DiaryPage";
 import { InboxPage, useInbox } from "./pages/InboxPage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NowPlayingPage } from "./pages/NowPlayingPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -19,6 +22,9 @@ export function App() {
       <Route element={<RequireAccount />}>
         <Route index element={<NowPlayingPage />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="library" element={<LibraryPage />} />
+        <Route path="albums/:id" element={<AlbumPage />} />
+        <Route path="diary" element={<DiaryPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -61,6 +67,8 @@ function Layout({ me }: { me: Me }) {
           <NavLink to="/inbox">
             Inbox{waiting > 0 && <span className="badge">{waiting}</span>}
           </NavLink>
+          <NavLink to="/library">Library</NavLink>
+          <NavLink to="/diary">Diary</NavLink>
           <NavLink to="/catalog">Catalogue</NavLink>
           <NavLink to="/devices">Stands</NavLink>
           <NavLink to="/settings">{me.username}</NavLink>

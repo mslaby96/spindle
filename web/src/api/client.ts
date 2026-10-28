@@ -120,3 +120,34 @@ export type InboxCard = {
   uid: string;
   album?: { id: number; title: string; artist: string; has_cover: boolean; cover_color?: string; rating?: number; length_sec?: number };
 };
+
+export type LibraryItem = {
+  album_id: number;
+  title: string;
+  artist: string;
+  year?: number;
+  has_cover: boolean;
+  cover_color?: string;
+  plays: number;
+  listened_sec: number;
+  last_played_at?: string;
+  rating?: number;
+  added_at: string;
+};
+
+export type DiaryEntry = {
+  session_id: number;
+  album_id: number;
+  title: string;
+  artist: string;
+  has_cover: boolean;
+  cover_color?: string;
+  started_at: string;
+  plays: number;
+  listened_sec: number;
+  duration_confirmed: boolean;
+  rating?: number;
+  note?: string;
+};
+
+export type AlbumDetail = { album: Album; stats: LibraryItem; releases: Release[]; history: DiaryEntry[] };

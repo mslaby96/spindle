@@ -256,3 +256,30 @@ func nullYear(y int) any {
 	}
 	return y
 }
+
+func (s *Service) Releases(ctx context.Context, userID, albumID int64) ([]Release, error) {
+	rows, err := s.DB.R.QueryContext(ctx,
+		`SELECT discogs_release_id FROM releases WHERE user_id = ? AND album_id = ? ORDER BY id`, userID, albumID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	out := []Release{}
+	for _, id := range ids {
+		r, err := s.releaseBy(ctx, userID, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}

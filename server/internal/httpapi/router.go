@@ -18,6 +18,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
 	"github.com/mslaby96/spindle/server/internal/sessions"
+	"github.com/mslaby96/spindle/server/internal/stats"
 	"github.com/mslaby96/spindle/server/internal/webui"
 )
 
@@ -33,6 +34,7 @@ type Deps struct {
 	Durations *duration.Resolver
 	Sessions  *sessions.Engine
 	Inbox     *inbox.Inbox
+	Stats     *stats.Stats
 	Bus       *events.Bus
 	Presence  presence.Handler
 	Log       *slog.Logger
@@ -64,6 +66,13 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/sessions/{id}/resolve", s.user(s.resolveSession))
 	s.mux.Handle("PUT /api/sessions/{id}/review", s.user(s.reviewSession))
 	s.mux.Handle("POST /api/sessions/{id}/dismiss", s.user(s.dismissSession))
+	s.mux.Handle("PUT /api/sessions/{id}", s.user(s.editSession))
+	s.mux.Handle("DELETE /api/sessions/{id}", s.user(s.deleteSession))
+
+	s.mux.Handle("GET /api/library", s.user(s.library))
+	s.mux.Handle("GET /api/library/forgotten", s.user(s.forgotten))
+	s.mux.Handle("GET /api/diary", s.user(s.diary))
+	s.mux.Handle("GET /api/albums/{id}", s.user(s.albumDetail))
 
 	s.mux.Handle("GET /api/discogs/search", s.user(s.searchDiscogs))
 	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))

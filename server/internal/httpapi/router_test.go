@@ -26,6 +26,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
 	"github.com/mslaby96/spindle/server/internal/sessions"
+	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
 type testEnv struct {
@@ -67,6 +68,7 @@ func newEnv(t *testing.T) *testEnv {
 		Durations: resolver,
 		Sessions:  engine,
 		Inbox:     &inbox.Inbox{DB: d, Bus: bus, Now: time.Now},
+		Stats:     &stats.Stats{DB: d, Now: time.Now, Loc: cfg.Location},
 		Bus:       bus,
 		Presence:  router,
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),

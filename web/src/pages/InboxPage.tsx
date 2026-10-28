@@ -4,21 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type InboxCard } from "../api/client";
 import { inboxKey } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
+import { Cover } from "../components/Cover";
 import { formatRating, RatingStars } from "../components/RatingStars";
+import { formatDateTime, formatLength } from "../format";
 
 export function useInbox() {
   return useQuery({ queryKey: inboxKey, queryFn: () => api<InboxCard[]>("/api/inbox") });
 }
 
-export function formatLength(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return h ? `${h} h ${m} min` : `${m} min`;
-}
-
-function when(iso: string) {
-  return new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
 
 export function InboxPage() {
   const { data: cards } = useInbox();
@@ -59,7 +52,7 @@ function ListenCard({ card }: { card: InboxCard }) {
     return (
       <article className="card listen">
         <p>
-          <strong>Unknown sleeve</strong> <span className="muted">· {when(session.started_at)} · {formatLength(session.listened_sec || 0)}</span>
+          <strong>Unknown sleeve</strong> <span className="muted">· {formatDateTime(session.started_at)} · {formatLength(session.listened_sec || 0)}</span>
         </p>
         <p className="muted">
           Which album is <code>{card.uid}</code>? The listen will be counted once you pick it.
@@ -77,17 +70,13 @@ function ListenCard({ card }: { card: InboxCard }) {
   return (
     <article className="card listen">
       <div className="row top">
-        {album.has_cover ? (
-          <img className="thumb-lg" src={`/api/albums/${album.id}/cover`} alt="" />
-        ) : (
-          <div className="thumb-lg" style={{ background: album.cover_color }} />
-        )}
+        <Cover albumId={album.id} hasCover={album.has_cover} color={album.cover_color} className="thumb-lg" />
         <div className="grow">
           <p>
             <strong>{album.title}</strong> <span className="muted">· {album.artist}</span>
           </p>
           <p className="muted">
-            {when(session.started_at)} · {formatLength(session.listened_sec)}
+            {formatDateTime(session.started_at)} · {formatLength(session.listened_sec)}
             {!session.duration_confirmed && " (unconfirmed)"}
             {album.rating !== undefined && ` · your rating ${formatRating(album.rating)}`}
           </p>

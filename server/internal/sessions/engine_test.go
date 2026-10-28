@@ -419,3 +419,45 @@ func TestNowPlayingEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestEditRecomputesListenedTime(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 30*time.Minute)
+	v.remove(t)
+	s := v.only(t)
+	start := s.StartedAt.Add(-10 * time.Minute)
+	if err := v.e.Edit(context.Background(), 1, s.ID, start, start.Add(40*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if s = v.only(t); s.ListenedSec != 40*60 || !s.StartedAt.Equal(start) || s.PlayCount != 1 {
+		t.Fatalf("after edit %+v", s)
+	}
+	if err := v.e.Edit(context.Background(), 1, s.ID, start, start.Add(-time.Minute)); !errors.Is(err, ErrInvalidTimes) {
+		t.Fatalf("end before start: %v", err)
+	}
+	if err := v.e.Edit(context.Background(), 1, s.ID, start, v.clock.now().Add(time.Hour)); !errors.Is(err, ErrInvalidTimes) {
+		t.Fatalf("end in the future: %v", err)
+	}
+	if err := v.e.Edit(context.Background(), 2, s.ID, start, start.Add(time.Minute)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other user: %v", err)
+	}
+}
+
+func TestDeleteRemovesListen(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 30*time.Minute)
+	v.remove(t)
+	v.play(t, tagA, 1*time.Minute)
+	if err := v.e.Delete(context.Background(), 1, v.sessions(t)[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	list := v.sessions(t)
+	if len(list) != 1 || list[0].State != StateActive {
+		t.Fatalf("after delete %+v", list)
+	}
+	if err := v.e.Delete(context.Background(), 1, list[0].ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleting the active session: %v", err)
+	}
+}
