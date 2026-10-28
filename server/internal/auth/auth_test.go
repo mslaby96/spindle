@@ -225,25 +225,49 @@ func TestLimiterBacksOff(t *testing.T) {
 	c := &clock{t: time.Unix(0, 0)}
 	l.Now = c.now
 	for i := 0; i < freeAttempts; i++ {
-		l.Fail("1.2.3.4")
+		if ok, _ := l.Begin("1.2.3.4"); !ok {
+			t.Fatalf("attempt %d blocked within free attempts", i+1)
+		}
 	}
-	if ok, _ := l.Allow("1.2.3.4"); !ok {
-		t.Fatal("blocked within free attempts")
+	if ok, _ := l.Begin("1.2.3.4"); !ok {
+		t.Fatal("4th attempt should run and start the backoff")
 	}
-	l.Fail("1.2.3.4")
-	ok, wait := l.Allow("1.2.3.4")
+	ok, wait := l.Begin("1.2.3.4")
 	if ok || wait != time.Second {
-		t.Fatalf("after 4th failure: ok=%v wait=%v", ok, wait)
+		t.Fatalf("right after the 4th attempt: ok=%v wait=%v", ok, wait)
 	}
-	l.Fail("1.2.3.4")
-	if _, wait := l.Allow("1.2.3.4"); wait != 2*time.Second {
-		t.Fatalf("after 5th failure: wait=%v", wait)
+	c.advance(time.Second)
+	l.Begin("1.2.3.4")
+	if _, wait := l.Begin("1.2.3.4"); wait != 2*time.Second {
+		t.Fatalf("after the 5th attempt: wait=%v", wait)
 	}
-	if ok, _ := l.Allow("5.6.7.8"); !ok {
+	if ok, _ := l.Begin("5.6.7.8"); !ok {
 		t.Error("other client blocked")
 	}
-	c.advance(2 * time.Second)
-	if ok, _ := l.Allow("1.2.3.4"); !ok {
-		t.Error("still blocked after backoff")
+	l.Reset("1.2.3.4")
+	if ok, _ := l.Begin("1.2.3.4"); !ok {
+		t.Error("still blocked after a successful login")
+	}
+}
+
+func TestLimiterHoldsUnderConcurrency(t *testing.T) {
+	l := NewLimiter()
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	allowed := 0
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if ok, _ := l.Begin("1.2.3.4"); ok {
+				mu.Lock()
+				allowed++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if allowed != freeAttempts+1 {
+		t.Fatalf("%d of 50 parallel attempts got through", allowed)
 	}
 }

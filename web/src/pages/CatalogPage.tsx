@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type CatalogMode, type Tag } from "../api/client";
-import { catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
+import { applyAssignedTag, catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 
 export function CatalogPage() {
@@ -22,9 +22,7 @@ export function CatalogPage() {
 
   function saved(t: Tag) {
     setEditing(null);
-    queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
-      prev && prev.tag.uid === t.uid ? { ...prev, tag: t } : prev,
-    );
+    applyAssignedTag(queryClient, t);
   }
 
   const active = mode.data?.active ?? false;
@@ -72,7 +70,7 @@ export function CatalogPage() {
       ) : (
         <p className="muted">
           Turn on cataloguing, then put your records on the stand one by one and pick each album. Nothing counts as a
-          listen while cataloguing is on. It switches itself off after 10 minutes without a new sleeve.
+          listen while cataloguing is on, and it switches itself off when no new sleeve shows up for a while.
         </p>
       )}
 

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/mslaby96/spindle/server/internal/devices"
 )
@@ -37,12 +36,11 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
-	err = s.Devices.Revoke(r.Context(), userID(r), id)
+	err := s.Devices.Revoke(r.Context(), userID(r), id)
 	if errors.Is(err, devices.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "device not found")
 		return

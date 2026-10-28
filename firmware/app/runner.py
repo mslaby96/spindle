@@ -51,7 +51,7 @@ def run():
     url = cfg["server"] + "/api/device/v1/report"
 
     seq = 0
-    reported = object()
+    attempted = object()
     interval = report.DEFAULT_INTERVAL_MS
     next_read = time.ticks_ms()
     next_report = time.ticks_ms()
@@ -64,13 +64,14 @@ def run():
         if time.ticks_diff(now, next_read) >= 0:
             uid = debounce.feed(reader.read())
             next_read = time.ticks_add(now, READ_EVERY_MS)
-            if uid != reported:
+            if uid != attempted:
                 next_report = now
 
         if not wifi.tick():
             led.show("offline")
         elif time.ticks_diff(now, next_report) >= 0:
             seq += 1
+            attempted = debounce.current
             try:
                 status, body = post_json(url, cfg["token"], report.build(debounce.current, VERSION, seq))
             except Exception as e:
@@ -80,7 +81,6 @@ def run():
             if status == 200:
                 state, interval = report.parse(body)
                 led.show(state)
-                reported = debounce.current
             elif status == 401:
                 print("server rejected the device token")
                 led.show("error")

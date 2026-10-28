@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
@@ -45,8 +47,9 @@ const (
 )
 
 var (
-	ErrNotFound   = errors.New("session not found")
-	ErrNotPending = errors.New("session is not waiting for confirmation")
+	ErrNotFound          = errors.New("session not found")
+	ErrNotPending        = errors.New("session is not waiting for confirmation")
+	ErrUnknownResolution = errors.New("resolution must be forgot, repeated or longer")
 )
 
 type Tags interface {
@@ -74,6 +77,7 @@ type Engine struct {
 	Cfg       config.Sessions
 	Now       func() time.Time
 	Durations LengthQueue
+	Log       *slog.Logger
 
 	mu sync.Mutex
 }
@@ -140,10 +144,9 @@ func (e *Engine) Sweep(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, s := range stale {
-		if err := e.close(ctx, s.userID, s.id); err != nil {
-			return err
-		}
+		errs = append(errs, e.close(ctx, s.userID, s.id))
 	}
 
 	expired, err := e.ids(ctx, `SELECT id, user_id FROM sessions WHERE state = 'pending_confirmation' AND classified_at <= ?`,
@@ -152,9 +155,7 @@ func (e *Engine) Sweep(ctx context.Context) error {
 		return err
 	}
 	for _, s := range expired {
-		if err := e.resolve(ctx, s.userID, s.id, ResolutionAuto); err != nil {
-			return err
-		}
+		errs = append(errs, e.resolve(ctx, s.userID, s.id, ResolutionAuto))
 	}
 
 	waiting, err := e.ids(ctx, `SELECT s.id, s.user_id FROM sessions s JOIN albums a ON a.id = s.album_id
@@ -164,11 +165,9 @@ func (e *Engine) Sweep(ctx context.Context) error {
 		return err
 	}
 	for _, s := range waiting {
-		if err := e.classify(ctx, s.userID, s.id, true); err != nil {
-			return err
-		}
+		errs = append(errs, e.classify(ctx, s.userID, s.id, true))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (e *Engine) RunSweeper(ctx context.Context, every time.Duration) {
@@ -179,7 +178,9 @@ func (e *Engine) RunSweeper(ctx context.Context, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			e.Sweep(ctx)
+			if err := e.Sweep(ctx); err != nil && ctx.Err() == nil && e.Log != nil {
+				e.Log.Error("session sweep", "err", err)
+			}
 		}
 	}
 }
@@ -205,7 +206,7 @@ func (e *Engine) Resolve(ctx context.Context, userID, sessionID int64, r Resolut
 	switch r {
 	case ResolutionForgot, ResolutionRepeated, ResolutionLonger:
 	default:
-		return errors.New("unknown resolution")
+		return ErrUnknownResolution
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -245,9 +246,7 @@ func (e *Engine) classify(ctx context.Context, userID, id int64, useFallback boo
 	if !l.albumID.Valid {
 		return nil
 	}
-	switch l.status.String {
-	case "resolved", "no_data", "manual":
-	default:
+	if !duration.Settled(l.status.String) {
 		if !useFallback {
 			if e.Durations != nil {
 				e.Durations.Enqueue(userID, l.albumID.Int64)
@@ -305,18 +304,7 @@ func (e *Engine) resolve(ctx context.Context, userID, id int64, r Resolution) er
 		return ErrNotPending
 	}
 
-	length := time.Duration(l.ended-l.started) * time.Second
-	album := typicalLP
-	if l.seconds.Valid && l.seconds.Int64 > 0 {
-		album = time.Duration(l.seconds.Int64) * time.Second
-	}
-	plays, listened := 1, length
-	switch r {
-	case ResolutionForgot, ResolutionAuto:
-		listened = min(album, length)
-	case ResolutionRepeated:
-		plays = repeatedPlays(length, album)
-	}
+	plays, listened := credit(r, time.Duration(l.ended-l.started)*time.Second, l.seconds)
 	_, err = e.DB.W.ExecContext(ctx,
 		`UPDATE sessions SET state = 'counted', play_count = ?, listened_sec = ?, duration_confirmed = 1, resolution = ?
 		 WHERE id = ?`, plays, int64(listened/time.Second), r, id)
@@ -324,6 +312,21 @@ func (e *Engine) resolve(ctx context.Context, userID, id int64, r Resolution) er
 		e.publish(userID, EventInboxChanged, nil)
 	}
 	return err
+}
+
+// credit is how many listens and how much time a session of the given length is worth once its resolution is known.
+func credit(r Resolution, length time.Duration, albumSec sql.NullInt64) (int, time.Duration) {
+	album := typicalLP
+	if albumSec.Valid && albumSec.Int64 > 0 {
+		album = time.Duration(albumSec.Int64) * time.Second
+	}
+	switch r {
+	case ResolutionForgot, ResolutionAuto:
+		return 1, min(album, length)
+	case ResolutionRepeated:
+		return repeatedPlays(length, album), length
+	}
+	return 1, length
 }
 
 func repeatedPlays(length, album time.Duration) int {

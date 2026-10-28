@@ -55,7 +55,7 @@ function RequireAccount() {
 }
 
 function Layout({ me }: { me: Me }) {
-  useLiveEvents(true);
+  useLiveEvents();
   const inbox = useInbox();
   const waiting = inbox.data?.length ?? 0;
   return (

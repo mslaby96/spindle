@@ -4,14 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 )
 
 func (s *Server) setAlbumDuration(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	var req struct {
@@ -29,7 +27,7 @@ func (s *Server) setAlbumDuration(w http.ResponseWriter, r *http.Request) {
 		v := time.Duration(*req.Seconds) * time.Second
 		d = &v
 	}
-	err = s.Durations.SetManual(r.Context(), userID(r), id, d)
+	err := s.Durations.SetManual(r.Context(), userID(r), id, d)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "album not found")
 		return

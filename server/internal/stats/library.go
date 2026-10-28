@@ -127,8 +127,10 @@ type DiaryEntry struct {
 
 type DiaryFilter struct {
 	AlbumID int64
-	Before  *time.Time
-	Limit   int
+	// Before and BeforeID are the started_at and session id of the last entry already shown.
+	Before   *time.Time
+	BeforeID int64
+	Limit    int
 }
 
 // Diary returns listens newest first. Pass the started_at of the last entry seen as Before to get the next page.
@@ -137,16 +139,20 @@ func (st *Stats) Diary(ctx context.Context, userID int64, f DiaryFilter) ([]Diar
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	cursor := int64(1 << 62)
+	cursor, cursorID := int64(1<<62), int64(1<<62)
 	if f.Before != nil {
 		cursor = f.Before.Unix()
+		if f.BeforeID > 0 {
+			cursorID = f.BeforeID
+		}
 	}
 	rows, err := st.DB.R.QueryContext(ctx, `
 		SELECT s.id, a.id, a.title, a.artist, a.cover_path IS NOT NULL, coalesce(a.cover_color, ''), s.started_at,
 			s.play_count, s.listened_sec, s.duration_confirmed, s.rating, coalesce(s.note, '')
 		FROM sessions s JOIN albums a ON a.id = s.album_id
-		WHERE s.user_id = ? AND `+listened+` AND s.started_at < ? AND (? = 0 OR s.album_id = ?)
-		ORDER BY s.started_at DESC, s.id DESC LIMIT ?`, userID, cursor, f.AlbumID, f.AlbumID, limit)
+		WHERE s.user_id = ? AND `+listened+` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))
+			AND (? = 0 OR s.album_id = ?)
+		ORDER BY s.started_at DESC, s.id DESC LIMIT ?`, userID, cursor, cursor, cursorID, f.AlbumID, f.AlbumID, limit)
 	if err != nil {
 		return nil, err
 	}

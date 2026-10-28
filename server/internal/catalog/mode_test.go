@@ -171,3 +171,21 @@ func TestAssignNeedsSomething(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestReenablingAfterExpiryAnnouncesSleeveAgain(t *testing.T) {
+	m, c, ch := newMode(t)
+	ctx := context.Background()
+	m.Set(ctx, 1, true)
+	m.Observe(ctx, obs("04A1", c.t))
+	c.t = c.t.Add(11 * time.Minute)
+	if on, _ := m.Active(ctx, 1); on {
+		t.Fatal("mode should have expired")
+	}
+	m.Set(ctx, 1, true)
+	drain(ch)
+	m.Observe(ctx, obs("04A1", c.t))
+	evs := drain(ch)
+	if len(evs) == 0 || evs[len(evs)-1].Type != EventCatalogTag {
+		t.Fatalf("sleeve left on the stand was not announced after re-enabling: %+v", evs)
+	}
+}

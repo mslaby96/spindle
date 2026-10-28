@@ -55,6 +55,28 @@ describe("catalogue", () => {
     expect(calls.find((c) => c.key === "POST /api/tags/04A1B2C3/assign")?.body).toEqual({ master_id: 10362 });
   });
 
+  it("assigns a specific pressing", async () => {
+    const calls = base({
+      "GET /api/discogs/search?q=dark%20side": () => [
+        200,
+        [{ kind: "master", id: 10362, artist: "Pink Floyd", title: "The Dark Side Of The Moon", year: "1973" }],
+      ],
+      "GET /api/discogs/masters/10362/versions?": () => [
+        200,
+        [{ id: 1873013, title: "The Dark Side Of The Moon", label: "Harvest", catno: "SHVL 804", country: "UK", released: "1973", format: "LP", thumb: "" }],
+      ],
+      "POST /api/tags/04A1B2C3/assign": () => [200, { id: 5, uid: "04A1B2C3", album: dsotm, created_at: 1 }],
+    });
+    renderApp("/catalog");
+    await placeSleeve({ device_id: 1, new: true, tag: { id: 5, uid: "04A1B2C3", created_at: 1 } });
+    await userEvent.type(await screen.findByLabelText("Search albums"), "dark side");
+    await userEvent.click(await screen.findByRole("button", { name: /The Dark Side Of The Moon/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /UK 1973/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === "POST /api/tags/04A1B2C3/assign")?.body).toEqual({ release_id: 1873013 }),
+    );
+  });
+
   it("saves a standalone pressing straight from search", async () => {
     const calls = base({
       "GET /api/discogs/search?q=seifert": () => [

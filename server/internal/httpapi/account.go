@@ -22,8 +22,20 @@ const (
 
 func userID(r *http.Request) int64 { return r.Context().Value(userKey).(int64) }
 
+// intentHeader must accompany every state-changing request made with the session cookie. Browsers only send custom
+// headers cross-origin after a CORS preflight, which Spindle never approves, so a foreign page can't forge one.
+const intentHeader = "X-Spindle"
+
+func hasIntent(r *http.Request) bool {
+	return r.Method == http.MethodGet || r.Method == http.MethodHead || r.Header.Get(intentHeader) != ""
+}
+
 func (s *Server) user(h http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !hasIntent(r) {
+			writeError(w, http.StatusForbidden, "missing "+intentHeader+" header")
+			return
+		}
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "not logged in")
@@ -72,7 +84,6 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "setup already completed")
 		return
 	case errors.Is(err, auth.ErrInvalidSetupCode):
-		s.limiter.Fail(clientIP(r))
 		writeError(w, http.StatusForbidden, "invalid setup code")
 		return
 	case errors.Is(err, auth.ErrWeakPassword):
@@ -100,7 +111,6 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.Auth.Authenticate(r.Context(), req.Username, req.Password)
 	if errors.Is(err, auth.ErrInvalidCredentials) {
-		s.limiter.Fail(clientIP(r))
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
@@ -116,6 +126,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if !hasIntent(r) {
+		writeError(w, http.StatusForbidden, "missing "+intentHeader+" header")
+		return
+	}
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		if err := s.Auth.DeleteSession(r.Context(), c.Value); err != nil {
 			s.internal(w, err)
@@ -192,7 +206,7 @@ func (s *Server) clearCookie(w http.ResponseWriter) {
 }
 
 func (s *Server) allow(w http.ResponseWriter, r *http.Request) bool {
-	ok, wait := s.limiter.Allow(clientIP(r))
+	ok, wait := s.limiter.Begin(clientIP(r))
 	if !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		writeError(w, http.StatusTooManyRequests, "too many attempts, try again later")

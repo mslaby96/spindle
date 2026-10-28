@@ -25,9 +25,8 @@ func (s *Server) searchDiscogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) masterVersions(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()

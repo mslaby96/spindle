@@ -27,3 +27,19 @@ export function timeAgo(iso: string, now = Date.now()) {
   if (months < 24) return `${months} months ago`;
   return `${Math.floor(months / 12)} years ago`;
 }
+
+export function formatMonth(iso: string) {
+  return new Date(iso).toLocaleDateString(locale, { month: "long", year: "numeric" });
+}
+
+export function formatWeekday(iso: string) {
+  return new Date(iso).toLocaleDateString(locale, { weekday: "short" });
+}
+
+export function formatDayMonth(iso: string) {
+  return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short" });
+}
+
+export function formatFull(iso: string) {
+  return new Date(iso).toLocaleString(locale);
+}

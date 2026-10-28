@@ -105,6 +105,42 @@ describe("now playing", () => {
   });
 });
 
+describe("live events", () => {
+  it("reconnects after the stream closes", async () => {
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "GET /api/now-playing": () => [200, []],
+    });
+    renderApp();
+    await screen.findByRole("heading", { name: "Nothing on the stand" });
+    await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const first = FakeEventSource.instances[0];
+      act(() => {
+        first.readyState = FakeEventSource.CLOSED;
+        first.onerror?.();
+      });
+      act(() => vi.advanceTimersByTime(3000));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(FakeEventSource.instances.length).toBe(2);
+    act(() =>
+      FakeEventSource.instances[1].emit("now_playing", {
+        device_id: 1,
+        active: true,
+        uid: "04A1",
+        album: { id: 1, title: "Rumours", artist: "Fleetwood Mac", styles: [], genres: [], has_cover: false, duration_status: "resolved" },
+      }),
+    );
+    expect(await screen.findByRole("heading", { name: "Rumours" })).toBeInTheDocument();
+  });
+});
+
 describe("stands", () => {
   it("shows a new stand token only once", async () => {
     let devices: unknown[] = [];

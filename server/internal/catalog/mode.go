@@ -55,6 +55,11 @@ func (m *Mode) Active(ctx context.Context, userID int64) (bool, error) {
 }
 
 func (m *Mode) Set(ctx context.Context, userID int64, on bool) (ModeState, error) {
+	if on {
+		if active, err := m.Active(ctx, userID); err == nil && !active {
+			m.forget()
+		}
+	}
 	var until any
 	if on {
 		until = m.now().Add(m.Idle).Unix()
@@ -63,9 +68,7 @@ func (m *Mode) Set(ctx context.Context, userID int64, on bool) (ModeState, error
 		return ModeState{}, err
 	}
 	if !on {
-		m.mu.Lock()
-		m.last = nil
-		m.mu.Unlock()
+		m.forget()
 	}
 	state, err := m.State(ctx, userID)
 	if err == nil {
@@ -101,4 +104,10 @@ func (m *Mode) Observe(ctx context.Context, o presence.Observation) (presence.LE
 		return presence.LEDCatalogSaved, nil
 	}
 	return presence.LEDCatalogReady, nil
+}
+
+func (m *Mode) forget() {
+	m.mu.Lock()
+	m.last = nil
+	m.mu.Unlock()
 }

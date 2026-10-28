@@ -44,6 +44,7 @@ describe("inbox", () => {
     renderApp("/inbox");
     expect(await screen.findByText(/stayed on the stand for 3 h 0 min, the album is 46 min/)).toBeInTheDocument();
     expect(screen.getByText(/\(unconfirmed\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "I played it several times" }));
     await waitFor(() =>
       expect(calls.find((c) => c.key === "POST /api/sessions/7/resolve")?.body).toEqual({ resolution: "repeated" }),

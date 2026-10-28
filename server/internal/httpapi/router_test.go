@@ -94,6 +94,9 @@ func do(t *testing.T, c *http.Client, method, url string, body any, header ...st
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if method != http.MethodGet {
+		req.Header.Set(intentHeader, "1")
+	}
 	for i := 0; i+1 < len(header); i += 2 {
 		req.Header.Set(header[i], header[i+1])
 	}
@@ -316,4 +319,24 @@ func TestDevicesIsolatedBetweenUsers(t *testing.T) {
 func jsonNumber(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func TestStateChangesNeedIntentHeader(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	e.listen(t, "counted", 40)
+	for _, path := range []string{"/api/sessions/1/dismiss", "/api/logout"} {
+		req, _ := http.NewRequest("POST", e.http.URL+path, nil)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s without header: %d", path, resp.StatusCode)
+		}
+	}
+	if resp := do(t, c, "GET", e.http.URL+"/api/me", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("still logged in after rejected logout: %d", resp.StatusCode)
+	}
 }

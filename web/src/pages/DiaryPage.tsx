@@ -4,21 +4,20 @@ import { Link } from "react-router";
 import { api, type DiaryEntry } from "../api/client";
 import { Cover } from "../components/Cover";
 import { formatRating } from "../components/RatingStars";
-import { formatLength } from "../format";
+import { formatLength, formatMonth, formatWeekday } from "../format";
 
 const pageSize = 50;
-
-function monthLabel(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-}
 
 export function DiaryPage() {
   const diary = useInfiniteQuery({
     queryKey: ["diary"],
     initialPageParam: "",
-    queryFn: ({ pageParam }) =>
-      api<DiaryEntry[]>(`/api/diary?limit=${pageSize}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ""}`),
-    getNextPageParam: (last) => (last.length === pageSize ? last[last.length - 1].started_at : undefined),
+    queryFn: ({ pageParam }) => api<DiaryEntry[]>(`/api/diary?limit=${pageSize}${pageParam}`),
+    getNextPageParam: (last) => {
+      if (last.length < pageSize) return undefined;
+      const e = last[last.length - 1];
+      return `&before=${encodeURIComponent(e.started_at)}&before_id=${e.session_id}`;
+    },
   });
   const entries = diary.data?.pages.flat() ?? [];
 
@@ -29,7 +28,7 @@ export function DiaryPage() {
       {diary.isSuccess && entries.length === 0 && <p className="muted">No listens yet.</p>}
       <ul className="list diary">
         {entries.map((e) => {
-          const m = monthLabel(e.started_at);
+          const m = formatMonth(e.started_at);
           const header = m !== month ? (month = m) : null;
           const d = new Date(e.started_at);
           return (
@@ -38,7 +37,7 @@ export function DiaryPage() {
               <Link to={`/albums/${e.album_id}`} className="entry">
                 <span className="day">
                   <strong>{d.getDate()}</strong>
-                  <span className="muted">{d.toLocaleDateString("en-GB", { weekday: "short" })}</span>
+                  <span className="muted">{formatWeekday(e.started_at)}</span>
                 </span>
                 <Cover albumId={e.album_id} hasCover={e.has_cover} color={e.cover_color} className="thumb-lg" />
                 <span className="grow">

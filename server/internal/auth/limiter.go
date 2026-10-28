@@ -26,27 +26,18 @@ func NewLimiter() *Limiter {
 	return &Limiter{Now: time.Now, clients: map[string]*attempts{}}
 }
 
-// Allow reports whether the client may try again and, if not, how long it has to wait.
-func (l *Limiter) Allow(client string) (bool, time.Duration) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	a := l.clients[client]
-	if a == nil {
-		return true, 0
-	}
-	if wait := a.blockedTo.Sub(l.Now()); wait > 0 {
-		return false, wait
-	}
-	return true, 0
-}
-
-func (l *Limiter) Fail(client string) {
+// Begin counts an attempt before it is checked, so parallel requests can't slip past the backoff. It reports whether
+// the client may try now and, if not, how long it has to wait. Call Reset after a successful attempt.
+func (l *Limiter) Begin(client string) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	a := l.clients[client]
 	if a == nil {
 		a = &attempts{}
 		l.clients[client] = a
+	}
+	if wait := a.blockedTo.Sub(l.Now()); wait > 0 {
+		return false, wait
 	}
 	a.failures++
 	if a.failures > freeAttempts {
@@ -56,6 +47,7 @@ func (l *Limiter) Fail(client string) {
 		}
 		a.blockedTo = l.Now().Add(backoff)
 	}
+	return true, 0
 }
 
 func (l *Limiter) Reset(client string) {

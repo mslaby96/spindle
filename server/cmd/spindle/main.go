@@ -90,6 +90,8 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 
 	bus := events.NewBus()
+	requests, endRequests := context.WithCancel(context.Background())
+	defer endRequests()
 	discogsClient := discogs.New(cfg.DiscogsToken, userAgent)
 	coverStore := &covers.Store{Dir: filepath.Join(cfg.DataDir, "covers")}
 	catalogSvc := &catalog.Service{DB: d, Discogs: discogsClient, Covers: coverStore}
@@ -103,7 +105,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	if cfg.LastFMKey != "" {
 		resolver.LastFM = lastfm.New(cfg.LastFMKey, userAgent)
 	}
-	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
+	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver, Log: log}
 	resolver.OnResolved = func(userID, albumID int64) {
 		if err := engine.ClassifyAlbum(ctx, userID, albumID); err != nil {
 			log.Error("classify listens", "album", albumID, "err", err)
@@ -155,7 +157,9 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Log:       log,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return requests },
 	}
+	srv.RegisterOnShutdown(endRequests)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("spindle started", "config", cfg.Summary())

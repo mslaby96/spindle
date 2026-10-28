@@ -21,6 +21,15 @@ const (
 
 var ErrWeakPassword = fmt.Errorf("password must be at least %d characters", MinPassword)
 
+// hashing limits how many Argon2 computations (19 MiB each) run at once.
+var hashing = make(chan struct{}, 4)
+
+func argonKey(pw, salt []byte, t, m uint32, p uint8, n uint32) []byte {
+	hashing <- struct{}{}
+	defer func() { <-hashing }()
+	return argon2.IDKey(pw, salt, t, m, p, n)
+}
+
 func HashPassword(pw string) (string, error) {
 	if len(pw) < MinPassword {
 		return "", ErrWeakPassword
@@ -29,7 +38,7 @@ func HashPassword(pw string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(pw), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := argonKey([]byte(pw), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 	enc := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads, enc.EncodeToString(salt), enc.EncodeToString(key)), nil
@@ -55,6 +64,6 @@ func VerifyPassword(encoded, pw string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(pw), salt, t, m, p, uint32(len(want)))
+	got := argonKey([]byte(pw), salt, t, m, p, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

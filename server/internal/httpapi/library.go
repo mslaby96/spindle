@@ -39,6 +39,7 @@ func (s *Server) diary(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.Before = &t
+		f.BeforeID, _ = strconv.ParseInt(q.Get("before_id"), 10, 64)
 	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	entries, err := s.Stats.Diary(r.Context(), userID(r), f)
@@ -50,9 +51,8 @@ func (s *Server) diary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	ctx, user := r.Context(), userID(r)
@@ -84,7 +84,7 @@ func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
-	id, ok := sessionID(w, r)
+	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
@@ -108,7 +108,7 @@ func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
-	id, ok := sessionID(w, r)
+	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}

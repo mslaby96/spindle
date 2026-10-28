@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
+import { formatFull } from "../format";
 
 export const devicesKey = ["devices"] as const;
 
@@ -45,7 +46,7 @@ export function DevicesPage() {
             <div>
               <strong>{d.name}</strong>
               <p className="muted">
-                {d.last_seen_at ? `Last seen ${new Date(d.last_seen_at).toLocaleString("en-GB")}` : "Never connected"}
+                {d.last_seen_at ? `Last seen ${formatFull(d.last_seen_at)}` : "Never connected"}
                 {d.fw_version && ` · firmware ${d.fw_version}`}
               </p>
             </div>

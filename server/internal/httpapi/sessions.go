@@ -3,7 +3,6 @@ package httpapi
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/sessions"
@@ -18,15 +17,6 @@ func (s *Server) nowPlaying(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-func sessionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
-		return 0, false
-	}
-	return id, true
-}
-
 func (s *Server) listInbox(w http.ResponseWriter, r *http.Request) {
 	cards, err := s.Inbox.List(r.Context(), userID(r))
 	if err != nil {
@@ -37,7 +27,7 @@ func (s *Server) listInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request) {
-	id, ok := sessionID(w, r)
+	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
@@ -52,15 +42,17 @@ func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, sessions.ErrNotPending):
 		writeError(w, http.StatusConflict, err.Error())
-	case err != nil:
+	case errors.Is(err, sessions.ErrUnknownResolution):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		s.internal(w, err)
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
 func (s *Server) reviewSession(w http.ResponseWriter, r *http.Request) {
-	id, ok := sessionID(w, r)
+	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
@@ -75,7 +67,7 @@ func (s *Server) reviewSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dismissSession(w http.ResponseWriter, r *http.Request) {
-	if id, ok := sessionID(w, r); ok {
+	if id, ok := pathID(w, r); ok {
 		s.inboxResult(w, s.Inbox.Dismiss(r.Context(), userID(r), id))
 	}
 }

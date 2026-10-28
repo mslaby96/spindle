@@ -36,7 +36,7 @@ func TestCancelRemovesSubscriber(t *testing.T) {
 	ch, cancel := b.Subscribe(1)
 	cancel()
 	cancel()
-	if n := b.subscribers(1); n != 0 {
+	if n := subscribers(b, 1); n != 0 {
 		t.Fatalf("subscribers after cancel: %d", n)
 	}
 	if _, ok := <-ch; ok {
@@ -74,4 +74,10 @@ func TestSubscribeAllSeesEveryUser(t *testing.T) {
 	if first.UserID != 1 || second.UserID != 2 {
 		t.Fatalf("got %+v %+v", first, second)
 	}
+}
+
+func subscribers(b *Bus, userID int64) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.subs[userID])
 }

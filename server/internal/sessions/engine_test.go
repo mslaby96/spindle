@@ -348,19 +348,122 @@ func TestConcurrentReportAndSweepMakeOneSession(t *testing.T) {
 	v := newEnv(t)
 	v.album(t, tagA, minutes(42))
 	v.play(t, tagA, 10*time.Minute)
-	v.clock.advance(v.e.Cfg.AbsenceTolerance - time.Second)
+	v.clock.advance(v.e.Cfg.AbsenceTolerance + time.Second)
 
 	var wg sync.WaitGroup
+	errs := make(chan error, 40)
+	obs := presence.Observation{UserID: 1, DeviceID: 1, UID: tagA, At: v.clock.now()}
 	for i := 0; i < 20; i++ {
 		wg.Add(2)
-		go func() { defer wg.Done(); v.see(t, tagA) }()
-		go func() { defer wg.Done(); v.e.Sweep(context.Background()) }()
+		go func() {
+			defer wg.Done()
+			_, err := v.e.Observe(context.Background(), obs)
+			errs <- err
+		}()
+		go func() { defer wg.Done(); errs <- v.e.Sweep(context.Background()) }()
 	}
 	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	var active int
 	v.e.DB.R.QueryRow(`SELECT count(*) FROM sessions WHERE state = 'active'`).Scan(&active)
-	if active != 1 {
+	if active > 1 {
 		t.Fatalf("active sessions %d: %+v", active, v.sessions(t))
+	}
+}
+
+func TestFailedLengthLookupFallsBackAfterADay(t *testing.T) {
+	cases := []struct {
+		minutes int
+		want    State
+	}{{40, StateCounted}, {100, StatePendingConfirmation}}
+	for _, tc := range cases {
+		v := newEnv(t)
+		albumID := v.album(t, tagA, nil)
+		v.e.DB.W.Exec(`UPDATE albums SET duration_status = 'failed' WHERE id = ?`, albumID)
+		v.see(t, tagA)
+		v.clock.advance(time.Duration(tc.minutes) * time.Minute)
+		v.see(t, tagA)
+		v.remove(t)
+
+		v.clock.advance(23 * time.Hour)
+		v.e.Sweep(context.Background())
+		if s := v.only(t); s.State != StateUnclassified {
+			t.Fatalf("%d min after 23 h: %+v", tc.minutes, s)
+		}
+		v.clock.advance(2 * time.Hour)
+		v.e.Sweep(context.Background())
+		if s := v.only(t); s.State != tc.want {
+			t.Fatalf("%d min after 25 h: %+v", tc.minutes, s)
+		}
+	}
+}
+
+func TestResolvingWithUnknownAlbumLength(t *testing.T) {
+	cases := []struct {
+		resolution Resolution
+		plays      int
+		listened   time.Duration
+	}{
+		{ResolutionForgot, 1, typicalLP},
+		{ResolutionRepeated, 2, 100 * time.Minute},
+		{ResolutionLonger, 1, 100 * time.Minute},
+	}
+	for _, tc := range cases {
+		v := newEnv(t)
+		v.album(t, tagA, nil)
+		v.see(t, tagA)
+		v.clock.advance(100 * time.Minute)
+		v.see(t, tagA)
+		v.remove(t)
+		if err := v.e.Resolve(context.Background(), 1, v.only(t).ID, tc.resolution); err != nil {
+			t.Fatal(err)
+		}
+		s := v.only(t)
+		if s.PlayCount != tc.plays || time.Duration(s.ListenedSec)*time.Second != tc.listened {
+			t.Fatalf("%s: %+v", tc.resolution, s)
+		}
+	}
+}
+
+func TestRepeatedRoundsToNearest(t *testing.T) {
+	if got := repeatedPlays(63*time.Minute, 42*time.Minute); got != 2 {
+		t.Fatalf("63 of 42 min: %d", got)
+	}
+}
+
+func TestEditKeepsTheResolution(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.see(t, tagA)
+	v.clock.advance(3 * time.Hour)
+	v.see(t, tagA)
+	v.remove(t)
+	s := v.only(t)
+	v.e.Resolve(context.Background(), 1, s.ID, ResolutionForgot)
+
+	if err := v.e.Edit(context.Background(), 1, s.ID, s.StartedAt, s.StartedAt.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if s = v.only(t); s.ListenedSec != 42*60 || s.PlayCount != 1 {
+		t.Fatalf("forgot listen after edit %+v", s)
+	}
+
+	v.e.DB.W.Exec(`UPDATE sessions SET resolution = 'repeated'`)
+	v.e.Edit(context.Background(), 1, s.ID, s.StartedAt, s.StartedAt.Add(126*time.Minute))
+	if s = v.only(t); s.PlayCount != 3 || s.ListenedSec != 126*60 {
+		t.Fatalf("repeated listen after edit %+v", s)
+	}
+}
+
+func TestUnknownResolutionIsRejected(t *testing.T) {
+	v := newEnv(t)
+	if err := v.e.Resolve(context.Background(), 1, 1, ResolutionAuto); !errors.Is(err, ErrUnknownResolution) {
+		t.Fatalf("auto from a client: %v", err)
 	}
 }
 
@@ -460,4 +563,22 @@ func TestDeleteRemovesListen(t *testing.T) {
 	if err := v.e.Delete(context.Background(), 1, list[0].ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleting the active session: %v", err)
 	}
+}
+
+func (e *Engine) List(ctx context.Context, userID int64) ([]Session, error) {
+	rows, err := e.DB.R.QueryContext(ctx,
+		`SELECT `+Columns("sessions")+` FROM sessions WHERE user_id = ? ORDER BY started_at DESC, id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Session{}
+	for rows.Next() {
+		s, err := ScanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
 }

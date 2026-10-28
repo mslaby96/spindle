@@ -45,8 +45,7 @@ type Inbox struct {
 // listens whose length needs confirming and fresh listens that can be rated.
 func (in *Inbox) List(ctx context.Context, userID int64) ([]Card, error) {
 	rows, err := in.DB.R.QueryContext(ctx, `
-		SELECT s.id, s.device_id, s.tag_id, s.album_id, s.release_id, s.state, s.started_at, s.ended_at, s.play_count,
-			s.listened_sec, s.duration_confirmed, coalesce(s.resolution, ''), s.rating, coalesce(s.note, ''), s.inbox_state,
+		SELECT `+sessions.Columns("s")+`,
 			t.uid, a.title, a.artist, a.cover_path IS NOT NULL, coalesce(a.cover_color, ''), a.duration_sec
 		FROM sessions s
 		JOIN tags t ON t.id = s.tag_id
@@ -109,21 +108,23 @@ func (in *Inbox) AlbumRating(ctx context.Context, userID, albumID int64) (*int, 
 	return &r, nil
 }
 
-// Review stores the rating (in half stars, 1-10, or nil) and note for one listen and closes its card.
+// Review stores the rating (in half stars, 1-10, or nil) and note for one listen and closes its card, unless the
+// listen still waits for its length to be confirmed.
 func (in *Inbox) Review(ctx context.Context, userID, sessionID int64, rating *int, note string) error {
 	if rating != nil && (*rating < 1 || *rating > 10) {
 		return ErrInvalidRating
 	}
 	note = strings.TrimSpace(note)
-	if len(note) > maxNote {
-		note = note[:maxNote]
+	if r := []rune(note); len(r) > maxNote {
+		note = string(r[:maxNote])
 	}
 	var ratedAt any
 	if rating != nil {
 		ratedAt = in.Now().Unix()
 	}
 	res, err := in.DB.W.ExecContext(ctx, `
-		UPDATE sessions SET rating = ?, rated_at = ?, note = ?, inbox_state = 'done'
+		UPDATE sessions SET rating = ?, rated_at = ?, note = ?,
+			inbox_state = CASE WHEN state = 'pending_confirmation' THEN 'open' ELSE 'done' END
 		WHERE id = ? AND user_id = ? AND state IN ('counted', 'pending_confirmation')`,
 		rating, ratedAt, nullString(note), sessionID, userID)
 	return in.changed(userID, res, err)

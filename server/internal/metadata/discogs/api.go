@@ -15,21 +15,19 @@ type Track struct {
 }
 
 type Image struct {
-	Type   string `json:"type"`
-	URI    string `json:"uri"`
-	URI150 string `json:"uri150"`
+	Type string `json:"type"`
+	URI  string `json:"uri"`
 }
 
 type Master struct {
-	ID          int64    `json:"id"`
-	MainRelease int64    `json:"main_release"`
-	Title       string   `json:"title"`
-	Year        int      `json:"year"`
-	Artists     []Artist `json:"artists"`
-	Genres      []string `json:"genres"`
-	Styles      []string `json:"styles"`
-	Tracklist   []Track  `json:"tracklist"`
-	Images      []Image  `json:"images"`
+	ID        int64    `json:"id"`
+	Title     string   `json:"title"`
+	Year      int      `json:"year"`
+	Artists   []Artist `json:"artists"`
+	Genres    []string `json:"genres"`
+	Styles    []string `json:"styles"`
+	Tracklist []Track  `json:"tracklist"`
+	Images    []Image  `json:"images"`
 }
 
 type Label struct {
@@ -39,7 +37,6 @@ type Label struct {
 
 type Format struct {
 	Name         string   `json:"name"`
-	Qty          string   `json:"qty"`
 	Descriptions []string `json:"descriptions"`
 }
 
@@ -92,16 +89,15 @@ func (c *Client) Release(ctx context.Context, id int64) (Release, error) {
 }
 
 type Result struct {
-	Kind     string   `json:"kind"`
-	ID       int64    `json:"id"`
-	Artist   string   `json:"artist"`
-	Title    string   `json:"title"`
-	Year     string   `json:"year,omitempty"`
-	Country  string   `json:"country,omitempty"`
-	Format   []string `json:"format,omitempty"`
-	Thumb    string   `json:"thumb,omitempty"`
-	CatNo    string   `json:"catno,omitempty"`
-	MasterID int64    `json:"-"`
+	Kind    string   `json:"kind"`
+	ID      int64    `json:"id"`
+	Artist  string   `json:"artist"`
+	Title   string   `json:"title"`
+	Year    string   `json:"year,omitempty"`
+	Country string   `json:"country,omitempty"`
+	Format  []string `json:"format,omitempty"`
+	Thumb   string   `json:"thumb,omitempty"`
+	CatNo   string   `json:"catno,omitempty"`
 }
 
 type rawResult struct {

@@ -15,10 +15,11 @@ export function ReleasePicker({ masterId, onPick, onSkip, busy }: Props) {
   const [country, setCountry] = useState("");
   const [year, setYear] = useState("");
   const [catno, setCatno] = useState("");
-  const filters = useDebounced({ country: country.trim(), year: year.trim(), catno: catno.trim() }, 400);
+  const key = useDebounced(JSON.stringify({ country: country.trim(), year: year.trim(), catno: catno.trim() }), 400);
+  const filters = JSON.parse(key) as { country: string; year: string; catno: string };
 
   const versions = useQuery({
-    queryKey: ["versions", masterId, filters],
+    queryKey: ["versions", masterId, key],
     queryFn: ({ signal }) => {
       const q = new URLSearchParams();
       if (filters.country) q.set("country", filters.country);

@@ -53,8 +53,10 @@ func TestInboxFlow(t *testing.T) {
 	if resp := do(t, c, "POST", base+strconv.FormatInt(long, 10)+"/resolve", map[string]string{"resolution": "forgot"}); resp.StatusCode != http.StatusConflict {
 		t.Fatalf("resolve twice: %d", resp.StatusCode)
 	}
-	if resp := do(t, c, "POST", base+strconv.FormatInt(normal, 10)+"/resolve", map[string]string{"resolution": "bogus"}); resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bogus resolution: %d", resp.StatusCode)
+	for _, bogus := range []string{"bogus", "auto"} {
+		if resp := do(t, c, "POST", base+strconv.FormatInt(normal, 10)+"/resolve", map[string]string{"resolution": bogus}); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("resolution %q: %d", bogus, resp.StatusCode)
+		}
 	}
 
 	if resp := do(t, c, "PUT", base+strconv.FormatInt(normal, 10)+"/review", map[string]any{"rating": 9, "note": "late night"}); resp.StatusCode != http.StatusNoContent {

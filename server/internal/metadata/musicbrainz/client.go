@@ -71,7 +71,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	}
 	defer resp.Body.Close()
 	switch {
-	case resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode >= 500:
+	case resp.StatusCode >= 500:
 		return ErrUnavailable
 	case resp.StatusCode != http.StatusOK:
 		return fmt.Errorf("musicbrainz: unexpected status %d", resp.StatusCode)

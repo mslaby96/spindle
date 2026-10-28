@@ -33,6 +33,11 @@ const (
 	StatusManual   = "manual"
 )
 
+// Settled reports whether an album length status is final, so listens of the album can be classified.
+func Settled(status string) bool {
+	return status == StatusResolved || status == StatusNoData || status == StatusManual
+}
+
 type job struct{ userID, albumID int64 }
 
 type Resolver struct {
@@ -134,7 +139,7 @@ func (r *Resolver) Resolve(ctx context.Context, userID, albumID int64) error {
 	if err != nil {
 		return err
 	}
-	if a.status == StatusManual || a.status == StatusResolved || a.status == StatusNoData {
+	if Settled(a.status) {
 		r.resolved(userID, albumID)
 		return nil
 	}

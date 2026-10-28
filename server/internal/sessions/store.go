@@ -1,8 +1,8 @@
 package sessions
 
 import (
-	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -24,8 +24,22 @@ type Session struct {
 	InboxState        string     `json:"inbox_state"`
 }
 
-const sessionColumns = `id, device_id, tag_id, album_id, release_id, state, started_at, ended_at, play_count, listened_sec,
-	duration_confirmed, coalesce(resolution, ''), rating, coalesce(note, ''), inbox_state`
+var columns = []string{"id", "device_id", "tag_id", "album_id", "release_id", "state", "started_at", "ended_at",
+	"play_count", "listened_sec", "duration_confirmed", "coalesce(%s.resolution, '')", "rating", "coalesce(%s.note, '')",
+	"inbox_state"}
+
+// Columns returns the session columns in the order ScanSession expects, qualified with the given table alias.
+func Columns(alias string) string {
+	out := make([]string, len(columns))
+	for i, c := range columns {
+		if strings.Contains(c, "%s") {
+			out[i] = strings.ReplaceAll(c, "%s", alias)
+		} else {
+			out[i] = alias + "." + c
+		}
+	}
+	return strings.Join(out, ", ")
+}
 
 type scanner interface{ Scan(...any) error }
 
@@ -56,22 +70,4 @@ func ScanSession(r scanner, extra ...any) (Session, error) {
 		s.Rating = &v
 	}
 	return s, nil
-}
-
-func (e *Engine) List(ctx context.Context, userID int64) ([]Session, error) {
-	rows, err := e.DB.R.QueryContext(ctx,
-		`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ? ORDER BY started_at DESC, id DESC`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Session{}
-	for rows.Next() {
-		s, err := ScanSession(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
 }

@@ -2,19 +2,17 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"mime"
 	"net/http"
+	"strconv"
 )
 
 const maxBody = 1 << 16
 
-var errUnsupportedMedia = errors.New("expected application/json")
-
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if mt != "application/json" {
-		writeError(w, http.StatusUnsupportedMediaType, errUnsupportedMedia.Error())
+		writeError(w, http.StatusUnsupportedMediaType, "expected application/json")
 		return false
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
@@ -34,4 +32,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return 0, false
+	}
+	return id, true
 }

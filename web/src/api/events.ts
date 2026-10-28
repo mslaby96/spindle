@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import type { Album, CatalogMode, Tag } from "./client";
 
@@ -14,11 +14,16 @@ export const inboxKey = ["inbox"] as const;
 
 const RETRY_MS = 3000;
 
-export function useLiveEvents(enabled: boolean) {
+export function applyAssignedTag(queryClient: QueryClient, tag: Tag) {
+  queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
+    prev && prev.tag.uid === tag.uid ? { ...prev, tag } : prev,
+  );
+}
+
+export function useLiveEvents() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!enabled) return;
     let source: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
@@ -45,9 +50,7 @@ export function useLiveEvents(enabled: boolean) {
         queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev) =>
           prev?.map((p) => (p.uid === tag.uid ? { ...p, album: tag.album } : p)),
         );
-        queryClient.setQueryData<CatalogTag | null>(catalogCurrentKey, (prev) =>
-          prev && prev.tag.uid === tag.uid ? { ...prev, tag } : prev,
-        );
+        applyAssignedTag(queryClient, tag);
         queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
       source.onerror = () => {
@@ -64,5 +67,5 @@ export function useLiveEvents(enabled: boolean) {
       clearTimeout(retry);
       source?.close();
     };
-  }, [enabled, queryClient]);
+  }, [queryClient]);
 }

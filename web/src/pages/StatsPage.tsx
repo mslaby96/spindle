@@ -5,7 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { api } from "../api/client";
 import { Cover } from "../components/Cover";
-import { formatLength } from "../format";
+import { formatDayMonth, formatLength } from "../format";
 
 type Ranked = { name: string; value: number };
 type Top = {
@@ -26,10 +26,6 @@ const periods = [
 
 function formatValue(measure: Measure, v: number) {
   return measure === "plays" ? `${v}×` : formatLength(v);
-}
-
-function weekLabel(start: string) {
-  return new Date(start).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 export function StatsPage() {
@@ -155,7 +151,7 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
           <tbody>
             {weeks.map((w) => (
               <tr key={w.start}>
-                <td>{weekLabel(w.start)}</td>
+                <td>{formatDayMonth(w.start)}</td>
                 <td>{w.plays}</td>
                 <td>{formatLength(w.listened_sec)}</td>
               </tr>
@@ -168,7 +164,7 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
             <CartesianGrid vertical={false} stroke="var(--grid)" />
             <XAxis
               dataKey="start"
-              tickFormatter={weekLabel}
+              tickFormatter={formatDayMonth}
               tick={{ fill: "var(--muted)", fontSize: 12 }}
               axisLine={{ stroke: "var(--grid)" }}
               tickLine={false}
@@ -185,7 +181,7 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
                   <div className="chart-tip">
                     <strong>{w.plays} listens</strong>
                     <span className="muted">
-                      {formatLength(w.listened_sec)} · week of {weekLabel(w.start)}
+                      {formatLength(w.listened_sec)} · week of {formatDayMonth(w.start)}
                     </span>
                   </div>
                 );

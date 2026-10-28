@@ -154,3 +154,30 @@ func TestIsolatedBetweenUsers(t *testing.T) {
 		t.Fatal("user 1 read user 2's album")
 	}
 }
+
+func TestDiaryPagesThroughListensInTheSameSecond(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	for i := 0; i < 5; i++ {
+		f.listen(1, a, "counted", now, 40, 1)
+	}
+	seen := map[int64]bool{}
+	filter := DiaryFilter{Limit: 2}
+	for page := 0; page < 5; page++ {
+		entries, err := f.st.Diary(context.Background(), 1, filter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) == 0 {
+			break
+		}
+		for _, e := range entries {
+			seen[e.SessionID] = true
+		}
+		last := entries[len(entries)-1]
+		filter.Before, filter.BeforeID = &last.StartedAt, last.SessionID
+	}
+	if len(seen) != 5 {
+		t.Fatalf("saw %d of 5 listens", len(seen))
+	}
+}

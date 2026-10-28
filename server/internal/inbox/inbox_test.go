@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mslaby96/spindle/server/internal/db"
 )
@@ -163,5 +165,29 @@ func TestDismissUnassignedDeletesListen(t *testing.T) {
 	v.in.DB.R.QueryRow(`SELECT count(*) FROM tags WHERE id = ?`, v.tag).Scan(&tags)
 	if n != 0 || tags != 1 {
 		t.Fatalf("sessions %d tags %d", n, tags)
+	}
+}
+
+func TestReviewKeepsPendingCardOpen(t *testing.T) {
+	v := newEnv(t)
+	id := v.session(t, "pending_confirmation", 100, true)
+	if err := v.in.Review(context.Background(), 1, id, half(8), ""); err != nil {
+		t.Fatal(err)
+	}
+	cards := v.cards(t)
+	if len(cards) != 1 || cards[0].Session.Rating == nil || *cards[0].Session.Rating != 8 {
+		t.Fatalf("pending card after rating %+v", cards)
+	}
+}
+
+func TestLongNoteIsCutOnCharacterBoundary(t *testing.T) {
+	v := newEnv(t)
+	id := v.session(t, "counted", 100, true)
+	note := strings.Repeat("ż", maxNote+10)
+	v.in.Review(context.Background(), 1, id, nil, note)
+	var stored string
+	v.in.DB.R.QueryRow(`SELECT note FROM sessions WHERE id = ?`, id).Scan(&stored)
+	if !utf8.ValidString(stored) || utf8.RuneCountInString(stored) != maxNote {
+		t.Fatalf("stored %d runes, valid=%v", utf8.RuneCountInString(stored), utf8.ValidString(stored))
 	}
 }

@@ -14,7 +14,10 @@ export async function api<T = void>(
   const res = await fetch(path, {
     signal: init.signal,
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: {
+      "X-Spindle": "1",
+      ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     credentials: "same-origin",
   });

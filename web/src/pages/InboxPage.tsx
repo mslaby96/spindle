@@ -112,9 +112,13 @@ function ListenCard({ card }: { card: InboxCard }) {
         aria-label="Note"
       />
       <div className="row">
-        <button className="link" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
-          Skip
-        </button>
+        {pending ? (
+          <span />
+        ) : (
+          <button className="link" onClick={() => dismiss.mutate()} disabled={dismiss.isPending}>
+            Skip
+          </button>
+        )}
         <button onClick={() => review.mutate()} disabled={review.isPending || (rating === undefined && note.trim() === "")}>
           Save
         </button>
