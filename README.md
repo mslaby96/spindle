@@ -72,7 +72,19 @@ Wiring. Power the reader from 3.3 V, never 5 V:
 | GND | GND |
 | 3.3V | 3V3(OUT) |
 
-The RC522 only reads a few centimetres, so stick the tags in the same spot on every sleeve (a lower corner works well) and mount the reader right behind that spot.
+The RC522 only reads about a centimetre with small stickers, and it loses a tag that lies directly on the antenna, so leave 3-5 mm of plastic or cardboard in between.
+
+### Printed stand
+
+`hardware/stand/` has a printable stand: `stand.scad` is the parametric source, the `.stl` files are ready to slice.
+
+- `body.stl` prints upright, no supports needed.
+- `cover.stl` prints upside down, flat side on the bed.
+- `spacer.stl` prints as exported.
+
+The RC522 needs a right-angle header (or wires soldered on) pointing down along the board. Slide it into the slot in the base from below, antenna side towards the front, until it stops. Put the spacer in after it, lay the Pico W in the recess on the cover with its USB end at the back, and close the cover with four M2.5 x 10 mm pan-head screws.
+
+Stick each tag on the back of the sleeve's outer sleeve, centred, 45 mm above the bottom edge. Line the sleeve up with the notch on the front of the stand and the tag lands on the mark over the reader.
 
 ### Firmware
 

@@ -20,7 +20,9 @@ slot_w = 10;            // room for a gatefold sleeve in its outer sleeve
 /* [Reader] */
 rc_w = 40.5;
 rc_h = 60.5;
-rc_depth = 8;           // board plus components
+rc_depth = 8;           // board plus components; the pin header must point down, not out of the board
+fit = 0.4;              // clearance around the board
+leg_w = 4;              // legs of the spacer that keeps the board up
 front_wall = 2.5;       // between the sleeve and the reader antenna
 tag_height = 45;        // sticker centre above the bottom edge of the sleeve
 antenna_from_top = 20;  // antenna centre measured from the top edge of the board
@@ -105,14 +107,28 @@ module rest() {
             rounded_box([rest_width, rest_t, rest_len + corner_r], corner_r);
 }
 
+// The board slides in from below, up along the backrest, and the spacer standing on the cover holds it there.
 module reader_pocket() {
-    in_rest() {
-        translate([(rest_width - rc_w) / 2, front_wall, board_bottom])
-            cube([rc_w, rest_t, rc_h]);
-        // pin header and wires drop down into the base
-        translate([(rest_width - rc_w) / 2, front_wall, -base_h])
-            cube([rc_w, rc_depth, board_bottom + base_h + eps]);
+    in_rest()
+        translate([(rest_width - rc_w - fit) / 2, front_wall, -1.5 * base_h])
+            cube([rc_w + fit, rc_depth, board_top + 1.5 * base_h]);
+}
+
+module spacer() {
+    intersection() {
+        in_rest()
+            for (x = [(rest_width - rc_w) / 2 + fit, (rest_width + rc_w) / 2 - leg_w - fit])
+                translate([x, front_wall + fit / 2, -1.5 * base_h])
+                    cube([leg_w, rc_depth - fit, 1.5 * base_h + board_bottom - 0.5]);
+        translate([0, 0, 0]) cube([width, depth, base_h]);
     }
+    hull()
+        intersection() {
+            in_rest()
+                translate([(rest_width - rc_w) / 2 + fit, front_wall + fit / 2, -1.5 * base_h])
+                    cube([rc_w - 2 * fit, rc_depth - fit, 1.5 * base_h]);
+            cube([width, depth, 2]);
+        }
 }
 
 module bay() {
@@ -219,8 +235,10 @@ module cover() {
 
 if (part == "body") body();
 else if (part == "cover") cover();
+else if (part == "spacer") spacer();
 else {
     body();
     translate([0, 0, -40]) cover();
+    color("orange") translate([0, 0, -20]) spacer();
     %in_rest() translate([(rest_width - 314) / 2, -4.5, 0]) cube([314, 4, 314]);
 }
