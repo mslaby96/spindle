@@ -39,7 +39,7 @@ export function NowPlayingPage() {
                 <p>{p.album.artist}</p>
                 <p className="muted">
                   {[p.album.year, ...p.album.styles].filter(Boolean).join(" · ")}
-                  {p.started_at && ` · since ${new Date(p.started_at).toLocaleTimeString([], { timeStyle: "short" })}`}
+                  {p.started_at && ` · since ${new Date(p.started_at).toLocaleTimeString("en-GB", { timeStyle: "short" })}`}
                 </p>
               </div>
             </>

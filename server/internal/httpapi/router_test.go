@@ -21,6 +21,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/presence"
@@ -65,6 +66,7 @@ func newEnv(t *testing.T) *testEnv {
 		Covers:    coverStore,
 		Durations: resolver,
 		Sessions:  engine,
+		Inbox:     &inbox.Inbox{DB: d, Bus: bus, Now: time.Now},
 		Bus:       bus,
 		Presence:  router,
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),

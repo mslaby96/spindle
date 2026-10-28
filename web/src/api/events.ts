@@ -10,6 +10,7 @@ export const nowPlayingKey = ["now-playing"] as const;
 export const catalogModeKey = ["catalog", "mode"] as const;
 export const catalogCurrentKey = ["catalog", "current"] as const;
 export const unassignedKey = ["tags", "unassigned"] as const;
+export const inboxKey = ["inbox"] as const;
 
 const RETRY_MS = 3000;
 
@@ -38,7 +39,9 @@ export function useLiveEvents(enabled: boolean) {
         queryClient.setQueryData(catalogCurrentKey, data);
         queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
+      on("inbox_changed", () => queryClient.invalidateQueries({ queryKey: inboxKey }));
       on<Tag>("tag_assigned", (tag) => {
+        queryClient.invalidateQueries({ queryKey: inboxKey });
         queryClient.setQueryData<NowPlaying[]>(nowPlayingKey, (prev) =>
           prev?.map((p) => (p.uid === tag.uid ? { ...p, album: tag.album } : p)),
         );

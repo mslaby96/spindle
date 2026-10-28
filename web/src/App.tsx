@@ -5,6 +5,7 @@ import { api, ApiError, meKey, setupKey, type Me } from "./api/client";
 import { useLiveEvents } from "./api/events";
 import { CatalogPage } from "./pages/CatalogPage";
 import { DevicesPage } from "./pages/DevicesPage";
+import { InboxPage, useInbox } from "./pages/InboxPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NowPlayingPage } from "./pages/NowPlayingPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -17,6 +18,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAccount />}>
         <Route index element={<NowPlayingPage />} />
+        <Route path="inbox" element={<InboxPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -46,6 +48,8 @@ function RequireAccount() {
 
 function Layout({ me }: { me: Me }) {
   useLiveEvents(true);
+  const inbox = useInbox();
+  const waiting = inbox.data?.length ?? 0;
   return (
     <div className="shell">
       <header>
@@ -53,6 +57,9 @@ function Layout({ me }: { me: Me }) {
         <nav>
           <NavLink to="/" end>
             Now playing
+          </NavLink>
+          <NavLink to="/inbox">
+            Inbox{waiting > 0 && <span className="badge">{waiting}</span>}
           </NavLink>
           <NavLink to="/catalog">Catalogue</NavLink>
           <NavLink to="/devices">Stands</NavLink>

@@ -45,7 +45,7 @@ export function DevicesPage() {
             <div>
               <strong>{d.name}</strong>
               <p className="muted">
-                {d.last_seen_at ? `Last seen ${new Date(d.last_seen_at).toLocaleString()}` : "Never connected"}
+                {d.last_seen_at ? `Last seen ${new Date(d.last_seen_at).toLocaleString("en-GB")}` : "Never connected"}
                 {d.fw_version && ` · firmware ${d.fw_version}`}
               </p>
             </div>

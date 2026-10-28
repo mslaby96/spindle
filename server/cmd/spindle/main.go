@@ -23,6 +23,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
+	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
 	"github.com/mslaby96/spindle/server/internal/metadata/lastfm"
@@ -124,6 +125,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Mode:      mode,
 			Durations: resolver,
 			Sessions:  engine,
+			Inbox:     &inbox.Inbox{DB: d, Bus: bus, Now: time.Now},
 			Discogs:   discogsClient,
 			Covers:    coverStore,
 			Bus:       bus,

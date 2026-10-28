@@ -97,3 +97,26 @@ export type Version = {
 };
 
 export type CatalogMode = { active: boolean; until?: string };
+
+export type Session = {
+  id: number;
+  device_id: number;
+  tag_id: number;
+  album_id?: number;
+  state: "active" | "unclassified" | "discarded" | "counted" | "pending_confirmation";
+  started_at: string;
+  ended_at?: string;
+  play_count: number;
+  listened_sec: number;
+  duration_confirmed: boolean;
+  resolution?: string;
+  rating?: number;
+  note?: string;
+  inbox_state: string;
+};
+
+export type InboxCard = {
+  session: Session;
+  uid: string;
+  album?: { id: number; title: string; artist: string; has_cover: boolean; cover_color?: string; rating?: number; length_sec?: number };
+};

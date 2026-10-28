@@ -29,12 +29,14 @@ const sessionColumns = `id, device_id, tag_id, album_id, release_id, state, star
 
 type scanner interface{ Scan(...any) error }
 
-func scanSession(r scanner) (Session, error) {
+// ScanSession reads the session columns in the order of a session SELECT, followed by any extra columns.
+func ScanSession(r scanner, extra ...any) (Session, error) {
 	var s Session
 	var album, release, ended, rating sql.NullInt64
 	var started int64
-	err := r.Scan(&s.ID, &s.DeviceID, &s.TagID, &album, &release, &s.State, &started, &ended, &s.PlayCount,
-		&s.ListenedSec, &s.DurationConfirmed, &s.Resolution, &rating, &s.Note, &s.InboxState)
+	dest := append([]any{&s.ID, &s.DeviceID, &s.TagID, &album, &release, &s.State, &started, &ended, &s.PlayCount,
+		&s.ListenedSec, &s.DurationConfirmed, &s.Resolution, &rating, &s.Note, &s.InboxState}, extra...)
+	err := r.Scan(dest...)
 	if err != nil {
 		return Session{}, err
 	}
@@ -65,7 +67,7 @@ func (e *Engine) List(ctx context.Context, userID int64) ([]Session, error) {
 	defer rows.Close()
 	out := []Session{}
 	for rows.Next() {
-		s, err := scanSession(rows)
+		s, err := ScanSession(rows)
 		if err != nil {
 			return nil, err
 		}
