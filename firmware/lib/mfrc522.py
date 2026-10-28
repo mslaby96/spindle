@@ -56,14 +56,13 @@ class MFRC522:
     def _wreg(self, reg, val):
 
         self.cs.value(0)
-        self.spi.write(b'%c' % int(0xff & ((reg << 1) & 0x7e)))
-        self.spi.write(b'%c' % int(0xff & val))
+        self.spi.write(bytes(((reg << 1) & 0x7e, val & 0xff)))
         self.cs.value(1)
 
     def _rreg(self, reg):
 
         self.cs.value(0)
-        self.spi.write(b'%c' % int(0xff & (((reg << 1) & 0x7e) | 0x80)))
+        self.spi.write(bytes((((reg << 1) & 0x7e) | 0x80,)))
         val = self.spi.read(1)
         self.cs.value(1)
 
