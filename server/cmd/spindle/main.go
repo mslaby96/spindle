@@ -22,6 +22,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/homeassistant"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
 	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
@@ -33,7 +34,10 @@ import (
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
-const userAgent = "Spindle/0.1 ( https://github.com/mslaby96/spindle )"
+const (
+	version   = "0.1.0"
+	userAgent = "Spindle/" + version + " ( https://github.com/mslaby96/spindle )"
+)
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -107,6 +111,22 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 	go resolver.Run(ctx)
 	go engine.RunSweeper(ctx, 10*time.Second)
+	ha := &homeassistant.Publisher{
+		Cfg:    cfg.MQTT,
+		DB:     d,
+		Bus:    bus,
+		Covers: coverStore,
+		Current: func(ctx context.Context, userID int64) ([]sessions.NowPlaying, error) {
+			return engine.Current(ctx, userID, catalogSvc.Album)
+		},
+		Version: version,
+		Log:     log,
+	}
+	go func() {
+		if err := ha.Run(ctx); err != nil {
+			log.Error("Home Assistant integration stopped", "err", err)
+		}
+	}()
 
 	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
 	router := &presence.Router{

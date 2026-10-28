@@ -62,3 +62,16 @@ func TestSlowSubscriberDoesNotBlock(t *testing.T) {
 		t.Fatal("publish blocked on a full subscriber")
 	}
 }
+
+func TestSubscribeAllSeesEveryUser(t *testing.T) {
+	b := NewBus()
+	ch, cancel := b.SubscribeAll()
+	defer cancel()
+	b.Publish(Event{Type: "a", UserID: 1})
+	b.Publish(Event{Type: "b", UserID: 2})
+	first, _ := receive(t, ch)
+	second, _ := receive(t, ch)
+	if first.UserID != 1 || second.UserID != 2 {
+		t.Fatalf("got %+v %+v", first, second)
+	}
+}
