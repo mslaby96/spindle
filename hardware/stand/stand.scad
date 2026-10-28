@@ -23,6 +23,9 @@ rc_h = 60.5;
 rc_depth = 8;           // board plus components; the pin header must point down, not out of the board
 fit = 0.4;              // clearance around the board
 leg_w = 4;              // legs of the spacer that keeps the board up
+pcb_t = 1.6;
+spacer_lip = 4;         // how far the spacer's lips reach up beside and behind the board
+side_lip = 1.5;
 front_wall = 2.5;       // between the sleeve and the reader antenna
 header_band = 12;       // strip at the bottom of the board with the straight pin header, kept inside the base
 antenna_from_top = 20;  // antenna centre measured from the top edge of the board
@@ -117,19 +120,35 @@ module reader_pocket() {
             cube([rc_w + fit, rc_depth, board_top + 1.5 * base_h]);
 }
 
+// Two legs stand on the cover and carry the bottom edge of the board. A lip behind and beside the board on each leg
+// lets the board itself hold the spacer in place; the cover holds it up once screwed on.
 module spacer() {
+    bx0 = (rest_width - rc_w) / 2;
+    bx1 = bx0 + rc_w;
+    y0 = front_wall + fit / 2;
+    y1 = front_wall + rc_depth - fit / 2;
+    top = board_bottom - 0.5;
+    lip_top = board_bottom + spacer_lip;
     intersection() {
         in_rest()
-            for (x = [(rest_width - rc_w) / 2 + fit, (rest_width + rc_w) / 2 - leg_w - fit])
-                translate([x, front_wall + fit / 2, -1.5 * base_h])
-                    cube([leg_w, rc_depth - fit, 1.5 * base_h + board_bottom - 0.5]);
-        translate([0, 0, 0]) cube([width, depth, base_h]);
+            for (side = [[bx0 - side_lip, bx0 + leg_w, bx0 - side_lip, bx0],
+                         [bx1 - leg_w, bx1 + side_lip, bx1, bx1 + side_lip]]) {
+                translate([side[0], y0, -1.5 * base_h])
+                    cube([side[1] - side[0], y1 - y0, 1.5 * base_h + top]);
+                // behind the board
+                translate([side[0], front_wall + pcb_t + fit, top - eps])
+                    cube([side[1] - side[0], y1 - front_wall - pcb_t - fit, lip_top - top]);
+                // beside the board
+                translate([side[2], y0, top - eps])
+                    cube([side[3] - side[2], y1 - y0, lip_top - top]);
+            }
+        cube([width, depth, base_h - shell]);
     }
     hull()
         intersection() {
             in_rest()
-                translate([(rest_width - rc_w) / 2 + fit, front_wall + fit / 2, -1.5 * base_h])
-                    cube([rc_w - 2 * fit, rc_depth - fit, 1.5 * base_h]);
+                translate([bx0 - side_lip, y0, -1.5 * base_h])
+                    cube([rc_w + 2 * side_lip, y1 - y0, 1.5 * base_h]);
             cube([width, depth, 2]);
         }
 }
