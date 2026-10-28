@@ -1,7 +1,12 @@
 package homeassistant
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"io"
 	"log/slog"
 	"net"
@@ -109,35 +114,48 @@ func eventually(t *testing.T, what string, ok func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
-func TestPublisherKeepsHomeAssistantInSync(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+type harness struct {
+	p    *Publisher
+	ha   *recorder
+	bus  *events.Bus
+	db   *db.DB
+	done chan error
+}
+
+func startPublisher(t *testing.T, ctx context.Context) *harness {
+	t.Helper()
 	broker := startBroker(t)
 	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "spindle.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.Close()
+	t.Cleanup(func() { d.Close() })
 	d.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('a', 'h', 1)`)
 
-	ha := listen(t, ctx, broker)
-	bus := events.NewBus()
-	p := &Publisher{
+	h := &harness{ha: listen(t, ctx, broker), bus: events.NewBus(), db: d, done: make(chan error, 1)}
+	h.p = &Publisher{
 		Cfg:     config.MQTT{URL: broker, Prefix: "homeassistant"},
 		DB:      d,
-		Bus:     bus,
+		Bus:     h.bus,
 		Covers:  &covers.Store{Dir: t.TempDir()},
 		Current: func(context.Context, int64) ([]sessions.NowPlaying, error) { return nil, nil },
 		Version: "test",
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
-	done := make(chan error, 1)
-	go func() { done <- p.Run(ctx) }()
+	go func() { h.done <- h.p.Run(ctx) }()
+	eventually(t, "online", func() bool { s, _ := h.ha.last(AvailabilityTopic); return s == "online" })
+	return h
+}
+
+func TestPublisherKeepsHomeAssistantInSync(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+	ha, bus, done := h.ha, h.bus, h.done
 
 	discovery := "homeassistant/device/spindle_1/config"
 	eventually(t, "discovery", func() bool { _, ok := ha.last(discovery); return ok })
 	eventually(t, "idle state", func() bool { s, _ := ha.last(StateTopic(1)); return s == Idle })
-	eventually(t, "online", func() bool { s, _ := ha.last(AvailabilityTopic); return s == "online" })
 
 	bus.Publish(events.Event{Type: sessions.EventNowPlaying, UserID: 1, Data: sessions.NowPlaying{
 		DeviceID: 1, Active: true, UID: "04A1",
@@ -183,5 +201,39 @@ func TestPublisherSurvivesUnreachableBroker(t *testing.T) {
 	}
 	if err := p.Run(ctx); err != nil {
 		t.Fatalf("unreachable broker should not be fatal: %v", err)
+	}
+}
+
+func TestPublisherSendsCoverAsSmallJPEG(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+
+	var src bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 1200, 900))
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{200, 30, 30, 255}}, image.Point{}, draw.Src)
+	if err := png.Encode(&src, img); err != nil {
+		t.Fatal(err)
+	}
+	name, _, err := h.p.Covers.Save(1, src.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.db.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, cover_path, cover_status, created_at)
+		VALUES (1, 1, 'Kind of Blue', 'Miles Davis', ?, 'resolved', 1)`, name)
+
+	h.bus.Publish(events.Event{Type: sessions.EventNowPlaying, UserID: 1, Data: sessions.NowPlaying{
+		DeviceID: 1, Active: true, UID: "04A1",
+		Album: &catalog.Album{ID: 1, Title: "Kind of Blue", Artist: "Miles Davis", HasCover: true},
+	}})
+	eventually(t, "cover", func() bool { _, ok := h.ha.last(CoverTopic(1)); return ok })
+
+	cover, _ := h.ha.last(CoverTopic(1))
+	got, format, err := image.Decode(strings.NewReader(cover))
+	if err != nil || format != "jpeg" {
+		t.Fatalf("cover is %q: %v", format, err)
+	}
+	if b := got.Bounds(); b.Dx() != 600 || b.Dy() != 450 {
+		t.Fatalf("cover is %dx%d", b.Dx(), b.Dy())
 	}
 }

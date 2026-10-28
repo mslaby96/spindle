@@ -253,3 +253,41 @@ func TestTracklistSkipsHeadings(t *testing.T) {
 		t.Fatalf("%v %d %v", d, n, complete)
 	}
 }
+
+func TestRunRetriesCoverAndLength(t *testing.T) {
+	e := newEnv(t)
+	e.r.DB.W.Exec(`UPDATE albums SET cover_status = 'failed' WHERE id = ?`, e.albumID)
+	e.dc.master.Tracklist = tracks("20:00", "21:00")
+	covers := make(chan int64, 1)
+	e.r.ResolveCover = func(_ context.Context, _, albumID int64) error {
+		covers <- albumID
+		return nil
+	}
+	done := make(chan int64, 1)
+	e.r.OnResolved = func(_, albumID int64) { done <- albumID }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		e.r.Run(ctx)
+		close(stopped)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+
+	for name, ch := range map[string]chan int64{"cover": covers, "length": done} {
+		select {
+		case id := <-ch:
+			if id != e.albumID {
+				t.Fatalf("%s retried for album %d", name, id)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s was not retried", name)
+		}
+	}
+	if status, secs, _ := e.album(t); status != StatusResolved || *secs != 2460 {
+		t.Fatalf("%s %v", status, *secs)
+	}
+}

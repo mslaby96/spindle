@@ -652,3 +652,33 @@ func TestCurrentReportsSleeveOffTheStand(t *testing.T) {
 		t.Fatalf("after removal %+v", current)
 	}
 }
+
+func TestSweeperEndsAbandonedListen(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 20*time.Minute)
+	v.see(t, "")
+	v.clock.advance(v.e.Cfg.AbsenceTolerance + 10*time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		v.e.RunSweeper(ctx, 10*time.Millisecond)
+		close(stopped)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for v.only(t).State == StateActive {
+		if time.Now().After(deadline) {
+			t.Fatal("sweeper never ended the listen")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if s := v.only(t); s.State != StateCounted {
+		t.Fatalf("session %+v", s)
+	}
+}

@@ -84,6 +84,10 @@ func newService(t *testing.T) (*Service, *fakeDiscogs) {
 				Labels:  []discogs.Label{{Name: "Harvest", CatNo: "SHVL 804"}},
 				Formats: []discogs.Format{{Name: "Vinyl", Descriptions: []string{"LP", "Album"}}},
 			},
+			1873014: {
+				ID: 1873014, MasterID: 10362, Title: "The Dark Side Of The Moon", Year: 2016, Country: "Europe",
+				Labels: []discogs.Label{{Name: "Pink Floyd Records", CatNo: "PFRLP8"}},
+			},
 			4455667: {
 				ID: 4455667, Title: "Solo Violin", Year: 1983, Country: "Poland",
 				Artists: []discogs.Artist{{Name: "Zbigniew Seifert (2)"}}, Genres: []string{"Jazz"},
@@ -211,5 +215,27 @@ func TestUnknownMaster(t *testing.T) {
 	s, _ := newService(t)
 	if _, err := s.SaveMaster(context.Background(), 1, 1); !errors.Is(err, discogs.ErrNotFound) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestReleasesListsSavedPressings(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	album, _, err := s.SaveRelease(ctx, 1, 1873013)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SaveRelease(ctx, 1, 1873014); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Releases(ctx, 1, album.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list[0].CatNo != "SHVL 804" || list[1].CatNo != "PFRLP8" || list[1].Year == nil || *list[1].Year != 2016 {
+		t.Fatalf("releases %+v", list)
+	}
+	if other, err := s.Releases(ctx, 2, album.ID); err != nil || len(other) != 0 {
+		t.Fatalf("another user's view: %+v %v", other, err)
 	}
 }

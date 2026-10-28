@@ -239,3 +239,36 @@ func TestLimiterSpacesRequestsWhenBudgetIsLow(t *testing.T) {
 		t.Fatalf("exhausted budget: delay %v", d)
 	}
 }
+
+func TestImage(t *testing.T) {
+	var auth string
+	big := false
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		switch {
+		case r.URL.Path == "/missing.jpg":
+			http.NotFound(w, r)
+		case big:
+			w.Write(make([]byte, maxImageBytes+1))
+		default:
+			w.Write([]byte("jpeg bytes"))
+		}
+	})
+	ctx := context.Background()
+
+	data, err := c.Image(ctx, c.BaseURL+"/cover.jpg")
+	if err != nil || string(data) != "jpeg bytes" {
+		t.Fatalf("%q %v", data, err)
+	}
+	if auth != "" {
+		t.Fatalf("token sent to the image host: %q", auth)
+	}
+	var status *StatusError
+	if _, err := c.Image(ctx, c.BaseURL+"/missing.jpg"); !errors.As(err, &status) || status.Code != http.StatusNotFound {
+		t.Fatalf("missing image: %v", err)
+	}
+	big = true
+	if _, err := c.Image(ctx, c.BaseURL+"/cover.jpg"); err == nil {
+		t.Fatal("oversized image accepted")
+	}
+}
