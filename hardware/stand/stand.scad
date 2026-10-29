@@ -70,6 +70,15 @@ module rounded_box(size, r) {
             translate([x, y, z]) sphere(r, $fn = 24);
 }
 
+// Rounded on top, straight down to a flat bottom so nothing overhangs the print bed.
+module flat_bottom_box(size, r) {
+    hull()
+        for (x = [r, size.x - r], y = [r, size.y - r]) {
+            translate([x, y, 0]) cylinder(r = r, h = size.z - r);
+            translate([x, y, size.z - r]) sphere(r, $fn = 24);
+        }
+}
+
 module rounded_plate(size, r) {
     hull()
         for (x = [r, size.x - r], y = [r, size.y - r])
@@ -101,7 +110,7 @@ module in_rest() {
 }
 
 module base() {
-    rounded_box([width, depth, base_h], corner_r);
+    flat_bottom_box([width, depth, base_h], corner_r);
 }
 
 // reaches well below the base's rounded top edge so the front reads as one flat face
@@ -161,9 +170,13 @@ module bay() {
         cube([width - 2 * shell, depth - 2 * shell, base_h - shell]);
 }
 
+// A 45 degree roof over the opening prints without support.
 module usb_opening() {
     translate([(width - usb_w) / 2, depth - shell - 1, -eps])
-        cube([usb_w, shell + 2, usb_h]);
+        rotate([-90, 0, 0])
+            mirror([0, 1, 0])
+                linear_extrude(shell + 2)
+                    polygon([[0, 0], [usb_w, 0], [usb_w, usb_h], [usb_w / 2, usb_h + usb_w / 2], [0, usb_h]]);
 }
 
 // the Pico W's LED sits near its USB end
