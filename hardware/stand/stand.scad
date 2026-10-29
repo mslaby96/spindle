@@ -2,7 +2,7 @@
 // with an RC522 reader inside the backrest and a Pico W in the base.
 // All dimensions in millimetres. Render a part with: openscad -D 'part="body"' -o body.stl stand.scad
 
-part = "preview"; // "body", "cover" or "preview"
+part = "preview"; // "body", "cover", "foot" or "preview"
 
 /* [Stand] */
 width = 140;
@@ -25,6 +25,7 @@ fit = 0.4;              // clearance around the board
 leg_w = 4;              // legs of the spacer that keeps the board up
 pcb_t = 1.6;
 spacer_lip = 4;         // how far the spacer's lips reach up beside and behind the board
+spacer_play = 0.3;      // extra room around the board, since the screws decide where the spacer ends up
 side_lip = 1.5;
 front_wall = 2.5;       // between the sleeve and the reader antenna
 header_band = 12;       // strip at the bottom of the board with the straight pin header, kept inside the base
@@ -56,6 +57,8 @@ foot_d = 12;
 foot_h = 3;
 head_d = 5.5;           // pan head of the screw, sunk into the foot
 head_h = 2.5;
+spigot_d = 6;           // centres a foot under its screw
+spigot_h = 1;
 pico_recess = 1;
 
 $fn = 48;
@@ -131,15 +134,15 @@ module spacer() {
     lip_top = board_bottom + spacer_lip;
     intersection() {
         in_rest()
-            for (side = [[bx0 - side_lip, bx0 + leg_w, bx0 - side_lip, bx0],
-                         [bx1 - leg_w, bx1 + side_lip, bx1, bx1 + side_lip]]) {
+            for (side = [[bx0 - side_lip - spacer_play, bx0 + leg_w, bx0 - side_lip, bx0],
+                         [bx1 - leg_w, bx1 + side_lip + spacer_play, bx1, bx1 + side_lip]]) {
                 translate([side[0], y0, -1.5 * base_h])
                     cube([side[1] - side[0], y1 - y0, 1.5 * base_h + top]);
                 // behind the board
-                translate([side[0], front_wall + pcb_t + fit, top - eps])
-                    cube([side[1] - side[0], y1 - front_wall - pcb_t - fit, lip_top - top]);
+                translate([side[0], front_wall + pcb_t + fit + spacer_play, top - eps])
+                    cube([side[1] - side[0], y1 - front_wall - pcb_t - fit - spacer_play, lip_top - top]);
                 // beside the board
-                translate([side[2], y0, top - eps])
+                translate([side[2] + (side[2] < bx0 ? -spacer_play : spacer_play), y0, top - eps])
                     cube([side[3] - side[2], y1 - y0, lip_top - top]);
             }
         cube([width, depth, base_h - shell]);
@@ -147,8 +150,8 @@ module spacer() {
     hull()
         intersection() {
             in_rest()
-                translate([bx0 - side_lip, y0, -1.5 * base_h])
-                    cube([rc_w + 2 * side_lip, y1 - y0, 1.5 * base_h]);
+                translate([bx0 - side_lip - spacer_play, y0, -1.5 * base_h])
+                    cube([rc_w + 2 * (side_lip + spacer_play), y1 - y0, 1.5 * base_h]);
             cube([width, depth, 2]);
         }
 }
@@ -236,18 +239,17 @@ module body() {
     }
 }
 
-// Printed upside down: the flat top on the bed, the feet facing up.
+// Printed as it sits, outside face on the bed, with the reader spacer standing on it.
 module cover() {
     difference() {
         union() {
             rounded_plate([width, depth, cover_t], corner_r);
-            for (p = boss_positions)
-                translate([p.x, p.y, -foot_h]) cylinder(d = foot_d, h = foot_h + eps);
+            translate([0, 0, cover_t]) spacer();
         }
         for (p = boss_positions)
-            translate([p.x, p.y, -foot_h - eps]) {
-                cylinder(d = screw_d + 0.6, h = foot_h + cover_t + 2 * eps);
-                cylinder(d = head_d, h = head_h);
+            translate([p.x, p.y, 0]) {
+                translate([0, 0, -eps]) cylinder(d = screw_d + 0.6, h = cover_t + 2 * eps);
+                translate([0, 0, -eps]) cylinder(d = spigot_d + 0.4, h = spigot_h + 0.2);
             }
         // shallow bed that keeps the Pico W lined up with the USB opening
         translate([pico_x - 0.5, pico_y - 0.5, cover_t - pico_recess])
@@ -255,12 +257,24 @@ module cover() {
     }
 }
 
+// One under each corner, held by the same screw as the cover; the head sinks into the foot.
+module foot() {
+    difference() {
+        union() {
+            cylinder(d = foot_d, h = foot_h);
+            translate([0, 0, foot_h - eps]) cylinder(d = spigot_d, h = spigot_h + eps);
+        }
+        translate([0, 0, -eps]) cylinder(d = screw_d + 0.6, h = foot_h + spigot_h + 2 * eps);
+        translate([0, 0, -eps]) cylinder(d = head_d, h = head_h);
+    }
+}
+
 if (part == "body") body();
 else if (part == "cover") cover();
-else if (part == "spacer") spacer();
+else if (part == "foot") foot();
 else {
     body();
-    translate([0, 0, -40]) cover();
-    color("orange") translate([0, 0, -20]) spacer();
+    color("orange") translate([0, 0, -30 - cover_t]) cover();
+    for (p = boss_positions) translate([p.x, p.y, -50 - foot_h]) foot();
     %in_rest() translate([(rest_width - 314) / 2, -4.5, 0]) cube([314, 4, 314]);
 }
