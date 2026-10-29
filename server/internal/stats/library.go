@@ -50,12 +50,15 @@ const itemQuery = `
 	LEFT JOIN sessions s ON s.album_id = a.id
 	WHERE a.user_id = ?`
 
+// onShelf keeps records that were sold or lost out of the library and the forgotten shelf; their listens still count.
+const onShelf = ` AND a.removed_at IS NULL`
+
 func (st *Stats) Library(ctx context.Context, userID int64, sort string) ([]Item, error) {
 	order, ok := sorts[sort]
 	if !ok {
 		order = sorts["last_played"]
 	}
-	return st.items(ctx, itemQuery+` GROUP BY a.id ORDER BY `+order, userID)
+	return st.items(ctx, itemQuery+onShelf+` GROUP BY a.id ORDER BY `+order, userID)
 }
 
 type Forgotten struct {
@@ -69,11 +72,11 @@ func (st *Stats) Forgotten(ctx context.Context, userID int64, after time.Duratio
 	cutoff := st.Now().Add(-after).Unix()
 	var f Forgotten
 	var err error
-	f.NotRecently, err = st.items(ctx, itemQuery+` GROUP BY a.id HAVING last_played < ? ORDER BY last_played`, userID, cutoff)
+	f.NotRecently, err = st.items(ctx, itemQuery+onShelf+` GROUP BY a.id HAVING last_played < ? ORDER BY last_played`, userID, cutoff)
 	if err != nil {
 		return f, err
 	}
-	f.Never, err = st.items(ctx, itemQuery+` GROUP BY a.id HAVING last_played IS NULL ORDER BY a.created_at`, userID)
+	f.Never, err = st.items(ctx, itemQuery+onShelf+` GROUP BY a.id HAVING last_played IS NULL ORDER BY a.created_at`, userID)
 	return f, err
 }
 

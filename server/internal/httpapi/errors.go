@@ -28,6 +28,7 @@ var knownErrors = []struct {
 	{devices.ErrNoName, http.StatusBadRequest, ""},
 	{devices.ErrInvalidCode, http.StatusForbidden, ""},
 	{catalog.ErrNothingToAssign, http.StatusBadRequest, ""},
+	{catalog.ErrUnknownListensChoice, http.StatusBadRequest, ""},
 	{sessions.ErrNotFound, http.StatusNotFound, ""},
 	{sessions.ErrNotPending, http.StatusConflict, ""},
 	{sessions.ErrUnknownResolution, http.StatusBadRequest, ""},

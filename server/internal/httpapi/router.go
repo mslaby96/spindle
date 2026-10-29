@@ -81,6 +81,9 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/discogs/masters/{id}/versions", s.user(s.masterVersions))
 	s.mux.Handle("GET /api/albums/{id}/cover", s.user(s.cover))
 	s.mux.Handle("PUT /api/albums/{id}/duration", s.user(s.setAlbumDuration))
+	s.mux.Handle("POST /api/albums/{id}/remove", s.user(s.removeAlbum))
+	s.mux.Handle("POST /api/albums/{id}/restore", s.user(s.restoreAlbum))
+	s.mux.Handle("DELETE /api/albums/{id}", s.user(s.deleteAlbum))
 
 	s.mux.Handle("GET /api/catalog/mode", s.user(s.catalogMode))
 	s.mux.Handle("PUT /api/catalog/mode", s.user(s.setCatalogMode))

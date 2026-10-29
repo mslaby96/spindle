@@ -233,3 +233,27 @@ func TestDiaryBeforeFirstSessionIDSkipsTheWholeSecond(t *testing.T) {
 		t.Fatalf("entries %+v", got)
 	}
 }
+
+func TestRemovedAlbumsLeaveTheShelvesButKeepTheirHistory(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	sold := f.album(1, "Sold", "A", `["Jazz"]`, `[]`, now.AddDate(-2, 0, 0))
+	neverPlayed := f.album(1, "Lost", "B", `[]`, `[]`, now.AddDate(-1, 0, 0))
+	f.listen(1, sold, "counted", now.AddDate(0, -7, 0), 40, 1)
+	f.st.DB.W.Exec(`UPDATE albums SET removed_at = ? WHERE id IN (?, ?)`, now.Unix(), sold, neverPlayed)
+
+	library, _ := f.st.Library(ctx, 1, "title")
+	forgotten, _ := f.st.Forgotten(ctx, 1, 180*24*time.Hour)
+	if len(library) != 0 || len(forgotten.NotRecently)+len(forgotten.Never) != 0 {
+		t.Fatalf("removed albums still on the shelves: %+v %+v", library, forgotten)
+	}
+
+	diary, _ := f.st.Diary(ctx, 1, DiaryFilter{})
+	top, _ := f.st.Top(ctx, 1, "all", "plays", 10)
+	if len(diary) != 1 || len(top.Albums) != 1 || top.Albums[0].AlbumID != sold || top.Genres[0].Name != "Jazz" {
+		t.Fatalf("history lost: diary %+v top %+v", diary, top)
+	}
+	if item, err := f.st.AlbumItem(ctx, 1, sold); err != nil || item.Plays != 1 {
+		t.Fatalf("album page: %+v %v", item, err)
+	}
+}

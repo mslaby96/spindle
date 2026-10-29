@@ -77,6 +77,10 @@ func newService(t *testing.T) (*Service, *fakeDiscogs) {
 				Genres:  []string{"Rock"}, Styles: []string{"Prog Rock", "Psychedelic Rock"},
 				Images: []discogs.Image{{Type: "primary", URI: "https://img/dsotm.png"}},
 			},
+			10414: {
+				ID: 10414, Title: "Wish You Were Here", Year: 1975,
+				Artists: []discogs.Artist{{Name: "Pink Floyd"}}, Genres: []string{"Rock"},
+			},
 		},
 		releases: map[int64]discogs.Release{
 			1873013: {

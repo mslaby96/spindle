@@ -73,6 +73,11 @@ func (s *Server) assignTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := s.Catalog.Assign(r.Context(), userID(r), uid, req)
+	var choice *catalog.ListensChoiceError
+	if errors.As(err, &choice) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": choice.Error(), "listens": choice.Listens})
+		return
+	}
 	if err != nil {
 		s.fail(w, err)
 		return
