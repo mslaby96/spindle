@@ -19,6 +19,7 @@ const tokenPrefix = "spd_"
 var (
 	ErrNotFound     = errors.New("device not found")
 	ErrInvalidToken = errors.New("invalid device token")
+	ErrNoName       = errors.New("name is required")
 )
 
 type Device struct {
@@ -43,15 +44,23 @@ func NewStore(d *db.DB) *Store {
 func (s *Store) Create(ctx context.Context, userID int64, name string) (Device, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return Device{}, "", errors.New("name is required")
+		return Device{}, "", ErrNoName
 	}
+	return s.insert(ctx, s.db.W, userID, name)
+}
+
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func (s *Store) insert(ctx context.Context, db execer, userID int64, name string) (Device, string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return Device{}, "", err
 	}
 	token := tokenPrefix + base64.RawURLEncoding.EncodeToString(b)
 	now := s.Now()
-	res, err := s.db.W.ExecContext(ctx,
+	res, err := db.ExecContext(ctx,
 		`INSERT INTO devices (user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)`,
 		userID, name, hashToken(token), now.Unix())
 	if err != nil {

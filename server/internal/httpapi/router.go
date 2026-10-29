@@ -60,6 +60,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/devices", s.user(s.listDevices))
 	s.mux.Handle("POST /api/devices", s.user(s.createDevice))
 	s.mux.Handle("DELETE /api/devices/{id}", s.user(s.revokeDevice))
+	s.mux.Handle("POST /api/devices/pairing", s.user(s.startPairing))
 	s.mux.Handle("GET /api/events", s.user(s.events))
 	s.mux.Handle("GET /api/now-playing", s.user(s.nowPlaying))
 	s.mux.Handle("GET /api/inbox", s.user(s.listInbox))
@@ -88,6 +89,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/tags/{uid}/assign", s.user(s.assignTag))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
+	s.mux.HandleFunc("POST /api/device/v1/pair", s.pair)
 
 	s.mux.Handle("/", webui.Handler())
 	return s
