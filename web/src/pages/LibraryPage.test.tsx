@@ -82,6 +82,7 @@ describe("album page", () => {
     album: { id: 1, title: "Kind of Blue", artist: "Miles Davis", year: 1959, genres: ["Jazz"], styles: ["Modal"], has_cover: false, duration_sec: 2760, duration_status: "resolved" },
     stats: item(1, "Kind of Blue", "Miles Davis", { plays: 2, listened_sec: 5520 }),
     releases: [{ id: 1, album_id: 1, discogs_release_id: 5, title: "Kind of Blue", country: "US", year: 1959, label: "Columbia", catno: "CL 1355" }],
+    sleeves: [],
     history: [
       { session_id: 11, album_id: 1, title: "Kind of Blue", artist: "Miles Davis", has_cover: false, started_at: "2026-03-14T20:00:00Z", plays: 1, listened_sec: 2760, duration_confirmed: true, note: "rainy evening" },
     ],
