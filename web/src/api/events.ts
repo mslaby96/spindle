@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { meKey, type Album, type CatalogMode, type Tag } from "./client";
+import { meKey, type Album, type CatalogMode, type Device, type Tag } from "./client";
 
 export type NowPlaying = {
   device_id: number;
@@ -18,6 +18,8 @@ export const catalogModeKey = ["catalog", "mode"] as const;
 export const catalogCurrentKey = ["catalog", "current"] as const;
 export const unassignedKey = ["tags", "unassigned"] as const;
 export const inboxKey = ["inbox"] as const;
+export const devicesKey = ["devices"] as const;
+export const pairedStandKey = ["paired-stand"] as const;
 
 const RETRY_MS = 3000;
 
@@ -34,7 +36,7 @@ export function applyAssignedTag(queryClient: QueryClient, tag: Tag) {
 
 // Events missed while the stream was down are not replayed, so everything they feed is fetched again.
 function catchUp(queryClient: QueryClient) {
-  for (const queryKey of [nowPlayingKey, inboxKey, catalogModeKey, unassignedKey]) {
+  for (const queryKey of [nowPlayingKey, inboxKey, catalogModeKey, unassignedKey, devicesKey]) {
     queryClient.invalidateQueries({ queryKey });
   }
 }
@@ -74,6 +76,10 @@ export function useLiveEvents() {
       });
       on("inbox_changed", () => queryClient.invalidateQueries({ queryKey: inboxKey }));
       on<Tag>("tag_assigned", (tag) => applyAssignedTag(queryClient, tag));
+      on<Device>("device_paired", (device) => {
+        queryClient.setQueryData(pairedStandKey, device);
+        queryClient.invalidateQueries({ queryKey: devicesKey });
+      });
       source.onopen = () => {
         if (opened) catchUp(queryClient);
         opened = true;

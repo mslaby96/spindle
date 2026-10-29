@@ -154,7 +154,54 @@ describe("live events", () => {
 });
 
 describe("stands", () => {
-  it("shows a new stand token only once", async () => {
+  it("pairs a new stand with a code", async () => {
+    let devices: unknown[] = [];
+    const calls = mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, devices],
+      "POST /api/devices/pairing": () => [201, { code: "K7F-29Q", expires_at: new Date(Date.now() + 600_000).toISOString() }],
+    });
+    renderApp("/devices");
+
+    await userEvent.type(await screen.findByPlaceholderText(/Stand name/), "Living room");
+    await userEvent.click(screen.getByRole("button", { name: "Add stand" }));
+
+    expect(await screen.findByText("K7F-29Q")).toBeInTheDocument();
+    expect(screen.getByText(/Spindle-/)).toBeInTheDocument();
+    expect(screen.getByText(/Code expires in (9:59|10:00)/)).toBeInTheDocument();
+    expect(calls.find((c) => c.key === "POST /api/devices/pairing")?.body).toEqual({ name: "Living room" });
+
+    devices = [{ id: 1, name: "Living room", fw_version: "0.2.0", created_at: "2026-01-01T00:00:00Z" }];
+    await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0));
+    act(() => FakeEventSource.instances.at(-1)!.emit("device_paired", devices[0]));
+
+    expect(await screen.findByText("Living room is connected.")).toBeInTheDocument();
+    expect(screen.queryByText("K7F-29Q")).not.toBeInTheDocument();
+    expect(await screen.findByText(/firmware 0.2.0/)).toBeInTheDocument();
+  });
+
+  it("offers a new code once the old one runs out", async () => {
+    let issued = 0;
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "POST /api/devices/pairing": () => {
+        issued++;
+        return [201, { code: issued === 1 ? "AAA-AAA" : "BBB-BBB", expires_at: new Date(Date.now() + (issued === 1 ? 500 : 600_000)).toISOString() }];
+      },
+    });
+    renderApp("/devices");
+    await userEvent.type(await screen.findByPlaceholderText(/Stand name/), "Kitchen");
+    await userEvent.click(screen.getByRole("button", { name: "Add stand" }));
+    expect(await screen.findByText("AAA-AAA")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: "New code" }, { timeout: 3000 }));
+    expect(await screen.findByText("BBB-BBB")).toBeInTheDocument();
+  });
+
+  it("shows a token once for setting a stand up over USB", async () => {
     let devices: unknown[] = [];
     mockApi({
       "GET /api/setup": () => [200, { needed: false }],
@@ -169,7 +216,7 @@ describe("stands", () => {
     renderApp("/devices");
 
     await userEvent.type(await screen.findByPlaceholderText(/Stand name/), "Living room");
-    await userEvent.click(screen.getByRole("button", { name: "Add stand" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set up over USB instead" }));
 
     expect(await screen.findByText("spd_secret_token")).toBeInTheDocument();
     expect(await screen.findByText("Living room")).toBeInTheDocument();
