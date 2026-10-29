@@ -259,12 +259,13 @@ describe("pairing instructions", () => {
     expect(within(dialog).getByText(/hold the BOOTSEL button/i)).toBeInTheDocument();
   });
 
-  it("warns that localhost means nothing to the stand", async () => {
-    vi.stubGlobal("location", { ...window.location, origin: "http://localhost:8080", hostname: "localhost" });
+  it("asks for the home network address when opened as localhost", async () => {
+    vi.stubGlobal("location", { ...window.location, origin: "http://localhost:8080", hostname: "localhost", port: "8080" });
     pairingApi();
     const dialog = await startPairing();
-    expect(within(dialog).getByText(/localhost/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/address of this computer on your home network/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/this computer's address on your home network with port 8080/)).toBeInTheDocument();
+    expect(within(dialog).getByText("http://192.168.1.10:8080")).toBeInTheDocument();
+    expect(within(dialog).queryByText("http://localhost:8080")).not.toBeInTheDocument();
   });
 });
 

@@ -117,7 +117,7 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
     return () => clearInterval(t);
   }, []);
   const left = new Date(pairing.expires_at).getTime() - now;
-  const server = window.location.origin;
+  const port = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
 
   return (
     <div className="card notice" role="dialog" aria-label="Pair a stand">
@@ -135,13 +135,17 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
           On that page pick your home Wi-Fi and type its password.
         </li>
         <li>
-          As the server address, type <code>{server}</code>
-          {isLocal(window.location.hostname) && (
-            <span className="error">
-              {" "}
-              — but that is this computer's own name, which means nothing to the stand. Type the address of this computer on
-              your home network instead, e.g. <code>http://192.168.1.10:{window.location.port || "80"}</code>.
-            </span>
+          {isLocal(window.location.hostname) ? (
+            <>
+              As the server address, type this computer's address on your home network with port {port}, e.g.{" "}
+              <code>http://192.168.1.10:{port}</code>. You opened Spindle as {window.location.hostname}, which only works on
+              this computer. On a Mac the address is under System Settings → Wi-Fi → Details; on Windows run{" "}
+              <code>ipconfig</code>.
+            </>
+          ) : (
+            <>
+              As the server address, type <code>{window.location.origin}</code>
+            </>
           )}
         </li>
         <li>Enter this code and press Connect:</li>
