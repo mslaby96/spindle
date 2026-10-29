@@ -72,6 +72,20 @@ class WiFiTest(unittest.TestCase):
         self.wifi.tick()
         self.assertEqual(self.wifi._wlan.connects, 2)
 
+    def test_counts_how_long_the_network_has_been_gone(self):
+        self.wifi.tick()
+        self.clock.now += 1000
+        self.wifi.tick()
+        self.assertEqual(self.wifi.down_ms(), 1000)
+        self.wifi._wlan.state = "up"
+        self.wifi.tick()
+        self.assertEqual(self.wifi.down_ms(), 0)
+        self.wifi._wlan.state = "idle"
+        self.clock.now += 500
+        self.wifi.tick()
+        self.clock.now += 700
+        self.assertEqual(self.wifi.down_ms(), 700)
+
 
 if __name__ == "__main__":
     unittest.main()

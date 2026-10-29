@@ -63,6 +63,22 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg["pins"], {"sck": 10, "spi_id": 1})
 
 
+class SetupNeededTest(unittest.TestCase):
+    def test_without_config_or_network_details(self):
+        self.assertTrue(report.needs_setup(None))
+        self.assertTrue(report.needs_setup({"pins": {"sck": 2}}))
+        self.assertTrue(report.needs_setup({"ssid": "home", "password": "pw", "server": "http://x"}))
+        self.assertFalse(report.needs_setup({"ssid": "home", "password": "", "server": "http://x", "token": "spd_x"}))
+
+    def test_forgetting_the_network_keeps_the_hardware_settings(self):
+        cfg = {"ssid": "home", "password": "pw", "server": "http://x", "token": "spd_x", "pins": {"sck": 10}, "led_pin": 15}
+        self.assertEqual(report.forget_network(cfg), {"pins": {"sck": 10}, "led_pin": 15})
+
+    def test_joining_a_network_keeps_the_hardware_settings(self):
+        cfg = report.join_network({"pins": {"sck": 10}, "ssid": "old"}, "home", "pw", "http://x", "spd_x")
+        self.assertEqual(cfg, {"pins": {"sck": 10}, "ssid": "home", "password": "pw", "server": "http://x", "token": "spd_x"})
+
+
 class RetryTest(unittest.TestCase):
     def test_backs_off_while_the_server_fails(self):
         self.assertEqual(report.retry_delay(1500, 0), 1500)

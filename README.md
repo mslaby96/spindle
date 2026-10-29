@@ -89,21 +89,30 @@ Stick each tag on the back of the sleeve's outer sleeve, centred, 24 mm above th
 ### Firmware
 
 1. Flash [MicroPython for the Pico W](https://micropython.org/download/RPI_PICO_W/): hold BOOTSEL while plugging it in and drop the `.uf2` file onto the drive.
-2. Install `mpremote`: `pipx install mpremote`.
-3. In the web app go to **Stands → Add stand** and copy the token. It is shown once.
-4. Copy `firmware/config.example.json` to `firmware/config.json` and fill in your Wi-Fi, the server address (as the Pico sees it, e.g. `http://192.168.1.10:8080`) and the token.
-5. Upload it:
+2. Install `mpremote` (`pipx install mpremote`) and upload the firmware:
 
 ```sh
 cd firmware
 mpremote mkdir :lib
 mpremote cp -r app :
 mpremote cp lib/mfrc522.py :lib/
-mpremote cp main.py config.json :
+mpremote cp main.py :
 mpremote reset
 ```
 
 If your MicroPython build doesn't include `requests`, run `mpremote mip install requests` once.
+
+### Connecting the stand
+
+1. In the web app go to **Stands**, type a name and press **Add stand**. You get a pairing code that works for ten minutes.
+2. Plug the stand in. With no settings yet, it opens its own Wi-Fi network called `Spindle-` and four characters, and the LED stays on with a short break every two seconds.
+3. Join that network on your phone. The setup page opens by itself; if it doesn't, go to `http://192.168.4.1`.
+4. Pick your Wi-Fi, type its password, the server address (the one you open Spindle at, e.g. `http://192.168.1.10:8080`, or your cloud address) and the pairing code.
+5. The stand joins your Wi-Fi, swaps the code for its own token and restarts. The app shows it as connected.
+
+To set it up again, for example after changing your router, hold the BOOTSEL button on the Pico for five seconds while the stand is running. The stand also opens its setup network on its own when it can't reach your Wi-Fi for five minutes, and keeps trying the old network meanwhile.
+
+You can still configure a stand by hand: press **Set up over USB instead** in the app, copy `firmware/config.example.json` to `config.json` with your Wi-Fi, server and that token, and upload it with `mpremote cp config.json :`.
 
 To check the reader before setting everything up, upload `app` and `lib/mfrc522.py` as above and run `mpremote run tools/scan.py`. It prints the tag UID whenever a sleeve comes near.
 
@@ -120,6 +129,7 @@ While you're tinkering over USB, set `"watchdog": false` in `config.json`. The w
 | double flash | cataloguing, saved |
 | short blip every 2 s | no connection to the server |
 | triple flash | broken config or rejected token, check the USB console |
+| on, short break every 2 s | waiting to be set up, join its Wi-Fi network |
 
 ### Quick test
 

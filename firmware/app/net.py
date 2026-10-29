@@ -19,12 +19,21 @@ class WiFi:
         self._next_attempt = time.ticks_ms()
         self._attempt_started = self._next_attempt
         self._backoff = MIN_BACKOFF_MS
+        self._down_since = self._next_attempt
+
+    def down_ms(self):
+        if self._down_since is None:
+            return 0
+        return time.ticks_diff(time.ticks_ms(), self._down_since)
 
     def tick(self):
         if self._wlan.isconnected():
             self._backoff = MIN_BACKOFF_MS
+            self._down_since = None
             return True
         now = time.ticks_ms()
+        if self._down_since is None:
+            self._down_since = now
         if (
             self._wlan.status() == network.STAT_CONNECTING
             and time.ticks_diff(now, self._attempt_started) < CONNECT_TIMEOUT_MS
@@ -40,12 +49,8 @@ class WiFi:
 
 
 def post_json(url, token, payload):
-    resp = requests.post(
-        url,
-        json=payload,
-        headers={"Authorization": "Bearer " + token},
-        timeout=HTTP_TIMEOUT_S,
-    )
+    headers = {"Authorization": "Bearer " + token} if token else {}
+    resp = requests.post(url, json=payload, headers=headers, timeout=HTTP_TIMEOUT_S)
     try:
         if resp.status_code != 200:
             return resp.status_code, None

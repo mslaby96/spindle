@@ -31,8 +31,22 @@ def retry_delay(interval, failures):
     return min(interval * 2 ** min(failures, 10), MAX_RETRY_MS)
 
 
+def needs_setup(cfg):
+    return cfg is None or "password" not in cfg or any(not cfg.get(k) for k in ("ssid", "server", "token"))
+
+
+def forget_network(cfg):
+    return {k: v for k, v in cfg.items() if k not in REQUIRED}
+
+
+def join_network(cfg, ssid, password, server, token):
+    cfg = forget_network(cfg)
+    cfg.update({"ssid": ssid, "password": password, "server": server, "token": token})
+    return cfg
+
+
 def check_config(cfg):
-    missing = [k for k in REQUIRED if not cfg.get(k)]
+    missing = [k for k in REQUIRED if k not in cfg or (k != "password" and not cfg[k])]
     if missing:
         raise ValueError("config.json is missing: " + ", ".join(missing))
     if not (cfg["server"].startswith("http://") or cfg["server"].startswith("https://")):

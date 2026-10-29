@@ -1,20 +1,35 @@
 import json
 import time
 
+import machine
+import rp2
 from machine import WDT
 
 from app import report
 from app.debounce import Debouncer
+from app.hold import Hold
 from app.led import Led
 from app.version import VERSION
 
 READ_EVERY_MS = 200
 WDT_TIMEOUT_MS = 8000
+# Holding BOOTSEL this long while the stand runs forgets its Wi-Fi and opens the setup network again.
+FORGET_HOLD_MS = 5000
+# After this long without the usual Wi-Fi the setup network opens, while the stand keeps trying the old one.
+SETUP_AFTER_OFFLINE_MS = 5 * 60 * 1000
 
 
-def load_config():
-    with open("config.json") as f:
-        return report.check_config(json.load(f))
+def read_config():
+    try:
+        with open("config.json") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def watchdog(cfg):
+    # The watchdog cannot be stopped once started, so allow turning it off while developing over USB.
+    return WDT(timeout=WDT_TIMEOUT_MS) if cfg.get("watchdog", True) else _NoWatchdog()
 
 
 class _NoWatchdog:
@@ -39,21 +54,26 @@ def read_tag(reader):
 
 def run():
     led = Led()
+    raw = read_config()
     try:
-        cfg = load_config()
+        if raw is not None and raw.get("led_pin") is not None:
+            led = Led(raw["led_pin"])
+        if report.needs_setup(raw):
+            from app.setup import SetupPortal
+
+            SetupPortal(raw, led, watchdog(raw or {})).run()
+        cfg = report.check_config(raw)
         from app.net import WiFi, post_json
         from app.reader import Reader
 
-        if cfg.get("led_pin") is not None:
-            led = Led(cfg["led_pin"])
         reader = Reader(cfg.get("pins"))
         wifi = WiFi(cfg["ssid"], cfg["password"])
     except Exception as e:
         print("setup error:", e)
         fail_forever(led)
 
-    # The watchdog cannot be stopped once started, so allow turning it off while developing over USB.
-    wdt = WDT(timeout=WDT_TIMEOUT_MS) if cfg.get("watchdog", True) else _NoWatchdog()
+    wdt = watchdog(cfg)
+    forget = Hold(FORGET_HOLD_MS)
     debounce = Debouncer()
     url = cfg["server"] + "/api/device/v1/report"
 
@@ -74,9 +94,21 @@ def run():
             next_read = time.ticks_add(now, READ_EVERY_MS)
             if uid != attempted:
                 next_report = now
+            # reading BOOTSEL briefly pauses flash access, so it is checked with the reader rather than every pass
+            if forget.feed(rp2.bootsel_button() == 1, now):
+                from app.setup import save_config
+
+                print("forgetting the Wi-Fi settings")
+                save_config(report.forget_network(cfg))
+                machine.reset()
 
         if not wifi.tick():
             led.show("offline")
+            if wifi.down_ms() > SETUP_AFTER_OFFLINE_MS:
+                from app.setup import SetupPortal
+
+                SetupPortal(cfg, led, wdt).run(back_online=wifi.tick)
+                led.show("offline")
         elif time.ticks_diff(now, next_report) >= 0:
             seq += 1
             attempted = debounce.current
