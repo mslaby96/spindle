@@ -72,8 +72,5 @@ func (m *mean) add(c rgb) {
 }
 
 func (m *mean) hex() string {
-	if m.n == 0 {
-		return "#000000"
-	}
 	return fmt.Sprintf("#%02x%02x%02x", m.r/m.n, m.g/m.n, m.b/m.n)
 }
