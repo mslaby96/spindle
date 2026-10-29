@@ -41,6 +41,9 @@ func TestDefaults(t *testing.T) {
 	if c.MQTT.Enabled() {
 		t.Error("mqtt should be disabled without url")
 	}
+	if c.SecureCookies {
+		t.Error("secure cookies should be off by default")
+	}
 }
 
 func TestOverrides(t *testing.T) {
@@ -78,6 +81,7 @@ func TestInvalidValueNamesVariable(t *testing.T) {
 		"SPINDLE_TZ":                 "Mars/Olympus",
 		"SPINDLE_SECURE_COOKIES":     "maybe",
 		"SPINDLE_AUTO_RESOLVE_AFTER": "twod",
+		"SPINDLE_CATALOG_IDLE":       "0s",
 	}
 	for k, v := range cases {
 		_, err := Load(env(map[string]string{k: v}))
@@ -120,5 +124,24 @@ func TestSummaryRedactsSecrets(t *testing.T) {
 		if strings.Contains(s, v) {
 			t.Errorf("summary leaks %q: %s", v, s)
 		}
+	}
+	if !strings.Contains(s, "discogs_token=set") || !strings.Contains(s, "lastfm_key=set") {
+		t.Errorf("summary hides what is configured: %s", s)
+	}
+	if bare, _ := Load(env(nil)); !strings.Contains(bare.Summary(), "discogs_token=unset") {
+		t.Errorf("summary without a token: %s", bare.Summary())
+	}
+}
+
+func TestSecretWithLeadingSpaceIsRejected(t *testing.T) {
+	if _, err := Load(env(map[string]string{"SPINDLE_DISCOGS_TOKEN": " tok123"})); err == nil {
+		t.Fatal("token starting with a space accepted")
+	}
+}
+
+func TestLongFactorOfOneIsAccepted(t *testing.T) {
+	c, err := Load(env(map[string]string{"SPINDLE_LONG_FACTOR": "1"}))
+	if err != nil || c.Sessions.LongFactor != 1 {
+		t.Fatalf("%v %v", c, err)
 	}
 }

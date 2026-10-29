@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
 
-func startBroker(t *testing.T) string {
+func startBroker(t *testing.T) (*mqtt.Server, string) {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -47,7 +48,7 @@ func startBroker(t *testing.T) string {
 	}
 	go server.Serve()
 	t.Cleanup(func() { server.Close() })
-	return "mqtt://" + addr
+	return server, "mqtt://" + addr
 }
 
 type recorder struct {
@@ -65,6 +66,12 @@ func (r *recorder) last(topic string) (string, bool) {
 		return "", false
 	}
 	return m[len(m)-1], true
+}
+
+func (r *recorder) qosOf(topic string) byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.qos[topic]
 }
 
 func (r *recorder) count(topic string) int {
@@ -117,11 +124,12 @@ func eventually(t *testing.T, what string, ok func() bool) {
 }
 
 type harness struct {
-	p    *Publisher
-	ha   *recorder
-	bus  *events.Bus
-	db   *db.DB
-	done chan error
+	p      *Publisher
+	ha     *recorder
+	broker *mqtt.Server
+	bus    *events.Bus
+	db     *db.DB
+	done   chan error
 }
 
 func startPublisher(t *testing.T, ctx context.Context) *harness {
@@ -131,7 +139,7 @@ func startPublisher(t *testing.T, ctx context.Context) *harness {
 
 func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc) *harness {
 	t.Helper()
-	broker := startBroker(t)
+	server, broker := startBroker(t)
 	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "spindle.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +147,7 @@ func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc) 
 	t.Cleanup(func() { d.Close() })
 	d.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('a', 'h', 1)`)
 
-	h := &harness{ha: listen(t, t.Context(), broker), bus: events.NewBus(), db: d, done: make(chan error, 1)}
+	h := &harness{ha: listen(t, t.Context(), broker), broker: server, bus: events.NewBus(), db: d, done: make(chan error, 1)}
 	h.p = &Publisher{
 		Cfg:     config.MQTT{URL: broker, Prefix: "homeassistant"},
 		DB:      d,
@@ -216,32 +224,76 @@ func TestPublisherSendsCoverAsSmallJPEG(t *testing.T) {
 	defer cancel()
 	h := startPublisher(t, ctx)
 
-	var src bytes.Buffer
-	img := image.NewRGBA(image.Rect(0, 0, 1200, 900))
-	draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{200, 30, 30, 255}}, image.Point{}, draw.Src)
-	if err := png.Encode(&src, img); err != nil {
-		t.Fatal(err)
-	}
-	name, _, err := h.p.Covers.Save(1, src.Bytes())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.db.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, cover_path, cover_status, created_at)
-		VALUES (1, 1, 'Kind of Blue', 'Miles Davis', ?, 'resolved', 1)`, name)
+	for i, tc := range []struct{ w, h, wantW, wantH int }{
+		{1200, 900, 600, 450},
+		{300, 1200, 150, 600},
+		{1200, 300, 600, 150},
+		{500, 400, 500, 400},
+	} {
+		id := int64(i + 1)
+		var src bytes.Buffer
+		img := image.NewRGBA(image.Rect(0, 0, tc.w, tc.h))
+		draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{200, 30, 30, 255}}, image.Point{}, draw.Src)
+		if err := png.Encode(&src, img); err != nil {
+			t.Fatal(err)
+		}
+		name, _, err := h.p.Covers.Save(id, src.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.db.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, cover_path, cover_status, created_at)
+			VALUES (1, ?, 'Kind of Blue', 'Miles Davis', ?, 'resolved', 1)`, id, name)
 
-	h.bus.Publish(events.Event{Type: sessions.EventNowPlaying, UserID: 1, Data: sessions.NowPlaying{
-		DeviceID: 1, Active: true, UID: "04A1",
-		Album: &catalog.Album{ID: 1, Title: "Kind of Blue", Artist: "Miles Davis", HasCover: true},
-	}})
-	eventually(t, "cover", func() bool { _, ok := h.ha.last(CoverTopic(1)); return ok })
+		before := h.ha.count(CoverTopic(1))
+		h.bus.Publish(events.Event{Type: sessions.EventNowPlaying, UserID: 1, Data: sessions.NowPlaying{
+			DeviceID: 1, Active: true, UID: "04A1",
+			Album: &catalog.Album{ID: id, Title: "Kind of Blue", Artist: "Miles Davis", HasCover: true},
+		}})
+		eventually(t, "cover", func() bool { return h.ha.count(CoverTopic(1)) > before })
 
-	cover, _ := h.ha.last(CoverTopic(1))
-	got, format, err := image.Decode(strings.NewReader(cover))
-	if err != nil || format != "jpeg" {
-		t.Fatalf("cover is %q: %v", format, err)
+		cover, _ := h.ha.last(CoverTopic(1))
+		got, format, err := image.Decode(strings.NewReader(cover))
+		if err != nil || format != "jpeg" {
+			t.Fatalf("cover is %q: %v", format, err)
+		}
+		if b := got.Bounds(); b.Dx() != tc.wantW || b.Dy() != tc.wantH {
+			t.Errorf("%dx%d cover sent as %dx%d", tc.w, tc.h, b.Dx(), b.Dy())
+		}
 	}
-	if b := got.Bounds(); b.Dx() != 600 || b.Dy() != 450 {
-		t.Fatalf("cover is %dx%d", b.Dx(), b.Dy())
+}
+
+func TestPublisherLeavesOfflineWillWhenConnectionDrops(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+
+	cl, ok := h.broker.Clients.Get("spindle")
+	if !ok {
+		t.Fatal("publisher is not connected")
+	}
+	cl.Net.Conn.Close()
+	eventually(t, "offline will", func() bool {
+		h.ha.mu.Lock()
+		defer h.ha.mu.Unlock()
+		return slices.Contains(h.ha.msgs[AvailabilityTopic], "offline")
+	})
+}
+
+func TestPublisherResyncsOnlyWhenHomeAssistantComesOnline(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+	discovery := "homeassistant/device/spindle_1/config"
+	eventually(t, "discovery", func() bool { return h.ha.count(discovery) > 0 })
+	before := h.ha.count(discovery)
+
+	h.ha.cm.Publish(ctx, &paho.Publish{Topic: "homeassistant/status", Payload: []byte("offline"), QoS: 1})
+	h.ha.cm.Publish(ctx, &paho.Publish{Topic: "somewhere/else", Payload: []byte("online"), QoS: 1})
+	h.ha.cm.Publish(ctx, &paho.Publish{Topic: "homeassistant/status", Payload: []byte("online"), QoS: 1})
+	eventually(t, "rediscovery", func() bool { return h.ha.count(discovery) > before })
+	time.Sleep(300 * time.Millisecond)
+	if n := h.ha.count(discovery); n != before+1 {
+		t.Fatalf("discovery sent %d more times, want once", n-before)
 	}
 }
 
@@ -260,10 +312,8 @@ func TestPublisherDeliversAtLeastOnce(t *testing.T) {
 	defer cancel()
 	h := startPublisher(t, ctx)
 	eventually(t, "idle state", func() bool { s, _ := h.ha.last(StateTopic(1)); return s == Idle })
-	h.ha.mu.Lock()
-	defer h.ha.mu.Unlock()
 	for _, topic := range []string{AvailabilityTopic, StateTopic(1), AttributesTopic(1)} {
-		if q := h.ha.qos[topic]; q != 1 {
+		if q := h.ha.qosOf(topic); q != 1 {
 			t.Fatalf("%s delivered at QoS %d", topic, q)
 		}
 	}
