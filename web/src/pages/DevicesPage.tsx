@@ -92,6 +92,10 @@ export function DevicesPage() {
       </ul>
       {!pairing && (
         <form className="card" onSubmit={submit}>
+          <p className="muted">
+            Name the stand and press Add stand. You get a short code, then set it up from your phone: the stand opens
+            its own Wi-Fi network with a page where you pick your home Wi-Fi and type the code.
+          </p>
           <div className="row">
             <input placeholder="Stand name, e.g. Living room" value={name} onChange={(e) => setName(e.target.value)} required />
             <button disabled={startPairing.isPending}>Add stand</button>
@@ -113,23 +117,49 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
     return () => clearInterval(t);
   }, []);
   const left = new Date(pairing.expires_at).getTime() - now;
+  const server = window.location.origin;
 
   return (
     <div className="card notice" role="dialog" aria-label="Pair a stand">
-      <ol>
-        <li>Plug the stand in. Its light blinks while it waits to be set up.</li>
+      <ol className="steps">
         <li>
-          On your phone, join the Wi-Fi network named <strong>Spindle-…</strong>. A setup page opens; if it doesn't, go to{" "}
-          <code>http://192.168.4.1</code>.
+          Plug the stand in. A new stand, or one you reset, waits to be set up: its light stays on with a short break every
+          two seconds.
         </li>
-        <li>Pick your Wi-Fi, enter this server's address and this code:</li>
+        <li>
+          On your phone, open the Wi-Fi settings and join the network named <strong>Spindle-</strong> followed by four
+          characters. It has no password. A setup page opens by itself; if it doesn't, open <code>http://192.168.4.1</code>{" "}
+          in the browser.
+        </li>
+        <li>
+          On that page pick your home Wi-Fi and type its password.
+        </li>
+        <li>
+          As the server address, type <code>{server}</code>
+          {isLocal(window.location.hostname) && (
+            <span className="error">
+              {" "}
+              — but that is this computer's own name, which means nothing to the stand. Type the address of this computer on
+              your home network instead, e.g. <code>http://192.168.1.10:{window.location.port || "80"}</code>.
+            </span>
+          )}
+        </li>
+        <li>Enter this code and press Connect:</li>
       </ol>
-      <code className="token">{pairing.code}</code>
+      <code className="token pair-code">{pairing.code}</code>
       {left > 0 ? (
         <p className="muted">Code expires in {formatCountdown(left)}. This page updates when the stand connects.</p>
       ) : (
         <p className="muted">This code has run out.</p>
       )}
+      <details>
+        <summary>Something not working?</summary>
+        <ul>
+          <li>No Spindle network: the stand already has Wi-Fi settings. Hold the BOOTSEL button on the Pico for five seconds to clear them.</li>
+          <li>Your phone drops the Spindle network while connecting: join it again, the page shows how it went.</li>
+          <li>The page says the server can't be reached: check that the stand's Wi-Fi is the same network this server is on.</li>
+        </ul>
+      </details>
       <div className="row">
         {left <= 0 && (
           <button onClick={onRenew} disabled={busy}>
@@ -142,4 +172,8 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
       </div>
     </div>
   );
+}
+
+function isLocal(hostname: string) {
+  return hostname === "localhost" || hostname.startsWith("127.") || hostname === "[::1]" || hostname === "::1";
 }

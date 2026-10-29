@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -222,6 +222,49 @@ describe("stands", () => {
     expect(await screen.findByText("Living room")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByText("spd_secret_token")).not.toBeInTheDocument();
+  });
+});
+
+describe("pairing instructions", () => {
+  function pairingApi() {
+    mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/devices": () => [200, []],
+      "POST /api/devices/pairing": () => [201, { code: "K7F-29Q", expires_at: new Date(Date.now() + 600_000).toISOString() }],
+    });
+  }
+
+  async function startPairing() {
+    renderApp("/devices");
+    await userEvent.type(await screen.findByPlaceholderText(/Stand name/), "Living room");
+    await userEvent.click(screen.getByRole("button", { name: "Add stand" }));
+    return screen.findByRole("dialog", { name: "Pair a stand" });
+  }
+
+  it("explains how adding a stand works before starting", async () => {
+    pairingApi();
+    renderApp("/devices");
+    expect(await screen.findByText(/set it up from your phone/)).toBeInTheDocument();
+  });
+
+  it("walks through joining the stand's network and gives the address to type", async () => {
+    vi.stubGlobal("location", { ...window.location, origin: "http://192.168.1.10:8080", hostname: "192.168.1.10" });
+    pairingApi();
+    const dialog = await startPairing();
+    expect(within(dialog).getByText(/Spindle-/)).toBeInTheDocument();
+    expect(within(dialog).getByText("http://192.168.1.10:8080")).toBeInTheDocument();
+    expect(within(dialog).getByText("K7F-29Q")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/localhost/)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/hold the BOOTSEL button/i)).toBeInTheDocument();
+  });
+
+  it("warns that localhost means nothing to the stand", async () => {
+    vi.stubGlobal("location", { ...window.location, origin: "http://localhost:8080", hostname: "localhost" });
+    pairingApi();
+    const dialog = await startPairing();
+    expect(within(dialog).getByText(/localhost/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/address of this computer on your home network/)).toBeInTheDocument();
   });
 });
 
