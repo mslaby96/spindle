@@ -80,37 +80,14 @@ func (s *Service) Assign(ctx context.Context, userID int64, uid string, a Assign
 	if err != nil {
 		return Tag{}, err
 	}
-	if a.Listens != "" && a.Listens != MoveListens && a.Listens != KeepListens {
-		return Tag{}, ErrUnknownListensChoice
-	}
-	if n, err := s.listensOf(ctx, tag); err != nil {
+	if err := s.checkListensChoice(ctx, tag, a.Listens); err != nil {
 		return Tag{}, err
-	} else if n > 0 && a.Listens == "" {
-		return Tag{}, &ListensChoiceError{Listens: n}
 	}
 	album, releaseID, err := s.saveAssignment(ctx, userID, a)
 	if err != nil {
 		return Tag{}, err
 	}
-
-	tx, err := s.DB.W.BeginTx(ctx, nil)
-	if err != nil {
-		return Tag{}, err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE tags SET album_id = ?, release_id = ?, assigned_at = ? WHERE id = ?`,
-		album.ID, releaseID, s.now(), tag.ID); err != nil {
-		return Tag{}, err
-	}
-	moved := `album_id IS NULL`
-	if a.Listens == MoveListens {
-		moved = `(album_id IS NULL OR album_id = ?)`
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET album_id = ?, release_id = ? WHERE tag_id = ? AND `+moved,
-		album.ID, releaseID, tag.ID, previousAlbum(tag)); err != nil {
-		return Tag{}, err
-	}
-	if err := tx.Commit(); err != nil {
+	if err := s.relink(ctx, tag, album.ID, releaseID, a.Listens == MoveListens); err != nil {
 		return Tag{}, err
 	}
 	if tag.Album != nil && tag.Album.ID != album.ID {
@@ -121,11 +98,36 @@ func (s *Service) Assign(ctx context.Context, userID int64, uid string, a Assign
 	return s.TagByUID(ctx, userID, uid)
 }
 
-func previousAlbum(t Tag) any {
-	if t.Album == nil {
-		return nil
+func (s *Service) checkListensChoice(ctx context.Context, tag Tag, choice string) error {
+	if choice != "" && choice != MoveListens && choice != KeepListens {
+		return ErrUnknownListensChoice
 	}
-	return t.Album.ID
+	n, err := s.listensOf(ctx, tag)
+	if err == nil && n > 0 && choice == "" {
+		return &ListensChoiceError{Listens: n}
+	}
+	return err
+}
+
+// relink points the tag at its new album, along with its listens that had none and, when asked, those of the old one.
+func (s *Service) relink(ctx context.Context, tag Tag, albumID int64, releaseID *int64, moveListens bool) error {
+	tx, err := s.DB.W.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE tags SET album_id = ?, release_id = ?, assigned_at = ? WHERE id = ?`,
+		albumID, releaseID, s.now(), tag.ID); err != nil {
+		return err
+	}
+	moved, args := `album_id IS NULL`, []any{albumID, releaseID, tag.ID}
+	if moveListens && tag.Album != nil {
+		moved, args = `(album_id IS NULL OR album_id = ?)`, append(args, tag.Album.ID)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET album_id = ?, release_id = ? WHERE tag_id = ? AND `+moved, args...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Service) saveAssignment(ctx context.Context, userID int64, a Assignment) (Album, *int64, error) {

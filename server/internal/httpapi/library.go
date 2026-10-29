@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/mslaby96/spindle/server/internal/catalog"
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
@@ -54,8 +56,7 @@ func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx, user := r.Context(), userID(r)
-	album, err := s.Catalog.Album(ctx, user, id)
+	page, err := s.albumPage(r.Context(), userID(r), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "album not found")
 		return
@@ -64,28 +65,32 @@ func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, err)
 		return
 	}
-	item, err := s.Stats.AlbumItem(ctx, user, id)
-	if err != nil {
-		s.internal(w, err)
-		return
+	writeJSON(w, http.StatusOK, page)
+}
+
+type albumPage struct {
+	Album    catalog.Album      `json:"album"`
+	Stats    stats.Item         `json:"stats"`
+	Releases []catalog.Release  `json:"releases"`
+	History  []stats.DiaryEntry `json:"history"`
+	Sleeves  []string           `json:"sleeves"`
+}
+
+func (s *Server) albumPage(ctx context.Context, user, id int64) (p albumPage, err error) {
+	if p.Album, err = s.Catalog.Album(ctx, user, id); err != nil {
+		return p, err
 	}
-	releases, err := s.Catalog.Releases(ctx, user, id)
-	if err != nil {
-		s.internal(w, err)
-		return
+	if p.Stats, err = s.Stats.AlbumItem(ctx, user, id); err != nil {
+		return p, err
 	}
-	history, err := s.Stats.Diary(ctx, user, stats.DiaryFilter{AlbumID: id, Limit: 200})
-	if err != nil {
-		s.internal(w, err)
-		return
+	if p.Releases, err = s.Catalog.Releases(ctx, user, id); err != nil {
+		return p, err
 	}
-	sleeves, err := s.Catalog.Sleeves(ctx, user, id)
-	if err != nil {
-		s.internal(w, err)
-		return
+	if p.History, err = s.Stats.Diary(ctx, user, stats.DiaryFilter{AlbumID: id, Limit: 200}); err != nil {
+		return p, err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"album": album, "stats": item, "releases": releases, "history": history,
-		"sleeves": sleeves})
+	p.Sleeves, err = s.Catalog.Sleeves(ctx, user, id)
+	return p, err
 }
 
 func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
