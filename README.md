@@ -78,7 +78,7 @@ The RC522 only reads about a centimetre with small stickers, and it loses a tag 
 
 `hardware/stand/` has a printable stand: `stand.scad` is the parametric source, the `.stl` files are ready to slice.
 
-- `body.stl` prints upright, no supports needed.
+- `body.stl` prints upright. The ceiling of the hollow base needs support: tree supports on the build plate only, with the threshold angle at 10° so none end up in the reader slot.
 - `cover.stl` prints as exported, flat side on the bed. The spacer that holds the reader up is part of it.
 - `foot.stl` prints as exported. You need four.
 
