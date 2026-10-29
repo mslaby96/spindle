@@ -166,7 +166,7 @@ func TestShortSessionIsDiscarded(t *testing.T) {
 	v.album(t, tagA, minutes(42))
 	v.play(t, tagA, 2*time.Minute)
 	v.remove(t)
-	if s := v.only(t); s.State != StateDiscarded || s.PlayCount != 0 {
+	if s := v.only(t); s.State != StateDiscarded || s.PlayCount != 0 || s.ListenedSec != 0 {
 		t.Fatalf("session %+v", s)
 	}
 }
@@ -272,6 +272,71 @@ func TestUnknownLengthUsesFallbackThreshold(t *testing.T) {
 	v.remove(t)
 	if s := v.only(t); s.State != StatePendingConfirmation {
 		t.Fatalf("session %+v", s)
+	}
+
+	v = newEnv(t)
+	v.album(t, tagA, nil)
+	v.see(t, tagA)
+	v.clock.advance(80 * time.Minute)
+	v.see(t, tagA)
+	v.remove(t)
+	if s := v.only(t); s.State != StateCounted {
+		t.Fatalf("80 min is within the fallback: %+v", s)
+	}
+}
+
+func TestExactlyTheLongThresholdCounts(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(40))
+	v.see(t, tagA)
+	v.clock.advance(52 * time.Minute)
+	v.see(t, tagA)
+	v.remove(t)
+	if s := v.only(t); s.State != StateCounted {
+		t.Fatalf("1.3 x 40 min exactly: %+v", s)
+	}
+}
+
+func TestResolvingUpdatesTheInbox(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.see(t, tagA)
+	v.clock.advance(3 * time.Hour)
+	v.see(t, tagA)
+	v.remove(t)
+	drainEvents(v.events)
+	if err := v.e.Resolve(context.Background(), 1, v.only(t).ID, ResolutionForgot); err != nil {
+		t.Fatal(err)
+	}
+	if evs := drainEvents(v.events); len(evs) != 1 || evs[0].Type != EventInboxChanged {
+		t.Fatalf("events %+v", evs)
+	}
+}
+
+func TestClassifyAlbumClassifiesEveryWaitingListen(t *testing.T) {
+	v := newEnv(t)
+	albumID := v.album(t, tagA, nil)
+	v.e.DB.W.Exec(`UPDATE albums SET duration_status = 'pending' WHERE id = ?`, albumID)
+	for range 2 {
+		v.play(t, tagA, 20*time.Minute)
+		v.remove(t)
+	}
+	if err := v.e.ClassifyAlbum(context.Background(), 1, albumID); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range v.sessions(t) {
+		if s.State != StateUnclassified {
+			t.Fatalf("classified while the length is still being looked up: %+v", s)
+		}
+	}
+
+	v.e.DB.W.Exec(`UPDATE albums SET duration_status = 'resolved', duration_sec = 2520 WHERE id = ?`, albumID)
+	if err := v.e.ClassifyAlbum(context.Background(), 1, albumID); err != nil {
+		t.Fatal(err)
+	}
+	list := v.sessions(t)
+	if len(list) != 2 || list[0].State != StateCounted || list[1].State != StateCounted {
+		t.Fatalf("sessions %+v", list)
 	}
 }
 
@@ -499,6 +564,12 @@ func TestResolveOnlyPending(t *testing.T) {
 func TestNowPlayingEvents(t *testing.T) {
 	v := newEnv(t)
 	v.album(t, tagA, minutes(42))
+	start := v.clock.now()
+	v.see(t, tagA)
+	first := (<-v.events).Data.(NowPlaying)
+	if !first.Active || first.UID != tagA || first.Album == nil || first.StartedAt == nil || !first.StartedAt.Equal(start) {
+		t.Fatalf("listen started %+v", first)
+	}
 	v.play(t, tagA, 10*time.Minute)
 	v.remove(t)
 
@@ -512,7 +583,7 @@ func TestNowPlayingEvents(t *testing.T) {
 		}
 		break
 	}
-	want := []string{EventNowPlaying, EventNowPlaying, EventNowPlaying, EventInboxChanged}
+	want := []string{EventNowPlaying, EventNowPlaying, EventInboxChanged}
 	if len(types) != len(want) {
 		t.Fatalf("events %v", types)
 	}
@@ -598,6 +669,7 @@ func drainEvents(ch <-chan events.Event) []events.Event {
 func TestRemovingSleeveAnnouncesWhenListenEnds(t *testing.T) {
 	v := newEnv(t)
 	v.album(t, tagA, minutes(42))
+	start := v.clock.now()
 	v.play(t, tagA, 10*time.Minute)
 	drainEvents(v.events)
 
@@ -610,14 +682,15 @@ func TestRemovingSleeveAnnouncesWhenListenEnds(t *testing.T) {
 	}
 	np := evs[0].Data.(NowPlaying)
 	want := removedAt.Add(v.e.Cfg.AbsenceTolerance)
-	if !np.Active || np.Album == nil || np.EndsAt == nil || !np.EndsAt.Equal(want) {
+	if !np.Active || np.Album == nil || np.EndsAt == nil || !np.EndsAt.Equal(want) || !np.StartedAt.Equal(start) {
 		t.Fatalf("absent event %+v, ends at %v want %v", np, np.EndsAt, want)
 	}
 
 	v.clock.advance(20 * time.Second)
 	v.see(t, tagA)
 	evs = drainEvents(v.events)
-	if len(evs) != 1 || evs[0].Data.(NowPlaying).EndsAt != nil || !evs[0].Data.(NowPlaying).Active {
+	if len(evs) != 1 || evs[0].Data.(NowPlaying).EndsAt != nil || !evs[0].Data.(NowPlaying).Active ||
+		!evs[0].Data.(NowPlaying).StartedAt.Equal(start) {
 		t.Fatalf("events after putting it back %+v", evs)
 	}
 	v.see(t, tagA)
@@ -637,14 +710,19 @@ func TestEmptyStandWithoutListenIsQuiet(t *testing.T) {
 func TestCurrentReportsSleeveOffTheStand(t *testing.T) {
 	v := newEnv(t)
 	v.album(t, tagA, minutes(42))
+	start := v.clock.now()
 	v.play(t, tagA, 5*time.Minute)
 	albums := func(ctx context.Context, user, id int64) (catalog.Album, error) { return v.tags.Album(ctx, user, id) }
 
 	current, err := v.e.Current(context.Background(), 1, albums)
-	if err != nil || len(current) != 1 || current[0].EndsAt != nil {
+	if err != nil || len(current) != 1 || current[0].EndsAt != nil || !current[0].Active || !current[0].StartedAt.Equal(start) {
 		t.Fatalf("while playing %+v %v", current, err)
 	}
 	lastSeen := v.clock.now()
+	v.clock.advance(staleReport)
+	if current, _ = v.e.Current(context.Background(), 1, albums); current[0].EndsAt != nil {
+		t.Fatalf("a report %v ago is not stale yet: %+v", staleReport, current)
+	}
 	v.see(t, "")
 	v.clock.advance(15 * time.Second)
 	current, _ = v.e.Current(context.Background(), 1, albums)
