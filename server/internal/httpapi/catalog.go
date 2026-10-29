@@ -11,15 +11,6 @@ import (
 
 const EventTagAssigned = "tag_assigned"
 
-func (s *Server) catalogMode(w http.ResponseWriter, r *http.Request) {
-	state, err := s.Mode.State(r.Context(), userID(r))
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state)
-}
-
 func (s *Server) setCatalogMode(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Active bool `json:"active"`
@@ -28,20 +19,7 @@ func (s *Server) setCatalogMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state, err := s.Mode.Set(r.Context(), userID(r), req.Active)
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state)
-}
-
-func (s *Server) unassignedTags(w http.ResponseWriter, r *http.Request) {
-	tags, err := s.Catalog.UnassignedTags(r.Context(), userID(r))
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, tags)
+	s.reply(w, http.StatusOK, state, err)
 }
 
 func (s *Server) tagByUID(w http.ResponseWriter, r *http.Request) {

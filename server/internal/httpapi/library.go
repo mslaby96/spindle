@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -57,15 +55,7 @@ func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := s.albumPage(r.Context(), userID(r), id)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "album not found")
-		return
-	}
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
+	s.reply(w, http.StatusOK, page, albumErr(err))
 }
 
 type albumPage struct {
@@ -109,11 +99,7 @@ func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	s.noContent(w, s.Sessions.Delete(r.Context(), userID(r), id))
+	s.act(w, r, s.Sessions.Delete)
 }
 
 func (s *Server) topStats(w http.ResponseWriter, r *http.Request) {

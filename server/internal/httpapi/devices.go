@@ -9,15 +9,6 @@ import (
 // EventDevicePaired tells the app that a stand finished setting itself up with a pairing code.
 const EventDevicePaired = "device_paired"
 
-func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
-	list, err := s.Devices.List(r.Context(), userID(r))
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, list)
-}
-
 func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
@@ -26,19 +17,11 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dev, token, err := s.Devices.Create(r.Context(), userID(r), req.Name)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"device": dev, "token": token})
+	s.reply(w, http.StatusCreated, map[string]any{"device": dev, "token": token}, err)
 }
 
 func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	s.noContent(w, s.Devices.Revoke(r.Context(), userID(r), id))
+	s.act(w, r, s.Devices.Revoke)
 }
 
 func (s *Server) startPairing(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +32,7 @@ func (s *Server) startPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := s.Devices.StartPairing(r.Context(), userID(r), req.Name)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, p)
+	s.reply(w, http.StatusCreated, p, err)
 }
 
 // pair is called by a stand during setup, before it has a token. Wrong codes count against the caller's address.
