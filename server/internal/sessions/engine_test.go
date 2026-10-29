@@ -384,15 +384,11 @@ func TestClassificationWaitsForAlbumLength(t *testing.T) {
 	}
 }
 
-func TestRepeatedRoundsAndHasMinimum(t *testing.T) {
-	if got := repeatedPlays(50*time.Minute, 42*time.Minute); got != 1 {
-		t.Errorf("50 of 42 min: %d", got)
-	}
-	if got := repeatedPlays(100*time.Minute, 42*time.Minute); got != 2 {
-		t.Errorf("100 of 42 min: %d", got)
-	}
-	if got := repeatedPlays(20*time.Minute, 42*time.Minute); got != 1 {
-		t.Errorf("20 of 42 min: %d", got)
+func TestRepeatedRoundsToNearestAndHasMinimum(t *testing.T) {
+	for minutes, want := range map[int]int{50: 1, 63: 2, 100: 2, 20: 1} {
+		if got := repeatedPlays(time.Duration(minutes)*time.Minute, 42*time.Minute); got != want {
+			t.Errorf("%d of 42 min: %d, want %d", minutes, got, want)
+		}
 	}
 }
 
@@ -492,12 +488,6 @@ func TestResolvingWithUnknownAlbumLength(t *testing.T) {
 		if s.PlayCount != tc.plays || time.Duration(s.ListenedSec)*time.Second != tc.listened {
 			t.Fatalf("%s: %+v", tc.resolution, s)
 		}
-	}
-}
-
-func TestRepeatedRoundsToNearest(t *testing.T) {
-	if got := repeatedPlays(63*time.Minute, 42*time.Minute); got != 2 {
-		t.Fatalf("63 of 42 min: %d", got)
 	}
 }
 
