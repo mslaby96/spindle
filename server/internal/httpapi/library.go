@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mslaby96/spindle/server/internal/sessions"
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
@@ -95,16 +94,7 @@ func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	switch err := s.Sessions.Edit(r.Context(), userID(r), id, req.StartedAt, req.EndedAt); {
-	case errors.Is(err, sessions.ErrInvalidTimes):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, sessions.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case err != nil:
-		s.internal(w, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	s.noContent(w, s.Sessions.Edit(r.Context(), userID(r), id, req.StartedAt, req.EndedAt))
 }
 
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
@@ -112,14 +102,7 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	switch err := s.Sessions.Delete(r.Context(), userID(r), id); {
-	case errors.Is(err, sessions.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case err != nil:
-		s.internal(w, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	s.noContent(w, s.Sessions.Delete(r.Context(), userID(r), id))
 }
 
 func (s *Server) topStats(w http.ResponseWriter, r *http.Request) {
@@ -133,12 +116,8 @@ func (s *Server) topStats(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	top, err := s.Stats.Top(r.Context(), userID(r), period, measure, limit)
-	if errors.Is(err, stats.ErrBadQuery) {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	if err != nil {
-		s.internal(w, err)
+		s.fail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, top)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -54,26 +55,28 @@ func (c *Client) AlbumLength(ctx context.Context, artist, album string) (time.Du
 		return 0, fmt.Errorf("lastfm: unexpected status %d", resp.StatusCode)
 	}
 
+	return albumLength(resp.Body)
+}
+
+// albumLength reads an album.getInfo response. Anything short of a full tracklist with every length is "don't know".
+func albumLength(r io.Reader) (time.Duration, error) {
 	var body struct {
 		Error int `json:"error"`
 		Album struct {
 			Tracks json.RawMessage `json:"tracks"`
 		} `json:"album"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(r).Decode(&body); err != nil {
 		return 0, err
-	}
-	if body.Error != 0 {
-		return 0, nil
 	}
 	var list struct {
 		Track json.RawMessage `json:"track"`
 	}
-	if t := bytes.TrimSpace(body.Album.Tracks); len(t) == 0 || t[0] != '{' || json.Unmarshal(t, &list) != nil {
+	if t := bytes.TrimSpace(body.Album.Tracks); body.Error != 0 || len(t) == 0 || t[0] != '{' || json.Unmarshal(t, &list) != nil {
 		return 0, nil
 	}
 	tracks, err := decodeTracks(list.Track)
-	if err != nil || len(tracks) == 0 {
+	if err != nil {
 		return 0, err
 	}
 	var total int

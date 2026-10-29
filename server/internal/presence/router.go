@@ -30,6 +30,35 @@ type Router struct {
 	devices map[int64]*deviceState
 }
 
+// listening records an observation outside cataloguing and reports whether it is the leftover sleeve to ignore.
+func (s *deviceState) listening(o Observation, tolerance time.Duration) bool {
+	if s.inCatalog && o.UID != "" && o.UID == s.lastUID {
+		s.suppressed = o.UID
+	}
+	s.inCatalog, s.lastUID = false, o.UID
+	if s.suppressed != "" {
+		s.followSuppressed(o, tolerance)
+	}
+	return s.suppressed != ""
+}
+
+// followSuppressed stops ignoring the leftover sleeve once another one shows up or it has been gone long enough.
+func (s *deviceState) followSuppressed(o Observation, tolerance time.Duration) {
+	switch {
+	case o.UID == s.suppressed:
+		s.absentSince = time.Time{}
+	case o.UID == "":
+		if s.absentSince.IsZero() {
+			s.absentSince = o.At
+		}
+		if o.At.Sub(s.absentSince) > tolerance {
+			s.suppressed = ""
+		}
+	default:
+		s.suppressed = ""
+	}
+}
+
 func (r *Router) state(deviceID int64) *deviceState {
 	if r.devices == nil {
 		r.devices = map[int64]*deviceState{}
@@ -56,26 +85,7 @@ func (r *Router) Observe(ctx context.Context, o Observation) (LED, error) {
 		return r.Catalog.Observe(ctx, o)
 	}
 
-	if s.inCatalog && o.UID != "" && o.UID == s.lastUID {
-		s.suppressed = o.UID
-	}
-	s.inCatalog, s.lastUID = false, o.UID
-	if s.suppressed != "" {
-		switch {
-		case o.UID == s.suppressed:
-			s.absentSince = time.Time{}
-		case o.UID == "":
-			if s.absentSince.IsZero() {
-				s.absentSince = o.At
-			}
-			if o.At.Sub(s.absentSince) > r.Tolerance {
-				s.suppressed = ""
-			}
-		default:
-			s.suppressed = ""
-		}
-	}
-	suppressed := s.suppressed != ""
+	suppressed := s.listening(o, r.Tolerance)
 	r.mu.Unlock()
 
 	if suppressed {

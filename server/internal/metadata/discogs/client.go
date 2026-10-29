@@ -56,45 +56,53 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
-	for attempt := 0; ; attempt++ {
-		if err := c.limiter.wait(ctx); err != nil {
-			return err
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("User-Agent", c.UserAgent)
-		req.Header.Set("Authorization", "Discogs token="+c.Token)
-		resp, err := c.HTTP.Do(req)
-		if err != nil {
-			return err
-		}
-		c.limiter.update(resp.Header)
-		switch {
-		case resp.StatusCode == http.StatusTooManyRequests:
-			resp.Body.Close()
-			if attempt > 0 {
-				return ErrRateLimited
-			}
-			if err := sleep(ctx, retryAfter(resp.Header)); err != nil {
-				return err
-			}
-			continue
-		case resp.StatusCode == http.StatusNotFound:
-			resp.Body.Close()
-			return ErrNotFound
-		case resp.StatusCode == http.StatusUnauthorized:
-			resp.Body.Close()
-			return errors.New("discogs: token rejected, check SPINDLE_DISCOGS_TOKEN")
-		case resp.StatusCode != http.StatusOK:
-			resp.Body.Close()
-			return &StatusError{Code: resp.StatusCode}
-		}
-		err = json.NewDecoder(resp.Body).Decode(out)
-		resp.Body.Close()
+	wait, err := c.fetch(ctx, u, out)
+	if !errors.Is(err, ErrRateLimited) {
 		return err
 	}
+	if err := sleep(ctx, wait); err != nil {
+		return err
+	}
+	_, err = c.fetch(ctx, u, out)
+	return err
+}
+
+// fetch makes one request and decodes the response into out. When Discogs asks to slow down it returns
+// ErrRateLimited and how long to wait before trying again.
+func (c *Client) fetch(ctx context.Context, u string, out any) (time.Duration, error) {
+	if err := c.limiter.wait(ctx); err != nil {
+		return 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("Authorization", "Discogs token="+c.Token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	c.limiter.update(resp.Header)
+	if err := statusError(resp.StatusCode); err != nil {
+		return retryAfter(resp.Header), err
+	}
+	return 0, json.NewDecoder(resp.Body).Decode(out)
+}
+
+func statusError(code int) error {
+	switch code {
+	case http.StatusOK:
+		return nil
+	case http.StatusTooManyRequests:
+		return ErrRateLimited
+	case http.StatusNotFound:
+		return ErrNotFound
+	case http.StatusUnauthorized:
+		return errors.New("discogs: token rejected, check SPINDLE_DISCOGS_TOKEN")
+	}
+	return &StatusError{Code: code}
 }
 
 func (c *Client) Image(ctx context.Context, imageURL string) ([]byte, error) {

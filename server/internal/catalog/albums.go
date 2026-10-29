@@ -91,21 +91,7 @@ func (s *Service) SaveRelease(ctx context.Context, userID, releaseID int64) (Alb
 		return Album{}, Release{}, err
 	}
 
-	var album Album
-	if rel.MasterID != 0 {
-		album, err = s.SaveMaster(ctx, userID, rel.MasterID)
-	} else {
-		album, err = s.albumBy(ctx, userID, "discogs_release_id", releaseID)
-		if errors.Is(err, sql.ErrNoRows) {
-			var id int64
-			id, err = s.insertAlbum(ctx, userID, nil, &releaseID, rel.Title, discogs.ArtistNames(rel.Artists), rel.Year,
-				rel.Genres, rel.Styles, discogs.PrimaryImage(rel.Images))
-			if err == nil {
-				s.ResolveCover(ctx, userID, id)
-				album, err = s.Album(ctx, userID, id)
-			}
-		}
-	}
+	album, err := s.albumOf(ctx, userID, rel)
 	if err != nil {
 		return Album{}, Release{}, err
 	}
@@ -255,6 +241,24 @@ func nullYear(y int) any {
 		return nil
 	}
 	return y
+}
+
+// albumOf returns the album a pressing belongs to: its master, or for a pressing without one, an album of its own.
+func (s *Service) albumOf(ctx context.Context, userID int64, rel discogs.Release) (Album, error) {
+	if rel.MasterID != 0 {
+		return s.SaveMaster(ctx, userID, rel.MasterID)
+	}
+	album, err := s.albumBy(ctx, userID, "discogs_release_id", rel.ID)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return album, err
+	}
+	id, err := s.insertAlbum(ctx, userID, nil, &rel.ID, rel.Title, discogs.ArtistNames(rel.Artists), rel.Year,
+		rel.Genres, rel.Styles, discogs.PrimaryImage(rel.Images))
+	if err != nil {
+		return Album{}, err
+	}
+	s.ResolveCover(ctx, userID, id)
+	return s.Album(ctx, userID, id)
 }
 
 func (s *Service) Releases(ctx context.Context, userID, albumID int64) ([]Release, error) {

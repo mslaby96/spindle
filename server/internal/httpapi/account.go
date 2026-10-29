@@ -79,18 +79,8 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := s.Auth.CompleteSetup(r.Context(), req.Code, req.Username, req.Password)
-	switch {
-	case errors.Is(err, auth.ErrSetupDone):
-		writeError(w, http.StatusNotFound, "setup already completed")
-		return
-	case errors.Is(err, auth.ErrInvalidSetupCode):
-		writeError(w, http.StatusForbidden, "invalid setup code")
-		return
-	case errors.Is(err, auth.ErrWeakPassword):
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	case err != nil:
-		s.internal(w, err)
+	if err != nil {
+		s.fail(w, err)
 		return
 	}
 	s.limiter.Reset(clientIP(r))
@@ -110,12 +100,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := s.Auth.Authenticate(r.Context(), req.Username, req.Password)
-	if errors.Is(err, auth.ErrInvalidCredentials) {
-		writeError(w, http.StatusUnauthorized, err.Error())
-		return
-	}
 	if err != nil {
-		s.internal(w, err)
+		s.fail(w, err)
 		return
 	}
 	s.limiter.Reset(clientIP(r))
@@ -160,16 +146,11 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.Context().Value(tokenKey).(string)
 	err := s.Auth.ChangePassword(r.Context(), userID(r), req.Current, req.New, token)
-	switch {
-	case errors.Is(err, auth.ErrInvalidCredentials):
+	if errors.Is(err, auth.ErrInvalidCredentials) {
 		writeError(w, http.StatusForbidden, "current password is incorrect")
-	case errors.Is(err, auth.ErrWeakPassword):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case err != nil:
-		s.internal(w, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
+		return
 	}
+	s.noContent(w, err)
 }
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int64, persistent bool) bool {

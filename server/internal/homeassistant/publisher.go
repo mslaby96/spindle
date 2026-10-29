@@ -46,16 +46,47 @@ func (p *Publisher) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	resync := make(chan struct{}, 1)
-	trigger := func() {
+	resync := make(signal, 1)
+	cm, err := autopaho.NewConnection(ctx, p.clientConfig(ctx, u, resync.raise))
+	if err != nil {
+		return err
+	}
+
+	evs, cancel := p.Bus.SubscribeAll()
+	defer cancel()
+	for {
 		select {
-		case resync <- struct{}{}:
-		default:
+		case <-ctx.Done():
+			p.goOffline(cm)
+			return nil
+		case <-resync:
+			p.resync(ctx, cm)
+		case e := <-evs:
+			p.handle(ctx, cm, e)
 		}
 	}
-	haStatus := p.Cfg.Prefix + "/status"
+}
 
-	cfg := autopaho.ClientConfig{
+func (p *Publisher) handle(ctx context.Context, cm *autopaho.ConnectionManager, e events.Event) {
+	if np, ok := e.Data.(sessions.NowPlaying); ok && e.Type == sessions.EventNowPlaying {
+		p.publishNowPlaying(ctx, cm, e.UserID, np)
+	}
+}
+
+// signal coalesces requests: raising it while one is already pending does nothing.
+type signal chan struct{}
+
+func (s signal) raise() {
+	select {
+	case s <- struct{}{}:
+	default:
+	}
+}
+
+// clientConfig asks for a full resync whenever the broker connection comes up or Home Assistant restarts.
+func (p *Publisher) clientConfig(ctx context.Context, u *url.URL, resync func()) autopaho.ClientConfig {
+	haStatus := p.Cfg.Prefix + "/status"
+	return autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{u},
 		KeepAlive:                     30,
 		CleanStartOnInitialConnection: true,
@@ -70,7 +101,7 @@ func (p *Publisher) Run(ctx context.Context) error {
 					p.Log.Warn("subscribe to Home Assistant status", "err", err)
 				}
 			}()
-			trigger()
+			resync()
 		},
 		OnConnectError: func(err error) { p.Log.Warn("MQTT connection failed", "err", err) },
 		ClientConfig: paho.ClientConfig{
@@ -78,45 +109,33 @@ func (p *Publisher) Run(ctx context.Context) error {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
 					if pr.Packet.Topic == haStatus && string(pr.Packet.Payload) == "online" {
-						trigger()
+						resync()
 					}
 					return true, nil
 				},
 			},
 		},
 	}
-	cm, err := autopaho.NewConnection(ctx, cfg)
-	if err != nil {
-		return err
-	}
+}
 
-	evs, cancel := p.Bus.SubscribeAll()
-	defer cancel()
-	for {
-		select {
-		case <-ctx.Done():
-			dctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
-			p.publish(dctx, cm, AvailabilityTopic, []byte("offline"))
-			cm.Disconnect(dctx)
-			stop()
-			return nil
-		case <-resync:
-			actx, stop := context.WithTimeout(ctx, 10*time.Second)
-			err := cm.AwaitConnection(actx)
-			stop()
-			if err != nil {
-				continue
-			}
-			p.publish(ctx, cm, AvailabilityTopic, []byte("online"))
-			if err := p.syncAll(ctx, cm); err != nil {
-				p.Log.Warn("Home Assistant sync", "err", err)
-			}
-		case e := <-evs:
-			if np, ok := e.Data.(sessions.NowPlaying); ok && e.Type == sessions.EventNowPlaying {
-				p.publishNowPlaying(ctx, cm, e.UserID, np)
-			}
-		}
+func (p *Publisher) resync(ctx context.Context, cm *autopaho.ConnectionManager) {
+	actx, stop := context.WithTimeout(ctx, 10*time.Second)
+	err := cm.AwaitConnection(actx)
+	stop()
+	if err != nil {
+		return
 	}
+	p.publish(ctx, cm, AvailabilityTopic, []byte("online"))
+	if err := p.syncAll(ctx, cm); err != nil {
+		p.Log.Warn("Home Assistant sync", "err", err)
+	}
+}
+
+func (p *Publisher) goOffline(cm *autopaho.ConnectionManager) {
+	ctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
+	defer stop()
+	p.publish(ctx, cm, AvailabilityTopic, []byte("offline"))
+	cm.Disconnect(ctx)
 }
 
 func (p *Publisher) syncAll(ctx context.Context, cm *autopaho.ConnectionManager) error {

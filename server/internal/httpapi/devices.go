@@ -1,10 +1,7 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
-
-	"github.com/mslaby96/spindle/server/internal/devices"
 )
 
 func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
@@ -40,14 +37,5 @@ func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := s.Devices.Revoke(r.Context(), userID(r), id)
-	if errors.Is(err, devices.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "device not found")
-		return
-	}
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	s.noContent(w, s.Devices.Revoke(r.Context(), userID(r), id))
 }

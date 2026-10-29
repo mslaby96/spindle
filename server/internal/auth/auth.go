@@ -87,6 +87,14 @@ func (s *Service) CompleteSetup(ctx context.Context, code, username, password st
 	if err != nil {
 		return 0, err
 	}
+	id, err := s.createFirstUser(ctx, username, hash)
+	if err == nil || errors.Is(err, ErrSetupDone) {
+		s.setupHash = nil
+	}
+	return id, err
+}
+
+func (s *Service) createFirstUser(ctx context.Context, username, hash string) (int64, error) {
 	tx, err := s.db.W.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -97,7 +105,6 @@ func (s *Service) CompleteSetup(ctx context.Context, code, username, password st
 		return 0, err
 	}
 	if n > 0 {
-		s.setupHash = nil
 		return 0, ErrSetupDone
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)`,
@@ -108,7 +115,6 @@ func (s *Service) CompleteSetup(ctx context.Context, code, username, password st
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
-	s.setupHash = nil
 	return res.LastInsertId()
 }
 

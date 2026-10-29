@@ -102,30 +102,43 @@ func (e *Engine) Observe(ctx context.Context, o presence.Observation) (presence.
 	if tag.Album != nil {
 		led = presence.LEDKnown
 	}
+	if err := e.track(ctx, o, tag); err != nil {
+		return "", err
+	}
+	return led, nil
+}
 
+// track keeps the device's active listen going while the same sleeve is reported, or swaps it for a new one.
+func (e *Engine) track(ctx context.Context, o presence.Observation, tag catalog.Tag) error {
 	var id, tagID, startedAt int64
-	err = e.DB.R.QueryRowContext(ctx,
+	err := e.DB.R.QueryRowContext(ctx,
 		`SELECT id, tag_id, started_at FROM sessions WHERE device_id = ? AND state = 'active'`, o.DeviceID).
 		Scan(&id, &tagID, &startedAt)
 	switch {
 	case err == nil && tagID == tag.ID:
-		if _, err := e.DB.W.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, o.At.Unix(), id); err != nil {
-			return "", err
-		}
-		if e.away[o.DeviceID] {
-			delete(e.away, o.DeviceID)
-			started := time.Unix(startedAt, 0).UTC()
-			e.publish(o.UserID, EventNowPlaying, NowPlaying{DeviceID: o.DeviceID, Active: true, UID: tag.UID, Album: tag.Album, StartedAt: &started})
-		}
-		return led, nil
+		return e.stillPlaying(ctx, o, tag, id, time.Unix(startedAt, 0).UTC())
 	case err == nil:
 		if err := e.close(ctx, o.UserID, id); err != nil {
-			return "", err
+			return err
 		}
 	case !errors.Is(err, sql.ErrNoRows):
-		return "", err
+		return err
 	}
+	return e.start(ctx, o, tag)
+}
 
+func (e *Engine) stillPlaying(ctx context.Context, o presence.Observation, tag catalog.Tag, id int64, started time.Time) error {
+	if _, err := e.DB.W.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, o.At.Unix(), id); err != nil {
+		return err
+	}
+	if e.away[o.DeviceID] {
+		delete(e.away, o.DeviceID)
+		e.publish(o.UserID, EventNowPlaying, NowPlaying{DeviceID: o.DeviceID, Active: true, UID: tag.UID, Album: tag.Album, StartedAt: &started})
+	}
+	return nil
+}
+
+func (e *Engine) start(ctx context.Context, o presence.Observation, tag catalog.Tag) error {
 	var albumID, releaseID any
 	if tag.Album != nil {
 		albumID = tag.Album.ID
@@ -133,16 +146,16 @@ func (e *Engine) Observe(ctx context.Context, o presence.Observation) (presence.
 	if tag.Release != nil {
 		releaseID = tag.Release.ID
 	}
-	_, err = e.DB.W.ExecContext(ctx,
+	_, err := e.DB.W.ExecContext(ctx,
 		`INSERT INTO sessions (user_id, device_id, tag_id, album_id, release_id, state, started_at, last_seen_at)
 		 VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
 		o.UserID, o.DeviceID, tag.ID, albumID, releaseID, o.At.Unix(), o.At.Unix())
 	if err != nil {
-		return "", err
+		return err
 	}
 	started := time.Unix(o.At.Unix(), 0).UTC()
 	e.publish(o.UserID, EventNowPlaying, NowPlaying{DeviceID: o.DeviceID, Active: true, UID: tag.UID, Album: tag.Album, StartedAt: &started})
-	return led, nil
+	return nil
 }
 
 // Sweep ends sessions whose sleeve has been gone longer than the tolerance, settles week-old confirmations and

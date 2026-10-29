@@ -60,37 +60,51 @@ func (in *Inbox) List(ctx context.Context, userID int64) ([]Card, error) {
 
 	out := []Card{}
 	for rows.Next() {
-		var c Card
-		var title, artist sql.NullString
-		var hasCover sql.NullBool
-		var length sql.NullInt64
-		var color string
-		s, err := sessions.ScanSession(rows, &c.UID, &title, &artist, &hasCover, &color, &length)
+		c, err := scanCard(rows)
 		if err != nil {
 			return nil, err
-		}
-		c.Session = s
-		if s.AlbumID != nil {
-			c.Album = &AlbumSummary{ID: *s.AlbumID, Title: title.String, Artist: artist.String, HasCover: hasCover.Bool, CoverColor: color}
-			if length.Valid {
-				c.Album.LengthSec = &length.Int64
-			}
 		}
 		out = append(out, c)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	rows.Close()
 	for i := range out {
-		if out[i].Album != nil {
-			r, err := in.AlbumRating(ctx, userID, out[i].Album.ID)
-			if err != nil {
-				return nil, err
-			}
-			out[i].Album.Rating = r
+		if err := in.rate(ctx, userID, &out[i]); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
+}
+
+func scanCard(rows *sql.Rows) (Card, error) {
+	var c Card
+	var title, artist sql.NullString
+	var hasCover sql.NullBool
+	var length sql.NullInt64
+	var color string
+	s, err := sessions.ScanSession(rows, &c.UID, &title, &artist, &hasCover, &color, &length)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Session = s
+	if s.AlbumID != nil {
+		c.Album = &AlbumSummary{ID: *s.AlbumID, Title: title.String, Artist: artist.String, HasCover: hasCover.Bool, CoverColor: color}
+		if length.Valid {
+			c.Album.LengthSec = &length.Int64
+		}
+	}
+	return c, nil
+}
+
+func (in *Inbox) rate(ctx context.Context, userID int64, c *Card) error {
+	if c.Album == nil {
+		return nil
+	}
+	r, err := in.AlbumRating(ctx, userID, c.Album.ID)
+	c.Album.Rating = r
+	return err
 }
 
 // AlbumRating is the rating from the most recent listen that has one, the way Letterboxd shows a film's rating.

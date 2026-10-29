@@ -77,18 +77,7 @@ func (s *Service) Assign(ctx context.Context, userID int64, uid string, a Assign
 	if err != nil {
 		return Tag{}, err
 	}
-	var album Album
-	var releaseID *int64
-	switch {
-	case a.ReleaseID != 0:
-		var rel Release
-		album, rel, err = s.SaveRelease(ctx, userID, a.ReleaseID)
-		releaseID = &rel.ID
-	case a.MasterID != 0:
-		album, err = s.SaveMaster(ctx, userID, a.MasterID)
-	default:
-		return Tag{}, ErrNothingToAssign
-	}
+	album, releaseID, err := s.saveAssignment(ctx, userID, a)
 	if err != nil {
 		return Tag{}, err
 	}
@@ -110,6 +99,18 @@ func (s *Service) Assign(ctx context.Context, userID int64, uid string, a Assign
 		return Tag{}, err
 	}
 	return s.TagByUID(ctx, userID, uid)
+}
+
+func (s *Service) saveAssignment(ctx context.Context, userID int64, a Assignment) (Album, *int64, error) {
+	switch {
+	case a.ReleaseID != 0:
+		album, rel, err := s.SaveRelease(ctx, userID, a.ReleaseID)
+		return album, &rel.ID, err
+	case a.MasterID != 0:
+		album, err := s.SaveMaster(ctx, userID, a.MasterID)
+		return album, nil, err
+	}
+	return Album{}, nil, ErrNothingToAssign
 }
 
 func (s *Service) fillTag(ctx context.Context, userID int64, t Tag, albumID, releaseID sql.NullInt64) (Tag, error) {

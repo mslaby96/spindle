@@ -73,12 +73,8 @@ func (s *Server) assignTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := s.Catalog.Assign(r.Context(), userID(r), uid, req)
-	switch {
-	case errors.Is(err, catalog.ErrNothingToAssign):
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	case err != nil:
-		s.discogsError(w, err)
+	if err != nil {
+		s.fail(w, err)
 		return
 	}
 	s.Durations.Enqueue(userID(r), tag.Album.ID)

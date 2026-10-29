@@ -112,9 +112,7 @@ func (r *Resolver) sweep(ctx context.Context) {
 }
 
 func (r *Resolver) process(ctx context.Context, j job) {
-	var coverStatus string
-	if err := r.DB.R.QueryRowContext(ctx, `SELECT cover_status FROM albums WHERE id = ?`, j.albumID).Scan(&coverStatus); err == nil &&
-		(coverStatus == "pending" || coverStatus == "failed") && r.ResolveCover != nil {
+	if r.needsCover(ctx, j.albumID) {
 		if err := r.ResolveCover(ctx, j.userID, j.albumID); err != nil {
 			r.Log.Warn("cover download failed", "album", j.albumID, "err", err)
 		}
@@ -122,6 +120,15 @@ func (r *Resolver) process(ctx context.Context, j job) {
 	if err := r.Resolve(ctx, j.userID, j.albumID); err != nil && !errors.Is(err, context.Canceled) {
 		r.Log.Warn("album length lookup failed", "album", j.albumID, "err", err)
 	}
+}
+
+func (r *Resolver) needsCover(ctx context.Context, albumID int64) bool {
+	if r.ResolveCover == nil {
+		return false
+	}
+	var status string
+	err := r.DB.R.QueryRowContext(ctx, `SELECT cover_status FROM albums WHERE id = ?`, albumID).Scan(&status)
+	return err == nil && (status == "pending" || status == "failed")
 }
 
 type albumInfo struct {
@@ -157,32 +164,11 @@ func (r *Resolver) Resolve(ctx context.Context, userID, albumID int64) error {
 
 // find returns the first complete album length a source knows, or the errors that kept the sources from answering.
 func (r *Resolver) find(ctx context.Context, userID, albumID int64, a albumInfo) (string, time.Duration, error) {
-	var failures []error
-	answered := func(d time.Duration, err error) bool {
-		if err != nil && !errors.Is(err, lastfm.ErrNoKey) && !errors.Is(err, discogs.ErrNotFound) {
-			failures = append(failures, err)
-		}
-		return err == nil && d > 0
-	}
-
-	expected := 0
-	if a.masterID.Valid {
-		m, err := r.Discogs.Master(ctx, a.masterID.Int64)
-		d, n, complete := Tracklist(m.Tracklist)
-		expected = n
-		if answered(d, err) && complete {
-			return "discogs_master", d, nil
-		}
-	}
-	for _, id := range r.releaseIDs(ctx, userID, albumID, a.releaseID) {
-		rel, err := r.Discogs.Release(ctx, id)
-		d, n, complete := Tracklist(rel.Tracklist)
-		if expected == 0 {
-			expected = n
-		}
-		if answered(d, err) && complete {
-			return "discogs_release", d, nil
-		}
+	var failed failures
+	answered := failed.answered
+	source, d, expected := r.fromDiscogs(ctx, userID, albumID, a, answered)
+	if d > 0 {
+		return source, d, nil
 	}
 	if r.MusicBrainz != nil {
 		if d, err := r.MusicBrainz.AlbumLength(ctx, a.artist, a.title, expected); answered(d, err) {
@@ -194,7 +180,45 @@ func (r *Resolver) find(ctx context.Context, userID, albumID int64, a albumInfo)
 			return "lastfm", d, nil
 		}
 	}
-	return "", 0, errors.Join(failures...)
+	return "", 0, errors.Join(failed...)
+}
+
+// failures collects the errors of sources that could not be asked. A source that doesn't know the album, or isn't
+// configured, has answered.
+type failures []error
+
+func (f *failures) answered(d time.Duration, err error) bool {
+	if err != nil && !errors.Is(err, lastfm.ErrNoKey) && !errors.Is(err, discogs.ErrNotFound) {
+		*f = append(*f, err)
+	}
+	return err == nil && d > 0
+}
+
+// fromDiscogs sums the tracklist of the master, then of each pressing, until one lists every track's length. It also
+// returns the track count it saw first, which helps pick the right release elsewhere.
+func (r *Resolver) fromDiscogs(ctx context.Context, userID, albumID int64, a albumInfo,
+	answered func(time.Duration, error) bool) (string, time.Duration, int) {
+	expected := 0
+	complete := func(tracks []discogs.Track, err error) (time.Duration, bool) {
+		d, n, complete := Tracklist(tracks)
+		if expected == 0 {
+			expected = n
+		}
+		return d, answered(d, err) && complete
+	}
+	if a.masterID.Valid {
+		m, err := r.Discogs.Master(ctx, a.masterID.Int64)
+		if d, ok := complete(m.Tracklist, err); ok {
+			return "discogs_master", d, expected
+		}
+	}
+	for _, id := range r.releaseIDs(ctx, userID, albumID, a.releaseID) {
+		rel, err := r.Discogs.Release(ctx, id)
+		if d, ok := complete(rel.Tracklist, err); ok {
+			return "discogs_release", d, expected
+		}
+	}
+	return "", 0, expected
 }
 
 func (r *Resolver) releaseIDs(ctx context.Context, userID, albumID int64, standalone sql.NullInt64) []int64 {

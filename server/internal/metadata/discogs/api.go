@@ -1,6 +1,7 @@
 package discogs
 
 import (
+	"cmp"
 	"context"
 	"net/url"
 	"strconv"
@@ -124,40 +125,36 @@ func (c *Client) Search(ctx context.Context, query string) ([]Result, error) {
 		return nil, err
 	}
 	out := []Result{}
-	seen := map[int64]bool{}
+	type key struct {
+		kind string
+		id   int64
+	}
+	seen := map[key]bool{}
 	for _, r := range resp.Results {
-		var kind string
-		var id int64
-		switch {
-		case r.Type == "master":
-			kind, id = "master", r.ID
-		case r.Type == "release" && r.MasterID != 0:
-			kind, id = "master", r.MasterID
-		case r.Type == "release":
-			kind, id = "release", r.ID
-		default:
-			continue
+		res, ok := r.result()
+		if k := (key{res.Kind, res.ID}); ok && !seen[k] {
+			seen[k] = true
+			out = append(out, res)
 		}
-		key := id
-		if kind == "release" {
-			key = -id
-		}
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		artist, title := splitTitle(r.Title)
-		thumb := r.Thumb
-		if thumb == "" {
-			thumb = r.Cover
-		}
-		res := Result{Kind: kind, ID: id, Artist: artist, Title: title, Year: r.Year, Thumb: thumb}
-		if kind == "release" {
-			res.Country, res.Format, res.CatNo = r.Country, r.Format, r.CatNo
-		}
-		out = append(out, res)
 	}
 	return out, nil
+}
+
+// result turns a search hit into a pick: a pressing that belongs to a master stands for the master.
+func (r rawResult) result() (Result, bool) {
+	artist, title := splitTitle(r.Title)
+	res := Result{Kind: "master", ID: r.ID, Artist: artist, Title: title, Year: r.Year, Thumb: cmp.Or(r.Thumb, r.Cover)}
+	switch {
+	case r.Type == "master":
+	case r.Type == "release" && r.MasterID != 0:
+		res.ID = r.MasterID
+	case r.Type == "release":
+		res.Kind = "release"
+		res.Country, res.Format, res.CatNo = r.Country, r.Format, r.CatNo
+	default:
+		return Result{}, false
+	}
+	return res, true
 }
 
 type VersionFilter struct {

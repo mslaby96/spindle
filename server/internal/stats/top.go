@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 )
 
@@ -39,75 +40,95 @@ type Top struct {
 	Styles  []Ranked      `json:"styles"`
 }
 
+// window is the part of the listening history one Top ranking looks at.
+type window struct {
+	userID int64
+	since  int64
+	value  string
+	limit  int
+}
+
+const inWindow = `s.user_id = ? AND ` + listened + ` AND s.started_at >= ?`
+
+func (st *Stats) window(userID int64, period, measure string, limit int) (window, error) {
+	length, ok := Periods[period]
+	if !ok || (measure != "plays" && measure != "time") {
+		return window{}, ErrBadQuery
+	}
+	w := window{userID: userID, value: "s.play_count", limit: limit}
+	if measure == "time" {
+		w.value = "s.listened_sec"
+	}
+	if limit <= 0 || limit > 50 {
+		w.limit = 10
+	}
+	if length > 0 {
+		w.since = st.Now().Add(-length).Unix()
+	}
+	return w, nil
+}
+
 // Top ranks albums, genres and styles by number of listens or by time listened. An album with several styles
 // counts towards each of them.
 func (st *Stats) Top(ctx context.Context, userID int64, period, measure string, limit int) (Top, error) {
-	window, ok := Periods[period]
-	if !ok || (measure != "plays" && measure != "time") {
-		return Top{}, ErrBadQuery
+	w, err := st.window(userID, period, measure, limit)
+	if err != nil {
+		return Top{}, err
 	}
-	if limit <= 0 || limit > 50 {
-		limit = 10
-	}
-	since := int64(0)
-	if window > 0 {
-		since = st.Now().Add(-window).Unix()
-	}
-	value := "s.play_count"
-	if measure == "time" {
-		value = "s.listened_sec"
-	}
-	where := `s.user_id = ? AND ` + listened + ` AND s.started_at >= ?`
-
 	var t Top
+	if t.Summary, err = st.summary(ctx, w); err != nil {
+		return Top{}, err
+	}
+	if t.Albums, err = st.topAlbums(ctx, w); err != nil {
+		return Top{}, err
+	}
+	if t.Genres, err = st.topTags(ctx, w, "genres"); err != nil {
+		return Top{}, err
+	}
+	if t.Styles, err = st.topTags(ctx, w, "styles"); err != nil {
+		return Top{}, err
+	}
+	return t, nil
+}
+
+func (st *Stats) summary(ctx context.Context, w window) (Summary, error) {
+	var s Summary
 	err := st.DB.R.QueryRowContext(ctx, `
 		SELECT coalesce(sum(s.play_count), 0), coalesce(sum(s.listened_sec), 0),
 			coalesce(sum(CASE WHEN s.duration_confirmed = 0 THEN s.listened_sec END), 0), count(DISTINCT s.album_id)
-		FROM sessions s WHERE `+where, userID, since).
-		Scan(&t.Summary.Plays, &t.Summary.ListenedSec, &t.Summary.UnconfirmedSec, &t.Summary.Albums)
-	if err != nil {
-		return Top{}, err
-	}
+		FROM sessions s WHERE `+inWindow, w.userID, w.since).
+		Scan(&s.Plays, &s.ListenedSec, &s.UnconfirmedSec, &s.Albums)
+	return s, err
+}
 
-	rows, err := st.DB.R.QueryContext(ctx, `
-		SELECT s.album_id, sum(`+value+`) AS v FROM sessions s
-		WHERE `+where+` AND s.album_id IS NOT NULL GROUP BY s.album_id ORDER BY v DESC, max(s.started_at) DESC LIMIT ?`,
-		userID, since, limit)
+func (st *Stats) topAlbums(ctx context.Context, w window) ([]RankedAlbum, error) {
+	top, err := st.ranked(ctx, `
+		SELECT s.album_id, sum(`+w.value+`) AS v FROM sessions s
+		WHERE `+inWindow+` AND s.album_id IS NOT NULL GROUP BY s.album_id ORDER BY v DESC, max(s.started_at) DESC LIMIT ?`,
+		w.userID, w.since, w.limit)
 	if err != nil {
-		return Top{}, err
+		return nil, err
 	}
-	type pair struct{ id, v int64 }
-	var top []pair
-	for rows.Next() {
-		var p pair
-		if err := rows.Scan(&p.id, &p.v); err != nil {
-			rows.Close()
-			return Top{}, err
-		}
-		top = append(top, p)
-	}
-	rows.Close()
-	t.Albums = []RankedAlbum{}
-	for _, p := range top {
-		item, err := st.AlbumItem(ctx, userID, p.id)
+	out := []RankedAlbum{}
+	for _, r := range top {
+		id, err := strconv.ParseInt(r.Name, 10, 64)
 		if err != nil {
-			return Top{}, err
+			return nil, err
 		}
-		t.Albums = append(t.Albums, RankedAlbum{Item: item, Value: p.v})
+		item, err := st.AlbumItem(ctx, w.userID, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, RankedAlbum{Item: item, Value: r.Value})
 	}
+	return out, nil
+}
 
-	for _, field := range []struct {
-		column string
-		out    *[]Ranked
-	}{{"genres", &t.Genres}, {"styles", &t.Styles}} {
-		*field.out, err = st.ranked(ctx, `
-			SELECT j.value, sum(`+value+`) AS v FROM sessions s JOIN albums a ON a.id = s.album_id, json_each(a.`+field.column+`) j
-			WHERE `+where+` GROUP BY j.value ORDER BY v DESC, j.value LIMIT ?`, userID, since, limit)
-		if err != nil {
-			return Top{}, err
-		}
-	}
-	return t, nil
+// topTags ranks the values of a JSON list column on albums, such as genres or styles.
+func (st *Stats) topTags(ctx context.Context, w window, column string) ([]Ranked, error) {
+	return st.ranked(ctx, `
+		SELECT j.value, sum(`+w.value+`) AS v FROM sessions s JOIN albums a ON a.id = s.album_id, json_each(a.`+column+`) j
+		WHERE `+inWindow+` GROUP BY j.value ORDER BY v DESC, j.value LIMIT ?`, w.userID, w.since, w.limit)
 }
 
 func (st *Stats) ranked(ctx context.Context, query string, args ...any) ([]Ranked, error) {

@@ -157,47 +157,48 @@ const minScore = 90
 // Pick chooses among close matches, preferring vinyl, then the expected track count, then the most common track
 // count, which steers clear of deluxe box sets and singles.
 func Pick(rs []Release, expectedTracks int) (Release, bool) {
-	var good []Release
-	for _, r := range rs {
-		if r.Score >= minScore && r.TrackCount > 0 {
-			good = append(good, r)
-		}
-	}
-	if len(good) == 0 {
-		return Release{}, false
-	}
-	var vinyl []Release
-	for _, r := range good {
-		if r.isVinyl() {
-			vinyl = append(vinyl, r)
-		}
-	}
-	if len(vinyl) > 0 {
+	good := filter(rs, func(r Release) bool { return r.Score >= minScore && r.TrackCount > 0 })
+	if vinyl := filter(good, Release.isVinyl); len(vinyl) > 0 {
 		good = vinyl
 	}
-	if expectedTracks > 0 {
-		for _, r := range good {
-			if r.TrackCount == expectedTracks {
-				return r, true
-			}
+	if r, ok := withTracks(good, expectedTracks); ok {
+		return r, true
+	}
+	return withTracks(good, commonTrackCount(good))
+}
+
+func filter(rs []Release, keep func(Release) bool) []Release {
+	var out []Release
+	for _, r := range rs {
+		if keep(r) {
+			out = append(out, r)
 		}
 	}
-	counts := map[int]int{}
-	for _, r := range good {
-		counts[r.TrackCount]++
-	}
-	mode := 0
-	for n, c := range counts {
-		if c > counts[mode] || (c == counts[mode] && n < mode) {
-			mode = n
-		}
-	}
-	for _, r := range good {
-		if r.TrackCount == mode {
+	return out
+}
+
+func withTracks(rs []Release, n int) (Release, bool) {
+	for _, r := range rs {
+		if n > 0 && r.TrackCount == n {
 			return r, true
 		}
 	}
 	return Release{}, false
+}
+
+// commonTrackCount is the track count most releases share, the lower one on a tie.
+func commonTrackCount(rs []Release) int {
+	counts := map[int]int{}
+	for _, r := range rs {
+		counts[r.TrackCount]++
+	}
+	common := 0
+	for n, c := range counts {
+		if c > counts[common] || (c == counts[common] && n < common) {
+			common = n
+		}
+	}
+	return common
 }
 
 func escape(s string) string {

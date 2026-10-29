@@ -18,14 +18,10 @@ func (s *Server) setAlbumDuration(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	var d *time.Duration
-	if req.Seconds != nil {
-		if *req.Seconds <= 0 || *req.Seconds > 24*3600 {
-			writeError(w, http.StatusBadRequest, "length must be between 1 second and 24 hours")
-			return
-		}
-		v := time.Duration(*req.Seconds) * time.Second
-		d = &v
+	d, ok := albumLength(req.Seconds)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "length must be between 1 second and 24 hours")
+		return
 	}
 	err := s.Durations.SetManual(r.Context(), userID(r), id, d)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -42,4 +38,16 @@ func (s *Server) setAlbumDuration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, album)
+}
+
+// albumLength parses a length typed in by the user; no length at all means "look it up again".
+func albumLength(seconds *int) (*time.Duration, bool) {
+	if seconds == nil {
+		return nil, true
+	}
+	if *seconds <= 0 || *seconds > 24*3600 {
+		return nil, false
+	}
+	d := time.Duration(*seconds) * time.Second
+	return &d, true
 }
