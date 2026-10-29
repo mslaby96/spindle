@@ -53,6 +53,7 @@ func startBroker(t *testing.T) string {
 type recorder struct {
 	mu   sync.Mutex
 	msgs map[string][]string
+	qos  map[string]byte
 	cm   *autopaho.ConnectionManager
 }
 
@@ -75,7 +76,7 @@ func (r *recorder) count(topic string) int {
 func listen(t *testing.T, ctx context.Context, broker string) *recorder {
 	t.Helper()
 	u, _ := url.Parse(broker)
-	r := &recorder{msgs: map[string][]string{}}
+	r := &recorder{msgs: map[string][]string{}, qos: map[string]byte{}}
 	cm, err := autopaho.NewConnection(ctx, autopaho.ClientConfig{
 		ServerUrls: []*url.URL{u},
 		KeepAlive:  30,
@@ -87,6 +88,7 @@ func listen(t *testing.T, ctx context.Context, broker string) *recorder {
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){func(pr paho.PublishReceived) (bool, error) {
 				r.mu.Lock()
 				r.msgs[pr.Packet.Topic] = append(r.msgs[pr.Packet.Topic], string(pr.Packet.Payload))
+				r.qos[pr.Packet.Topic] = pr.Packet.QoS
 				r.mu.Unlock()
 				return true, nil
 			}},
@@ -124,6 +126,11 @@ type harness struct {
 
 func startPublisher(t *testing.T, ctx context.Context) *harness {
 	t.Helper()
+	return startPublisherWith(t, ctx, func(context.Context, int64) ([]sessions.NowPlaying, error) { return nil, nil })
+}
+
+func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc) *harness {
+	t.Helper()
 	broker := startBroker(t)
 	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "spindle.db"))
 	if err != nil {
@@ -132,13 +139,13 @@ func startPublisher(t *testing.T, ctx context.Context) *harness {
 	t.Cleanup(func() { d.Close() })
 	d.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('a', 'h', 1)`)
 
-	h := &harness{ha: listen(t, ctx, broker), bus: events.NewBus(), db: d, done: make(chan error, 1)}
+	h := &harness{ha: listen(t, t.Context(), broker), bus: events.NewBus(), db: d, done: make(chan error, 1)}
 	h.p = &Publisher{
 		Cfg:     config.MQTT{URL: broker, Prefix: "homeassistant"},
 		DB:      d,
 		Bus:     h.bus,
 		Covers:  &covers.Store{Dir: t.TempDir()},
-		Current: func(context.Context, int64) ([]sessions.NowPlaying, error) { return nil, nil },
+		Current: current,
 		Version: "test",
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
@@ -236,4 +243,42 @@ func TestPublisherSendsCoverAsSmallJPEG(t *testing.T) {
 	if b := got.Bounds(); b.Dx() != 600 || b.Dy() != 450 {
 		t.Fatalf("cover is %dx%d", b.Dx(), b.Dy())
 	}
+}
+
+func TestPublisherSyncsWhatIsPlayingWhenItConnects(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisherWith(t, ctx, func(context.Context, int64) ([]sessions.NowPlaying, error) {
+		return []sessions.NowPlaying{{DeviceID: 1, Active: true, UID: "04A1",
+			Album: &catalog.Album{ID: 1, Title: "Kind of Blue", Artist: "Miles Davis"}}}, nil
+	})
+	eventually(t, "playing state", func() bool { s, _ := h.ha.last(StateTopic(1)); return s == "Miles Davis – Kind of Blue" })
+}
+
+func TestPublisherDeliversAtLeastOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+	eventually(t, "idle state", func() bool { s, _ := h.ha.last(StateTopic(1)); return s == Idle })
+	h.ha.mu.Lock()
+	defer h.ha.mu.Unlock()
+	for _, topic := range []string{AvailabilityTopic, StateTopic(1), AttributesTopic(1)} {
+		if q := h.ha.qos[topic]; q != 1 {
+			t.Fatalf("%s delivered at QoS %d", topic, q)
+		}
+	}
+}
+
+func TestPublisherGoesOfflineWhenStopped(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := startPublisher(t, ctx)
+
+	cancel()
+	select {
+	case <-h.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("publisher did not stop")
+	}
+	eventually(t, "offline", func() bool { s, _ := h.ha.last(AvailabilityTopic); return s == "offline" })
 }

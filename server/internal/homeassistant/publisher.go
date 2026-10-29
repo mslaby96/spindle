@@ -46,8 +46,11 @@ func (p *Publisher) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The connection outlives ctx just long enough to tell Home Assistant that Spindle is going away.
+	conn, closeConn := context.WithCancel(context.WithoutCancel(ctx))
+	defer closeConn()
 	resync := make(signal, 1)
-	cm, err := autopaho.NewConnection(ctx, p.clientConfig(ctx, u, resync.raise))
+	cm, err := autopaho.NewConnection(conn, p.clientConfig(ctx, u, resync.raise))
 	if err != nil {
 		return err
 	}
