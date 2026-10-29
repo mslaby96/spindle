@@ -192,11 +192,18 @@ module centre_mark() {
             cylinder(r1 = 2, r2 = 2, h = lip_t + 2 * eps, $fn = 3);
 }
 
+// The letters run into the face at 45 degrees downwards, so their tops print without support.
 module label_cut() {
-    translate([width / 2, label_depth - eps, (base_h + lip_h) / 2])
-        rotate([90, 0, 0])
-            linear_extrude(label_depth + 1)
-                text(label, size = label_size, font = label_font, halign = "center", valign = "center");
+    minkowski() {
+        translate([width / 2, -eps, (base_h + lip_h) / 2])
+            rotate([90, 0, 0])
+                linear_extrude(1)
+                    text(label, size = label_size, font = label_font, halign = "center", valign = "center");
+        hull() {
+            cube(eps);
+            translate([0, label_depth, -label_depth]) cube(eps);
+        }
+    }
 }
 
 module arc(r, w, half_angle) {
@@ -227,6 +234,8 @@ module bosses() {
             difference() {
                 cylinder(d = boss_d, h = base_h - shell + eps);
                 translate([0, 0, -eps]) cylinder(d = screw_d, h = base_h - shell - 2);
+                // pointed end, so the hole needs no support inside
+                translate([0, 0, base_h - shell - 2 - eps]) cylinder(d1 = screw_d, d2 = 0, h = screw_d / 2);
             }
 }
 
