@@ -79,7 +79,13 @@ func (s *Server) albumDetail(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"album": album, "stats": item, "releases": releases, "history": history})
+	sleeves, err := s.Catalog.Sleeves(ctx, user, id)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"album": album, "stats": item, "releases": releases, "history": history,
+		"sleeves": sleeves})
 }
 
 func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {

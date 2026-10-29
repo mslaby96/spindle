@@ -216,3 +216,18 @@ func TestRestoringPutsTheAlbumBack(t *testing.T) {
 		t.Fatalf("someone else's album: %v", err)
 	}
 }
+
+func TestSleevesOfAnAlbum(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	tag := sleeve(t, s, "04A1", dsotm)
+	sleeve(t, s, "04B2", dsotm)
+	sleeve(t, s, "04C3", wywh)
+	uids, err := s.Sleeves(ctx, 1, tag.Album.ID)
+	if err != nil || len(uids) != 2 || uids[0] != "04A1" || uids[1] != "04B2" {
+		t.Fatalf("%v %v", uids, err)
+	}
+	if other, _ := s.Sleeves(ctx, 2, tag.Album.ID); len(other) != 0 {
+		t.Fatalf("someone else's sleeves: %v", other)
+	}
+}

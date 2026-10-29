@@ -39,6 +39,18 @@ func TestAlbumLeavesAndReturnsToTheCollection(t *testing.T) {
 	c := e.loggedIn(t)
 	id, _ := e.catalogued(t, c, "04A1B2C3")
 	url := e.http.URL + "/api/albums/" + strconv.FormatInt(id, 10)
+	type detail struct {
+		Album struct {
+			RemovedAt *string `json:"removed_at"`
+		}
+		Sleeves []string
+	}
+
+	var before detail
+	json.NewDecoder(do(t, c, "GET", url, nil).Body).Decode(&before)
+	if len(before.Sleeves) != 1 || before.Sleeves[0] != "04A1B2C3" || before.Album.RemovedAt != nil {
+		t.Fatalf("before %+v", before)
+	}
 
 	if resp := do(t, c, "POST", url+"/remove", nil); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("remove: %d", resp.StatusCode)
@@ -46,14 +58,10 @@ func TestAlbumLeavesAndReturnsToTheCollection(t *testing.T) {
 	if ids := e.libraryIDs(t, c); len(ids) != 0 {
 		t.Fatalf("library still has %v", ids)
 	}
-	var detail struct {
-		Album struct {
-			RemovedAt *string `json:"removed_at"`
-		}
-	}
-	json.NewDecoder(do(t, c, "GET", url, nil).Body).Decode(&detail)
-	if detail.Album.RemovedAt == nil {
-		t.Fatal("album page doesn't say the record is gone")
+	var after detail
+	json.NewDecoder(do(t, c, "GET", url, nil).Body).Decode(&after)
+	if after.Album.RemovedAt == nil || len(after.Sleeves) != 0 {
+		t.Fatalf("after %+v", after)
 	}
 
 	if resp := do(t, c, "POST", url+"/restore", nil); resp.StatusCode != http.StatusNoContent {

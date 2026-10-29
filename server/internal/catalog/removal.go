@@ -114,3 +114,21 @@ func (s *Service) listensOf(ctx context.Context, tag Tag) (int, error) {
 		AND state IN ('counted', 'pending_confirmation')`, tag.ID, tag.Album.ID).Scan(&n)
 	return n, err
 }
+
+// Sleeves lists the tag UIDs that point at an album.
+func (s *Service) Sleeves(ctx context.Context, userID, albumID int64) ([]string, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT uid FROM tags WHERE user_id = ? AND album_id = ? ORDER BY uid`, userID, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var uid string
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
+		}
+		out = append(out, uid)
+	}
+	return out, rows.Err()
+}
