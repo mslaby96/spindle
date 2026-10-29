@@ -51,13 +51,14 @@ led_hole_d = 5;
 
 /* [Cover] */
 cover_t = 3;
-screw_d = 2.2;          // for M2.5 self-tapping screws
-boss_d = 7;
+screw_d = 2.5;          // M3 x 20 machine screws cut their own thread in the bosses
+screw_clear = 3.4;
+boss_d = 8;
 foot_d = 12;
-foot_h = 3;
-head_d = 5.5;           // pan head of the screw, sunk into the foot
-head_h = 2.5;
-spigot_d = 6;           // centres a foot under its screw
+foot_h = 4.5;
+head_d = 6.5;           // pan, socket or countersunk M3 head, sunk into the foot
+head_h = 3.2;
+spigot_d = 7;           // centres a foot under its screw
 spigot_h = 1;
 pico_recess = 1;
 
@@ -261,7 +262,7 @@ module cover() {
         }
         for (p = boss_positions)
             translate([p.x, p.y, 0]) {
-                translate([0, 0, -eps]) cylinder(d = screw_d + 0.6, h = cover_t + 2 * eps);
+                translate([0, 0, -eps]) cylinder(d = screw_clear, h = cover_t + 2 * eps);
                 translate([0, 0, -eps]) cylinder(d = spigot_d + 0.4, h = spigot_h + 0.2);
             }
         // shallow bed that keeps the Pico W lined up with the USB opening
@@ -277,7 +278,7 @@ module foot() {
             cylinder(d = foot_d, h = foot_h);
             translate([0, 0, foot_h - eps]) cylinder(d = spigot_d, h = spigot_h + eps);
         }
-        translate([0, 0, -eps]) cylinder(d = screw_d + 0.6, h = foot_h + spigot_h + 2 * eps);
+        translate([0, 0, -eps]) cylinder(d = screw_clear, h = foot_h + spigot_h + 2 * eps);
         translate([0, 0, -eps]) cylinder(d = head_d, h = head_h);
     }
 }

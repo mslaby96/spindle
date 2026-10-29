@@ -82,7 +82,7 @@ The RC522 only reads about a centimetre with small stickers, and it loses a tag 
 - `cover.stl` prints as exported, flat side on the bed. The spacer that holds the reader up is part of it.
 - `foot.stl` prints as exported. You need four.
 
-Slide the RC522 into the slot in the base from below, header end last and the pins pointing towards the back, until it stops. The strip with the header stays inside the base, so a straight header with jumper wires fits. Lay the Pico W in the recess on the cover with its USB end at the back and put the cover on, so the spacer slides in under the reader. Each M2.5 x 10 mm pan-head screw goes through a foot and the cover into the base; the small ring on top of the foot sits in the hole under the cover. If the feet slip on your table, print them in TPU or stick felt under them.
+Slide the RC522 into the slot in the base from below, header end last and the pins pointing towards the back, until it stops. The strip with the header stays inside the base, so a straight header with jumper wires fits. Lay the Pico W in the recess on the cover with its USB end at the back and put the cover on, so the spacer slides in under the reader. Each M3 x 20 mm machine screw goes through a foot and the cover and cuts its own thread in the base, so drive it in slowly; the small ring on top of the foot sits in the hole under the cover. If the feet slip on your table, print them in TPU or stick felt under them.
 
 Stick each tag on the back of the sleeve's outer sleeve, centred, 24 mm above the bottom edge (the value is printed when you render `stand.scad`). Line the sleeve up with the notch on the front of the stand and the tag lands on the mark over the reader.
 
