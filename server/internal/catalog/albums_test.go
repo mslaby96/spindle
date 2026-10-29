@@ -239,3 +239,46 @@ func TestReleasesListsSavedPressings(t *testing.T) {
 		t.Fatalf("another user's view: %+v %v", other, err)
 	}
 }
+
+func TestReleaseWithoutLabelOrYear(t *testing.T) {
+	s, f := newService(t)
+	f.releases[5550001] = discogs.Release{ID: 5550001, Title: "White Label", Artists: []discogs.Artist{{Name: "Unknown"}}}
+	album, rel, err := s.SaveRelease(context.Background(), 1, 5550001)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if album.Year != nil || rel.Year != nil || rel.Label != "" || rel.CatNo != "" {
+		t.Fatalf("album %+v release %+v", album, rel)
+	}
+}
+
+func TestEarliestPositiveYearIsKept(t *testing.T) {
+	s, f := newService(t)
+	f.releases[5550002] = discogs.Release{ID: 5550002, Title: "Ancient", Year: 1}
+	album, rel, err := s.SaveRelease(context.Background(), 1, 5550002)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if album.Year == nil || *album.Year != 1 || rel.Year == nil || *rel.Year != 1 {
+		t.Fatalf("album %+v release %+v", album, rel)
+	}
+}
+
+func TestSaveMasterDoesNotFetchWhenLibraryLookupFails(t *testing.T) {
+	s, f := newService(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.SaveMaster(ctx, 1, 10362); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	if f.calls["master"] != 0 {
+		t.Fatalf("master fetched %d times", f.calls["master"])
+	}
+}
+
+func TestSaveMasterForUnknownUser(t *testing.T) {
+	s, _ := newService(t)
+	if _, err := s.SaveMaster(context.Background(), 99, 10362); err == nil {
+		t.Fatal("album saved for a user that does not exist")
+	}
+}

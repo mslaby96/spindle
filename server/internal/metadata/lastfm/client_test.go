@@ -53,6 +53,9 @@ func TestIncompleteDurations(t *testing.T) {
 		`{"album":{"tracks":{"track":[{"duration":100},{"duration":0}]}}}`,
 		`{"album":{"tracks":{"track":[]}}}`,
 		`{"album":{"tracks":""}}`,
+		`{"album":{"tracks":{}}}`,
+		`{"album":{"name":"b"}}`,
+		`{}`,
 		`{"error":6,"message":"Album not found"}`,
 	} {
 		c, _ := newClient(t, body, 200)
@@ -63,9 +66,31 @@ func TestIncompleteDurations(t *testing.T) {
 }
 
 func TestServerError(t *testing.T) {
-	c, _ := newClient(t, "", 503)
+	for _, status := range []int{500, 503} {
+		c, _ := newClient(t, `{"album":{"tracks":{"track":[{"duration":100}]}}}`, status)
+		if _, err := c.AlbumLength(context.Background(), "a", "b"); err == nil {
+			t.Fatalf("status %d: expected error", status)
+		}
+	}
+}
+
+func TestOneSecondTrackCounts(t *testing.T) {
+	c, _ := newClient(t, `{"album":{"tracks":{"track":[{"duration":1},{"duration":100}]}}}`, 200)
+	if d, err := c.AlbumLength(context.Background(), "a", "b"); err != nil || d != 101*time.Second {
+		t.Fatalf("d=%v err=%v", d, err)
+	}
+}
+
+func TestUnreadableResponseIsError(t *testing.T) {
+	c, _ := newClient(t, `<html>`, 200)
 	if _, err := c.AlbumLength(context.Background(), "a", "b"); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestNewClientTimesOut(t *testing.T) {
+	if got := New("k", "x").HTTP.Timeout; got != 15*time.Second {
+		t.Fatalf("timeout %v", got)
 	}
 }
 

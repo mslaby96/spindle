@@ -474,7 +474,7 @@ func TestResolvingWithUnknownAlbumLength(t *testing.T) {
 		plays      int
 		listened   time.Duration
 	}{
-		{ResolutionForgot, 1, typicalLP},
+		{ResolutionForgot, 1, 45 * time.Minute},
 		{ResolutionRepeated, 2, 100 * time.Minute},
 		{ResolutionLonger, 1, 100 * time.Minute},
 	}
@@ -719,9 +719,9 @@ func TestCurrentReportsSleeveOffTheStand(t *testing.T) {
 		t.Fatalf("while playing %+v %v", current, err)
 	}
 	lastSeen := v.clock.now()
-	v.clock.advance(staleReport)
+	v.clock.advance(5 * time.Second)
 	if current, _ = v.e.Current(context.Background(), 1, albums); current[0].EndsAt != nil {
-		t.Fatalf("a report %v ago is not stale yet: %+v", staleReport, current)
+		t.Fatalf("a report 5s ago is not stale yet: %+v", current)
 	}
 	v.see(t, "")
 	v.clock.advance(15 * time.Second)
@@ -759,4 +759,91 @@ func TestSweeperEndsAbandonedListen(t *testing.T) {
 	if s := v.only(t); s.State != StateCounted {
 		t.Fatalf("session %+v", s)
 	}
+}
+
+func TestNonPositiveAlbumLengthUsesFallbackThreshold(t *testing.T) {
+	cases := []struct {
+		album  time.Duration
+		listen time.Duration
+		want   State
+	}{
+		{0, 80 * time.Minute, StateCounted},
+		{0, 100 * time.Minute, StatePendingConfirmation},
+		{time.Second, 80 * time.Minute, StatePendingConfirmation},
+	}
+	for _, tc := range cases {
+		v := newEnv(t)
+		v.album(t, tagA, &tc.album)
+		v.see(t, tagA)
+		v.clock.advance(tc.listen)
+		v.see(t, tagA)
+		v.remove(t)
+		if s := v.only(t); s.State != tc.want {
+			t.Fatalf("%v of a %v album: %+v", tc.listen, tc.album, s)
+		}
+	}
+}
+
+func TestForgotCreditsTypicalLPWhenAlbumLengthIsZero(t *testing.T) {
+	cases := []struct {
+		album    time.Duration
+		listened time.Duration
+	}{
+		{0, 45 * time.Minute},
+		{time.Second, time.Second},
+	}
+	for _, tc := range cases {
+		v := newEnv(t)
+		v.album(t, tagA, &tc.album)
+		v.see(t, tagA)
+		v.clock.advance(100 * time.Minute)
+		v.see(t, tagA)
+		v.remove(t)
+		if err := v.e.Resolve(context.Background(), 1, v.only(t).ID, ResolutionForgot); err != nil {
+			t.Fatal(err)
+		}
+		if s := v.only(t); time.Duration(s.ListenedSec)*time.Second != tc.listened {
+			t.Fatalf("forgot on a %v album: %+v", tc.album, s)
+		}
+	}
+}
+
+func TestEditUpdatesTheInbox(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 30*time.Minute)
+	v.remove(t)
+	s := v.only(t)
+	drainEvents(v.events)
+	if err := v.e.Edit(context.Background(), 1, s.ID, s.StartedAt, s.StartedAt.Add(20*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if evs := drainEvents(v.events); len(evs) != 1 || evs[0].Type != EventInboxChanged {
+		t.Fatalf("events %+v", evs)
+	}
+}
+
+func TestListedSessionStartsOnTheWholeSecond(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	start := v.clock.now()
+	v.play(t, tagA, 30*time.Minute)
+	v.remove(t)
+	if s := v.only(t); s.StartedAt != start {
+		t.Fatalf("started %v want %v", s.StartedAt, start)
+	}
+}
+
+func TestSweeperWithoutLoggerSurvivesFailingSweeps(t *testing.T) {
+	v := newEnv(t)
+	v.e.DB.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		v.e.RunSweeper(ctx, time.Millisecond)
+		close(stopped)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-stopped
 }

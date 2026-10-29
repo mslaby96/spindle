@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -189,5 +190,29 @@ func TestLongNoteIsCutOnCharacterBoundary(t *testing.T) {
 	v.in.DB.R.QueryRow(`SELECT note FROM sessions WHERE id = ?`, id).Scan(&stored)
 	if !utf8.ValidString(stored) || utf8.RuneCountInString(stored) != maxNote {
 		t.Fatalf("stored %d runes, valid=%v", utf8.RuneCountInString(stored), utf8.ValidString(stored))
+	}
+}
+
+func TestReviewAcceptsRatingBounds(t *testing.T) {
+	v := newEnv(t)
+	for _, good := range []int{1, 10} {
+		id := v.session(t, "counted", int64(100*good), true)
+		if err := v.in.Review(context.Background(), 1, id, half(good), ""); err != nil {
+			t.Errorf("rating %d: %v", good, err)
+		}
+	}
+}
+
+func TestReviewRecordsWhenRatingWasGiven(t *testing.T) {
+	v := newEnv(t)
+	rated := v.session(t, "counted", 100, true)
+	noted := v.session(t, "counted", 300, true)
+	v.in.Review(context.Background(), 1, rated, half(7), "")
+	v.in.Review(context.Background(), 1, noted, nil, "just a note")
+	var ratedAt, notedAt sql.NullInt64
+	v.in.DB.R.QueryRow(`SELECT rated_at FROM sessions WHERE id = ?`, rated).Scan(&ratedAt)
+	v.in.DB.R.QueryRow(`SELECT rated_at FROM sessions WHERE id = ?`, noted).Scan(&notedAt)
+	if !ratedAt.Valid || ratedAt.Int64 != 5000 || notedAt.Valid {
+		t.Fatalf("rated_at %+v, note-only rated_at %+v", ratedAt, notedAt)
 	}
 }

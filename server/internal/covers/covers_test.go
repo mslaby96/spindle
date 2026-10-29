@@ -3,6 +3,7 @@ package covers
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -91,5 +92,74 @@ func TestPathCannotEscapeDir(t *testing.T) {
 	s := &Store{Dir: "/data/covers"}
 	if got := s.Path("../../etc/passwd"); got != "/data/covers/passwd" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestDominantColorLargestAreaWinsOverLowerBucket(t *testing.T) {
+	img := solid(100, 100, func(x, y int) color.Color {
+		if x < 30 {
+			return color.RGBA{20, 60, 160, 255}
+		}
+		return color.RGBA{240, 200, 0, 255}
+	})
+	if got := DominantColor(img); got != "#f0c800" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestDominantColorTieIsStable(t *testing.T) {
+	img := solid(64, 64, func(x, y int) color.Color {
+		if x < 32 {
+			return color.RGBA{240, 200, 0, 255}
+		}
+		return color.RGBA{20, 60, 160, 255}
+	})
+	for range 50 {
+		if got := DominantColor(img); got != "#143ca0" {
+			t.Fatalf("got %s", got)
+		}
+	}
+}
+
+func TestDominantColorKeepsGreysAtTheDullThresholds(t *testing.T) {
+	for _, grey := range []uint8{235, 20} {
+		img := solid(100, 100, func(x, y int) color.Color {
+			if x < 70 {
+				return color.RGBA{grey, grey, grey, 255}
+			}
+			return color.RGBA{200, 30, 30, 255}
+		})
+		want := fmt.Sprintf("#%02x%02x%02x", grey, grey, grey)
+		if got := DominantColor(img); got != want {
+			t.Errorf("grey %d: got %s", grey, got)
+		}
+	}
+}
+
+func TestDominantColorAllWhite(t *testing.T) {
+	img := solid(10, 10, func(int, int) color.Color { return color.White })
+	if got := DominantColor(img); got != "#ffffff" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestDominantColorSingleColouredPixel(t *testing.T) {
+	img := solid(64, 64, func(x, y int) color.Color {
+		if x == 10 && y == 10 {
+			return color.RGBA{200, 30, 30, 255}
+		}
+		return color.White
+	})
+	if got := DominantColor(img); got != "#c81e1e" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestSaveAcceptsImagesAtMaxSide(t *testing.T) {
+	s := &Store{Dir: t.TempDir()}
+	for _, r := range []image.Rectangle{image.Rect(0, 0, maxSide, 1), image.Rect(0, 0, 1, maxSide)} {
+		if _, _, err := s.Save(1, encode(t, image.NewGray(r))); err != nil {
+			t.Errorf("%v: %v", r, err)
+		}
 	}
 }

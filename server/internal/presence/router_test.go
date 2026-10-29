@@ -97,3 +97,31 @@ func TestEmptyStandWhenModeEnds(t *testing.T) {
 		t.Fatalf("got %v", ses.uids)
 	}
 }
+
+func TestSleeveReportedRepeatedlyKeepsReachingSessions(t *testing.T) {
+	r, _, _, ses := newRouter()
+	at := time.Unix(1000, 0)
+	for i := 0; i < 3; i++ {
+		r.Observe(context.Background(), Observation{DeviceID: 1, UID: "A", At: at.Add(time.Duration(i) * time.Second)})
+	}
+	for _, uid := range ses.uids {
+		if uid != "A" {
+			t.Fatalf("sessions saw %v", ses.uids)
+		}
+	}
+}
+
+func TestRemovalOfExactlyToleranceKeepsIgnoringLeftoverSleeve(t *testing.T) {
+	r, mode, _, ses := newRouter()
+	at := time.Unix(1000, 0)
+	mode.on = true
+	r.Observe(context.Background(), Observation{DeviceID: 1, UID: "A", At: at})
+	mode.on = false
+	r.Observe(context.Background(), Observation{DeviceID: 1, UID: "A", At: at.Add(30 * time.Second)})
+	r.Observe(context.Background(), Observation{DeviceID: 1, UID: "", At: at.Add(time.Minute)})
+	r.Observe(context.Background(), Observation{DeviceID: 1, UID: "", At: at.Add(time.Minute + r.Tolerance)})
+	r.Observe(context.Background(), Observation{DeviceID: 1, UID: "A", At: at.Add(time.Minute + r.Tolerance + time.Second)})
+	if got := ses.uids[len(ses.uids)-1]; got != "" {
+		t.Fatalf("sleeve gone exactly the tolerance was let through: %v", ses.uids)
+	}
+}

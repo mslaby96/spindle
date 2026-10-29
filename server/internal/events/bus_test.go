@@ -81,3 +81,15 @@ func subscribers(b *Bus, userID int64) int {
 	defer b.mu.Unlock()
 	return len(b.subs[userID])
 }
+
+func TestCancelKeepsOtherSubscribersOfSameUser(t *testing.T) {
+	b := NewBus()
+	phone, cancelPhone := b.Subscribe(1)
+	defer cancelPhone()
+	_, cancelLaptop := b.Subscribe(1)
+	cancelLaptop()
+	b.Publish(Event{Type: "now_playing", UserID: 1})
+	if e, ok := receive(t, phone); !ok || e.Type != "now_playing" {
+		t.Fatalf("remaining subscriber got %+v ok=%v", e, ok)
+	}
+}

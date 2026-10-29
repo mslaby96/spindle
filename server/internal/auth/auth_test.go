@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -269,5 +270,195 @@ func TestLimiterHoldsUnderConcurrency(t *testing.T) {
 	wg.Wait()
 	if allowed != freeAttempts+1 {
 		t.Fatalf("%d of 50 parallel attempts got through", allowed)
+	}
+}
+
+func TestPasswordOfMinimumLengthAccepted(t *testing.T) {
+	pw := "12345678"
+	if len(pw) != MinPassword {
+		t.Fatalf("fixture has %d characters", len(pw))
+	}
+	h, err := HashPassword(pw)
+	if err != nil {
+		t.Fatalf("password of exactly %d characters: %v", MinPassword, err)
+	}
+	if ok, _ := VerifyPassword(h, pw); !ok {
+		t.Error("valid password rejected")
+	}
+}
+
+func TestPasswordHashRecordsArgonParameters(t *testing.T) {
+	h, err := HashPassword("correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(h, "$argon2id$v=19$m=19456,t=2,p=1$") {
+		t.Fatalf("hash %q", h)
+	}
+}
+
+func TestVerifyRejectsMalformedHashes(t *testing.T) {
+	for _, h := range []string{
+		"",
+		"$bcrypt$v=19$m=19456,t=2,p=1$c2FsdA$a2V5",
+		"$argon2id$v=19$m=x,t=2,p=1$c2FsdA$a2V5",
+		"$argon2id$v=19$m=19456,t=2,p=1$!!!$a2V5",
+		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$!!!",
+	} {
+		if ok, err := VerifyPassword(h, "correct horse"); ok || err == nil {
+			t.Errorf("hash %q: ok=%v err=%v", h, ok, err)
+		}
+	}
+}
+
+func TestSetupRequiresUsernameAndStrongPassword(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	code, _ := s.PrepareSetup(ctx)
+	if _, err := s.CompleteSetup(ctx, code, "  ", "correct horse"); err == nil {
+		t.Error("blank username accepted")
+	}
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "short"); !errors.Is(err, ErrWeakPassword) {
+		t.Errorf("weak password: %v", err)
+	}
+	if needed, _ := s.SetupNeeded(ctx); !needed {
+		t.Fatal("account created by a rejected setup")
+	}
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); err != nil {
+		t.Errorf("valid setup after rejections: %v", err)
+	}
+}
+
+func TestSetupFailsWhenAccountAppearedAfterCodeWasIssued(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	code, _ := s.PrepareSetup(ctx)
+	if _, err := s.db.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('first', 'h', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); !errors.Is(err, ErrSetupDone) {
+		t.Fatalf("setup with existing account: %v", err)
+	}
+	var n int
+	s.db.R.QueryRow(`SELECT count(*) FROM users`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("users=%d", n)
+	}
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); !errors.Is(err, ErrSetupDone) {
+		t.Errorf("code still usable: %v", err)
+	}
+}
+
+func TestSetupWithClosedDatabase(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	code, _ := s.PrepareSetup(ctx)
+	s.db.Close()
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); err == nil || errors.Is(err, ErrSetupDone) {
+		t.Fatalf("setup on closed database: %v", err)
+	}
+}
+
+func TestAuthenticateWithClosedDatabase(t *testing.T) {
+	s, _ := newService(t)
+	setupUser(t, s)
+	s.db.Close()
+	_, err := s.Authenticate(context.Background(), "maciej", "correct horse")
+	if err == nil || errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestAuthenticateWithCorruptStoredHash(t *testing.T) {
+	s, _ := newService(t)
+	setupUser(t, s)
+	s.db.W.Exec(`UPDATE users SET password_hash = 'garbage'`)
+	_, err := s.Authenticate(context.Background(), "maciej", "correct horse")
+	if err == nil || errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSessionExpiresAtExactIdleDeadline(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	id := setupUser(t, s)
+	token, _, _ := s.CreateSession(ctx, id, false)
+	c.advance(SessionIdle)
+	if _, err := s.Lookup(ctx, token); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("at the idle deadline: %v", err)
+	}
+}
+
+func TestLookupKeepsExpiryWithinTouchGranularity(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	id := setupUser(t, s)
+	token, created, _ := s.CreateSession(ctx, id, false)
+	c.advance(touchGranularity - time.Second)
+	sess, err := s.Lookup(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.UserID != id || !sess.ExpiresAt.Equal(created.ExpiresAt) {
+		t.Fatalf("got %+v, created %+v", sess, created)
+	}
+}
+
+func TestLookupSlidesExpiryAfterTouchGranularity(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	id := setupUser(t, s)
+	token, _, _ := s.CreateSession(ctx, id, false)
+	c.advance(touchGranularity)
+	sess, err := s.Lookup(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := c.now().Add(SessionIdle); sess.UserID != id || !sess.ExpiresAt.Equal(want) {
+		t.Fatalf("got %+v, want expiry %v", sess, want)
+	}
+	c.advance(SessionIdle - time.Second)
+	if _, err := s.Lookup(ctx, token); err != nil {
+		t.Fatalf("slid expiry not stored: %v", err)
+	}
+}
+
+func TestLimiterBlocksUntilBackoffFullyElapses(t *testing.T) {
+	l := NewLimiter()
+	c := &clock{t: time.Unix(0, 0)}
+	l.Now = c.now
+	for i := 0; i <= freeAttempts; i++ {
+		l.Begin("1.2.3.4")
+	}
+	c.advance(time.Second - time.Nanosecond)
+	if ok, wait := l.Begin("1.2.3.4"); ok || wait != time.Nanosecond {
+		t.Fatalf("1ns before the backoff ends: ok=%v wait=%v", ok, wait)
+	}
+	c.advance(time.Nanosecond)
+	if ok, _ := l.Begin("1.2.3.4"); !ok {
+		t.Fatal("blocked after the backoff ended")
+	}
+}
+
+func TestLimiterBackoffIsCapped(t *testing.T) {
+	l := NewLimiter()
+	c := &clock{t: time.Unix(0, 0)}
+	l.Now = c.now
+	for i := 0; i < 100; i++ {
+		if ok, _ := l.Begin("1.2.3.4"); !ok {
+			t.Fatalf("attempt %d blocked after waiting out the backoff", i+1)
+		}
+		if i < freeAttempts {
+			continue
+		}
+		ok, wait := l.Begin("1.2.3.4")
+		if ok || wait <= 0 || wait > maxBackoff {
+			t.Fatalf("after attempt %d: ok=%v wait=%v", i+1, ok, wait)
+		}
+		if i >= freeAttempts+9 && wait != maxBackoff {
+			t.Fatalf("after attempt %d: wait=%v", i+1, wait)
+		}
+		c.advance(maxBackoff)
 	}
 }

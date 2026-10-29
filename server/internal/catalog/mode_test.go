@@ -189,3 +189,21 @@ func TestReenablingAfterExpiryAnnouncesSleeveAgain(t *testing.T) {
 		t.Fatalf("sleeve left on the stand was not announced after re-enabling: %+v", evs)
 	}
 }
+
+func TestModeEndsExactlyWhenIdlePeriodRunsOut(t *testing.T) {
+	m, c, _ := newMode(t)
+	ctx := context.Background()
+	start := c.t
+	state, err := m.Set(ctx, 1, true)
+	if err != nil || !state.Active || state.Until == nil || !state.Until.Equal(start.Add(m.Idle)) || state.Until.Nanosecond() != 0 {
+		t.Fatalf("state %+v err %v", state, err)
+	}
+	c.t = start.Add(m.Idle - time.Second)
+	if on, _ := m.Active(ctx, 1); !on {
+		t.Fatal("mode ended a second early")
+	}
+	c.t = start.Add(m.Idle)
+	if on, _ := m.Active(ctx, 1); on {
+		t.Fatal("mode still on when the idle period ran out")
+	}
+}

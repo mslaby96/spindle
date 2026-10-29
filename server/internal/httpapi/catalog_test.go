@@ -21,6 +21,12 @@ func TestCatalogFlow(t *testing.T) {
 	if ev, ok := waitEvent(t, stream); !ok || ev.name != "catalog_mode" {
 		t.Fatalf("mode event %+v", ev)
 	}
+	var current struct{ Active bool }
+	if resp := do(t, c, "GET", e.http.URL+"/api/catalog/mode", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("mode: %d", resp.StatusCode)
+	} else if json.NewDecoder(resp.Body).Decode(&current); !current.Active {
+		t.Fatal("mode not reported active")
+	}
 
 	if _, out := e.report(t, token, nil); out.LED != "catalog_ready" {
 		t.Fatalf("empty stand in catalog mode: %s", out.LED)
@@ -56,6 +62,14 @@ func TestCatalogFlow(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&tag)
 	if resp.StatusCode != http.StatusOK || tag.Album.Title != "The Dark Side Of The Moon" {
 		t.Fatalf("assign: %d %+v", resp.StatusCode, tag)
+	}
+	var saved struct {
+		Album struct{ Title string }
+	}
+	tagResp := do(t, c, "GET", e.http.URL+"/api/tags/04A1B2C3D4E5F6", nil)
+	json.NewDecoder(tagResp.Body).Decode(&saved)
+	if tagResp.StatusCode != http.StatusOK || saved.Album.Title != "The Dark Side Of The Moon" {
+		t.Fatalf("tag lookup: %d %+v", tagResp.StatusCode, saved)
 	}
 	if _, out := e.report(t, token, "04A1B2C3D4E5F6"); out.LED != "catalog_saved" {
 		t.Fatalf("after assign: %s", out.LED)

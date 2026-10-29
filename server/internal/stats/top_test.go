@@ -124,3 +124,68 @@ func TestTimelineUsesLocalTimeZone(t *testing.T) {
 		t.Fatalf("Monday 00:30 in Warsaw (Sunday in UTC) landed in the wrong week: %+v", weeks)
 	}
 }
+
+func TestLongerPeriodsExcludeOlderListens(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	f.listen(1, a, "counted", now.AddDate(0, 0, -366), 40, 1)
+	f.listen(1, a, "counted", now.AddDate(0, 0, -364), 40, 1)
+	f.listen(1, a, "counted", now.AddDate(0, 0, -91), 40, 1)
+	f.listen(1, a, "counted", now.AddDate(0, 0, -89), 40, 1)
+	for period, want := range map[string]int64{"90d": 1, "year": 3, "all": 4} {
+		top, err := f.st.Top(context.Background(), 1, period, "plays", 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if top.Summary.Plays != want {
+			t.Fatalf("plays in %s %d, want %d", period, top.Summary.Plays, want)
+		}
+	}
+}
+
+func TestTopLimitFallsBackToTenOutsideOneToFifty(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `["G01","G02","G03","G04","G05","G06","G07","G08","G09","G10","G11"]`, `[]`, now)
+	f.listen(1, a, "counted", now.AddDate(0, 0, -1), 40, 1)
+	for limit, want := range map[int]int{-1: 10, 0: 10, 1: 1, 50: 11, 51: 10} {
+		top, err := f.st.Top(context.Background(), 1, "all", "plays", limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(top.Genres) != want {
+			t.Fatalf("limit %d returned %d genres, want %d", limit, len(top.Genres), want)
+		}
+	}
+}
+
+func TestTimelineWeeksFallBackToTwentySixOutsideOneToFiveHundredTwenty(t *testing.T) {
+	f := newFixture(t)
+	for weeks, want := range map[int]int{-1: 26, 0: 26, 1: 1, 520: 520, 521: 26} {
+		got, err := f.st.Timeline(context.Background(), 1, weeks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != want {
+			t.Fatalf("weeks %d returned %d weeks, want %d", weeks, len(got), want)
+		}
+	}
+}
+
+func TestTimelineCountsListenAtMidnightStartingTheFirstWeek(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	f.listen(1, a, "counted", time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC), 40, 1)
+	weeks, _ := f.st.Timeline(context.Background(), 1, 2)
+	if weeks[0].Start != "2026-09-21" || weeks[0].Plays != 1 {
+		t.Fatalf("weeks %+v", weeks)
+	}
+}
+
+func TestTimelineWithoutTimeZoneUsesLocalTime(t *testing.T) {
+	f := newFixture(t)
+	f.st.Loc = nil
+	weeks, err := f.st.Timeline(context.Background(), 1, 1)
+	if err != nil || len(weeks) != 1 || weeks[0].Start != "2026-09-28" {
+		t.Fatalf("weeks %+v err %v", weeks, err)
+	}
+}

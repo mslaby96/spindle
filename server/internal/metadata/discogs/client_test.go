@@ -132,6 +132,16 @@ func TestVersionsFilters(t *testing.T) {
 	if len(byCat) == 0 {
 		t.Fatal("catalog number filter dropped matching versions")
 	}
+	if q := req.URL.Query(); q.Has("released") || q.Has("label") {
+		t.Errorf("empty filters sent: %v", q)
+	}
+	compact, err := c.Versions(context.Background(), 10362, VersionFilter{CatNo: "shvl804"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(compact) != len(byCat) {
+		t.Fatalf("catalog number without separators matched %d versions, want %d", len(compact), len(byCat))
+	}
 	none, _ := c.Versions(context.Background(), 10362, VersionFilter{CatNo: "XYZ 1"})
 	if len(none) != 0 {
 		t.Fatalf("unexpected match %+v", none)
@@ -155,11 +165,15 @@ func TestRetriesOnceAfter429(t *testing.T) {
 		}
 		w.Write(fixture(t, "master.json"))
 	})
+	start := time.Now()
 	if _, err := c.Master(context.Background(), 10362); err != nil {
 		t.Fatalf("after retry: %v", err)
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("calls %d", calls.Load())
+	}
+	if elapsed := time.Since(start); elapsed < time.Second {
+		t.Fatalf("retried after %v, before Retry-After elapsed", elapsed)
 	}
 }
 
@@ -270,5 +284,48 @@ func TestImage(t *testing.T) {
 	big = true
 	if _, err := c.Image(ctx, c.BaseURL+"/cover.jpg"); err == nil {
 		t.Fatal("oversized image accepted")
+	}
+}
+
+func TestVersionsSendsYearAndLabel(t *testing.T) {
+	var req http.Request
+	c := newTestClient(t, serveFixtures(t, &req))
+	if _, err := c.Versions(context.Background(), 10362, VersionFilter{Year: "1973", Label: "Harvest", AnyMedia: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := req.URL.Query()
+	if q.Get("released") != "1973" || q.Get("label") != "Harvest" || q.Has("format") {
+		t.Errorf("query %v", q)
+	}
+}
+
+func TestSearchSkipsNonAlbumHits(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"type":"artist","id":45467,"title":"Pink Floyd"},{"type":"label","id":2,"title":"Harvest"},{"type":"master","id":10362,"title":"Pink Floyd - Meddle"}]}`))
+	})
+	results, err := c.Search(context.Background(), "pink floyd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].ID != 10362 {
+		t.Fatalf("results %+v", results)
+	}
+}
+
+func TestPrimaryImage(t *testing.T) {
+	cases := []struct {
+		name   string
+		images []Image
+		want   string
+	}{
+		{"primary wins over earlier secondary", []Image{{Type: "secondary", URI: "a"}, {Type: "primary", URI: "b"}}, "b"},
+		{"falls back to the only image", []Image{{Type: "secondary", URI: "a"}}, "a"},
+		{"falls back to the first image", []Image{{Type: "secondary", URI: "a"}, {Type: "secondary", URI: "b"}}, "a"},
+		{"no images", nil, ""},
+	}
+	for _, tc := range cases {
+		if got := PrimaryImage(tc.images); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }

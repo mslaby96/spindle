@@ -2,8 +2,10 @@ package db
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func openTemp(t *testing.T) (*DB, string) {
@@ -66,5 +68,20 @@ func TestForeignKeysOnEveryConnection(t *testing.T) {
 	_, err := d.W.Exec(`INSERT INTO devices (user_id, name, token_hash, created_at) VALUES (999, 'x', 'h', 1)`)
 	if err == nil {
 		t.Fatal("expected foreign key violation")
+	}
+}
+
+func TestWritesGoThroughOneConnection(t *testing.T) {
+	d, _ := openTemp(t)
+	ctx := context.Background()
+	tx, err := d.W.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	wait, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	if _, err := d.W.ExecContext(wait, `INSERT INTO users (username, password_hash, created_at) VALUES ('a', 'h', 1)`); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("second writer while a transaction is open: %v", err)
 	}
 }

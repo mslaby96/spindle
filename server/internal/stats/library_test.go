@@ -73,7 +73,8 @@ func TestLibraryAggregates(t *testing.T) {
 		t.Fatalf("items %+v", items)
 	}
 	k := items[0]
-	if k.Plays != 2 || k.ListenedSec != 225*60 || !k.LastPlayedAt.Equal(now.AddDate(0, 0, -1)) || *k.Rating != 9 {
+	if k.Plays != 2 || k.ListenedSec != 225*60 || !k.LastPlayedAt.Equal(now.AddDate(0, 0, -1)) || *k.Rating != 9 ||
+		!k.AddedAt.Equal(now.AddDate(-1, 0, 0)) {
 		t.Fatalf("kind of blue %+v", k)
 	}
 	byPlays, _ := f.st.Library(ctx, 1, "plays")
@@ -125,7 +126,8 @@ func TestDiary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page) != 3 || page[0].SessionID != ids[0] || page[0].Note != "late night" || *page[0].Rating != 7 {
+	if len(page) != 3 || page[0].SessionID != ids[0] || page[0].Note != "late night" || *page[0].Rating != 7 ||
+		!page[0].StartedAt.Equal(now) {
 		t.Fatalf("first page %+v", page)
 	}
 	next, _ := f.st.Diary(ctx, 1, DiaryFilter{Limit: 3, Before: &page[2].StartedAt})
@@ -179,5 +181,55 @@ func TestDiaryPagesThroughListensInTheSameSecond(t *testing.T) {
 	}
 	if len(seen) != 5 {
 		t.Fatalf("saw %d of 5 listens", len(seen))
+	}
+}
+
+func TestDiaryLimitFallsBackToFiftyOutsideOneToTwoHundred(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	for i := 0; i < 60; i++ {
+		f.listen(1, a, "counted", now.Add(-time.Duration(i)*time.Minute), 40, 1)
+	}
+	for limit, want := range map[int]int{-1: 50, 0: 50, 1: 1, 200: 60, 201: 50} {
+		got, err := f.st.Diary(context.Background(), 1, DiaryFilter{Limit: limit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != want {
+			t.Fatalf("limit %d returned %d entries, want %d", limit, len(got), want)
+		}
+	}
+}
+
+func TestDiaryBeforeWithoutSessionIDKeepsListensFromThatSecond(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	f.listen(1, a, "counted", now, 40, 1)
+	f.listen(1, a, "counted", now, 40, 1)
+	f.listen(1, a, "counted", now.Add(-time.Hour), 40, 1)
+	got, err := f.st.Diary(context.Background(), 1, DiaryFilter{Before: &now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("entries %+v", got)
+	}
+}
+
+func TestDiaryBeforeFirstSessionIDSkipsTheWholeSecond(t *testing.T) {
+	f := newFixture(t)
+	a := f.album(1, "A", "A", `[]`, `[]`, now)
+	first := f.listen(1, a, "counted", now, 40, 1)
+	f.listen(1, a, "counted", now, 40, 1)
+	older := f.listen(1, a, "counted", now.Add(-time.Hour), 40, 1)
+	if first != 1 {
+		t.Fatalf("first session id %d", first)
+	}
+	got, err := f.st.Diary(context.Background(), 1, DiaryFilter{Before: &now, BeforeID: first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].SessionID != older {
+		t.Fatalf("entries %+v", got)
 	}
 }

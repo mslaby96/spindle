@@ -15,13 +15,22 @@ import (
 )
 
 type fakeDiscogs struct {
-	master  discogs.Master
-	release discogs.Release
-	err     error
+	master   discogs.Master
+	release  discogs.Release
+	releases map[int64]discogs.Release
+	fetched  map[int64]int
+	err      error
 }
 
 func (f *fakeDiscogs) Master(context.Context, int64) (discogs.Master, error) { return f.master, f.err }
-func (f *fakeDiscogs) Release(context.Context, int64) (discogs.Release, error) {
+func (f *fakeDiscogs) Release(_ context.Context, id int64) (discogs.Release, error) {
+	if f.fetched == nil {
+		f.fetched = map[int64]int{}
+	}
+	f.fetched[id]++
+	if rel, ok := f.releases[id]; ok {
+		return rel, f.err
+	}
 	return f.release, f.err
 }
 
@@ -239,7 +248,10 @@ func TestParseTrack(t *testing.T) {
 			t.Errorf("%q: %v %v", in, got, ok)
 		}
 	}
-	for _, bad := range []string{"", "abc", "0:00", "-1:00"} {
+	if got, ok := ParseTrack("0:01"); !ok || got != time.Second {
+		t.Errorf("0:01: %v %v", got, ok)
+	}
+	for _, bad := range []string{"", "abc", "0:00", "-1:00", "5:xx", "1:-30"} {
 		if _, ok := ParseTrack(bad); ok {
 			t.Errorf("%q parsed", bad)
 		}
@@ -289,5 +301,83 @@ func TestRunRetriesCoverAndLength(t *testing.T) {
 	}
 	if status, secs, _ := e.album(t); status != StatusResolved || *secs != 2460 {
 		t.Fatalf("%s %v", status, *secs)
+	}
+}
+
+func TestTracklistCompleteness(t *testing.T) {
+	if _, n, complete := Tracklist(nil); n != 0 || complete {
+		t.Fatalf("empty tracklist: %d %v", n, complete)
+	}
+	if d, n, complete := Tracklist(tracks("7:00")); d != 7*time.Minute || n != 1 || !complete {
+		t.Fatalf("single track: %v %d %v", d, n, complete)
+	}
+}
+
+func TestStandaloneReleaseThenLinkedPressingsEachOnce(t *testing.T) {
+	e := newEnv(t)
+	e.r.DB.W.Exec(`UPDATE albums SET discogs_release_id = 555 WHERE id = ?`, e.albumID)
+	for _, id := range []int64{555, 777} {
+		e.r.DB.W.Exec(`INSERT INTO releases (user_id, album_id, discogs_release_id, title, created_at) VALUES (1, ?, ?, 'x', 1)`, e.albumID, id)
+	}
+	e.dc.release.Tracklist = tracks("3:00", "")
+	e.dc.releases = map[int64]discogs.Release{777: {Tracklist: tracks("10:00", "5:00")}}
+	if err := e.resolve(t); err != nil {
+		t.Fatal(err)
+	}
+	if status, secs, src := e.album(t); status != StatusResolved || *secs != 900 || *src != "discogs_release" {
+		t.Fatalf("%s %v %v", status, secs, src)
+	}
+	for id, n := range e.dc.fetched {
+		if n != 1 {
+			t.Errorf("release %d fetched %d times", id, n)
+		}
+	}
+}
+
+func runUntilResolved(t *testing.T, r *Resolver, albumID int64) {
+	t.Helper()
+	done := make(chan int64, 1)
+	r.OnResolved = func(_, id int64) { done <- id }
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		r.Run(ctx)
+		close(stopped)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+	select {
+	case id := <-done:
+		if id != albumID {
+			t.Fatalf("resolved album %d", id)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("length was not resolved")
+	}
+}
+
+func TestRunSkipsCoverThatIsSettled(t *testing.T) {
+	e := newEnv(t)
+	e.dc.master.Tracklist = tracks("20:00")
+	var covers int
+	e.r.ResolveCover = func(context.Context, int64, int64) error {
+		covers++
+		return nil
+	}
+	runUntilResolved(t, e.r, e.albumID)
+	if covers != 0 {
+		t.Fatalf("settled cover downloaded again %d times", covers)
+	}
+}
+
+func TestRunWithoutCoverResolver(t *testing.T) {
+	e := newEnv(t)
+	e.r.DB.W.Exec(`UPDATE albums SET cover_status = 'pending' WHERE id = ?`, e.albumID)
+	e.dc.master.Tracklist = tracks("20:00")
+	runUntilResolved(t, e.r, e.albumID)
+	if status, secs, _ := e.album(t); status != StatusResolved || *secs != 1200 {
+		t.Fatalf("%s %v", status, secs)
 	}
 }

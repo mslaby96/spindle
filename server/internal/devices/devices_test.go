@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
 )
@@ -84,5 +85,32 @@ func TestBadTokens(t *testing.T) {
 		if _, err := s.Authenticate(context.Background(), tok); !errors.Is(err, ErrInvalidToken) {
 			t.Errorf("token %q: %v", tok, err)
 		}
+	}
+}
+
+func TestTouchRecordsLastSeenAndFirmware(t *testing.T) {
+	s, userA, _ := newStore(t)
+	ctx := context.Background()
+	created := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	s.Now = func() time.Time { return created }
+	dev, token, err := s.Create(ctx, userA, "Stand")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Authenticate(ctx, token); got.LastSeenAt != nil || !got.CreatedAt.Equal(dev.CreatedAt) {
+		t.Fatalf("before touch: %+v, created %+v", got, dev)
+	}
+	seen := created.Add(time.Hour)
+	s.Now = func() time.Time { return seen }
+	if err := s.Touch(ctx, dev.ID, "0.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.List(ctx, userA)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+	got := list[0]
+	if got.CreatedAt != created || got.LastSeenAt == nil || *got.LastSeenAt != seen || got.FWVersion != "0.2.0" {
+		t.Fatalf("after touch: %+v", got)
 	}
 }

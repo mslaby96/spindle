@@ -73,10 +73,11 @@ func TestOverrides(t *testing.T) {
 
 func TestInvalidValueNamesVariable(t *testing.T) {
 	cases := map[string]string{
-		"SPINDLE_MIN_DURATION":   "five",
-		"SPINDLE_LONG_FACTOR":    "0.5",
-		"SPINDLE_TZ":             "Mars/Olympus",
-		"SPINDLE_SECURE_COOKIES": "maybe",
+		"SPINDLE_MIN_DURATION":       "five",
+		"SPINDLE_LONG_FACTOR":        "0.5",
+		"SPINDLE_TZ":                 "Mars/Olympus",
+		"SPINDLE_SECURE_COOKIES":     "maybe",
+		"SPINDLE_AUTO_RESOLVE_AFTER": "twod",
 	}
 	for k, v := range cases {
 		_, err := Load(env(map[string]string{k: v}))

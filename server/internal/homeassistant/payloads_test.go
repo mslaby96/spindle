@@ -20,6 +20,7 @@ func TestDiscovery(t *testing.T) {
 		Dev  struct{ IDs []string }
 		O    struct{ Name string }
 		Avty string `json:"avty_t"`
+		QoS  int
 		Cmps map[string]struct {
 			P      string
 			UniqID string `json:"uniq_id"`
@@ -30,7 +31,7 @@ func TestDiscovery(t *testing.T) {
 	if err := json.Unmarshal(payload, &msg); err != nil {
 		t.Fatal(err)
 	}
-	if len(msg.Dev.IDs) != 1 || msg.O.Name != "Spindle" || msg.Avty != AvailabilityTopic {
+	if len(msg.Dev.IDs) != 1 || msg.O.Name != "Spindle" || msg.Avty != AvailabilityTopic || msg.QoS != 1 {
 		t.Fatalf("device %+v", msg)
 	}
 	sensor, image := msg.Cmps["spindle_1_now_playing"], msg.Cmps["spindle_1_cover"]
@@ -87,5 +88,24 @@ func TestLongStateIsTruncated(t *testing.T) {
 	}
 	if !strings.Contains(string(attrs), strings.TrimSpace(title)) {
 		t.Fatal("full title missing from attributes")
+	}
+}
+
+func TestStateOfExactlyMaxLengthIsKept(t *testing.T) {
+	title := strings.Repeat("я", maxState-utf8.RuneCountInString("A – "))
+	state, _ := State(sessions.NowPlaying{Active: true, Album: &catalog.Album{Title: title, Artist: "A"}})
+	if state != "A – "+title {
+		t.Fatalf("state %q", state)
+	}
+}
+
+func TestInvalidCoverColorIsLeftOut(t *testing.T) {
+	for _, c := range []string{"#zzzzzz", "#1d3557ff", "1d3557"} {
+		_, attrs := State(sessions.NowPlaying{Active: true, Album: &catalog.Album{Title: "T", Artist: "A", CoverColor: c}})
+		var a Attributes
+		json.Unmarshal(attrs, &a)
+		if a.Color != "" || a.RGB != nil {
+			t.Fatalf("%q gave %s", c, attrs)
+		}
 	}
 }

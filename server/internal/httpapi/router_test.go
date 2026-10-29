@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -346,5 +348,100 @@ func TestSecurityHeaders(t *testing.T) {
 	resp := do(t, e.client(t), "GET", e.http.URL+"/", nil)
 	if resp.Header.Get("X-Frame-Options") != "DENY" || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("headers %v", resp.Header)
+	}
+}
+
+func TestSetupStartsRememberedSession(t *testing.T) {
+	e := newEnv(t)
+	resp := do(t, e.client(t), "POST", e.http.URL+"/api/setup",
+		map[string]string{"code": e.code, "username": "maciej", "password": "correct horse"})
+	if c := sessionCookieFrom(resp); resp.StatusCode != http.StatusCreated || c == nil || c.MaxAge <= 0 {
+		t.Fatalf("setup: %d cookie %+v", resp.StatusCode, c)
+	}
+}
+
+func TestSetupIsRateLimited(t *testing.T) {
+	e := newEnv(t)
+	e.srv.limiter.Now = func() time.Time { return time.Unix(1_000_000, 0) }
+	c := e.client(t)
+	for i := 0; i < 4; i++ {
+		do(t, c, "POST", e.http.URL+"/api/setup", map[string]string{"code": "WRONG", "username": "x", "password": "correct horse"})
+	}
+	resp := do(t, c, "POST", e.http.URL+"/api/setup",
+		map[string]string{"code": e.code, "username": "maciej", "password": "correct horse"})
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("setup while blocked: %d", resp.StatusCode)
+	}
+	if needed, _ := e.srv.Auth.SetupNeeded(context.Background()); !needed {
+		t.Fatal("blocked setup created the account")
+	}
+}
+
+func TestLoginBackoffTellsWhenToRetry(t *testing.T) {
+	e := newEnv(t)
+	e.loggedIn(t)
+	var elapsed atomic.Int64
+	start := time.Unix(1_000_000, 0)
+	e.srv.limiter.Now = func() time.Time { return start.Add(time.Duration(elapsed.Load())) }
+	c := e.client(t)
+	for i := 0; i < 4; i++ {
+		do(t, c, "POST", e.http.URL+"/api/login", map[string]string{"username": "maciej", "password": "wrong password"})
+	}
+	elapsed.Store(int64(500 * time.Millisecond))
+	resp := do(t, c, "POST", e.http.URL+"/api/login", map[string]string{"username": "maciej", "password": "correct horse"})
+	if resp.StatusCode != http.StatusTooManyRequests || resp.Header.Get("Retry-After") != "1" {
+		t.Fatalf("blocked login: %d Retry-After=%q", resp.StatusCode, resp.Header.Get("Retry-After"))
+	}
+}
+
+func TestMalformedLoginsDoNotUseUpAttempts(t *testing.T) {
+	e := newEnv(t)
+	e.loggedIn(t)
+	c := e.client(t)
+	for i := 0; i < 6; i++ {
+		if resp := do(t, c, "POST", e.http.URL+"/api/login", map[string]any{"user": "maciej"}); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("malformed login: %d", resp.StatusCode)
+		}
+	}
+	if resp := do(t, c, "POST", e.http.URL+"/api/login",
+		map[string]string{"username": "maciej", "password": "correct horse"}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("login after malformed requests: %d", resp.StatusCode)
+	}
+}
+
+func TestLoginWhenSessionCannotBeStored(t *testing.T) {
+	e := newEnv(t)
+	e.loggedIn(t)
+	e.srv.DB.W.Close()
+	resp := do(t, e.client(t), "POST", e.http.URL+"/api/login",
+		map[string]string{"username": "maciej", "password": "correct horse"})
+	if resp.StatusCode != http.StatusInternalServerError || sessionCookieFrom(resp) != nil {
+		t.Fatalf("login: %d cookie %+v", resp.StatusCode, sessionCookieFrom(resp))
+	}
+}
+
+func TestLogoutEndsSessionOnServer(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	u, _ := url.Parse(e.http.URL)
+	old := c.Jar.Cookies(u)
+	resp := do(t, c, "POST", e.http.URL+"/api/logout", nil)
+	if cleared := sessionCookieFrom(resp); resp.StatusCode != http.StatusNoContent || cleared == nil || cleared.MaxAge >= 0 {
+		t.Fatalf("logout: %d cookie %+v", resp.StatusCode, cleared)
+	}
+	replay := e.client(t)
+	replay.Jar.SetCookies(u, old)
+	if resp := do(t, replay, "GET", e.http.URL+"/api/me", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old cookie after logout: %d", resp.StatusCode)
+	}
+}
+
+func TestInvalidPathIDAnswersOnce(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	resp := do(t, c, "DELETE", e.http.URL+"/api/devices/abc", nil)
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusBadRequest || string(body) != "{\"error\":\"invalid id\"}\n" {
+		t.Fatalf("got %d %s", resp.StatusCode, body)
 	}
 }
