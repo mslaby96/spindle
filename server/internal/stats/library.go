@@ -41,7 +41,7 @@ type Item struct {
 // sit under B.
 func filingKey(name string) string {
 	key := strings.ToLower(strings.TrimSpace(name))
-	if rest, ok := strings.CutPrefix(key, "the "); ok && strings.TrimSpace(rest) != "" {
+	if rest, ok := strings.CutPrefix(key, "the "); ok {
 		key = strings.TrimSpace(rest)
 	}
 	return key
