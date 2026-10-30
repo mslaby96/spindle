@@ -2,7 +2,7 @@
 // with an RC522 reader inside the backrest and a Pico W in the base.
 // All dimensions in millimetres. Render a part with: openscad -D 'part="body"' -o body.stl stand.scad
 
-part = "preview"; // "body", "cover", "foot" or "preview"
+part = "preview"; // "body", "cover", "foot", "clip" or "preview"
 
 /* [Stand] */
 width = 140;
@@ -18,18 +18,30 @@ lip_t = 7;
 slot_w = 10;            // room for a gatefold sleeve in its outer sleeve
 
 /* [Reader] */
-rc_w = 40.5;
-rc_h = 60.5;
+pocket_w = 40.5;        // the pocket in the printed body; the board is a little smaller
+pocket_h = 60.5;
+board_w = 39.4;         // the common blue RFID-RC522 module
+board_h = 59.8;
+board_holes = 24.9;     // between the two mounting holes at the antenna end
+board_hole_from_top = 7.8;
+board_hole_d = 3;
 rc_depth = 8;           // board plus components; the pin header must point down, not out of the board
 fit = 0.4;              // clearance around the board
 leg_w = 4;              // legs of the spacer that keeps the board up
 pcb_t = 1.6;
-spacer_lip = 4;         // how far the spacer's lips reach up beside and behind the board
+spacer_lip = 4;         // how far the spacer's lips reach up beside the board
+back_lip = 1;           // behind the board's bottom edge, low enough to pass under the crystal and the LED
+pcb_slot = 0.3;         // room around the board's thickness behind that lip
 spacer_play = 0.3;      // extra room around the board, since the screws decide where the spacer ends up
 side_lip = 1.5;
 front_wall = 2.5;       // between the sleeve and the reader antenna
 header_band = 12;       // strip at the bottom of the board with the straight pin header, kept inside the base
 antenna_from_top = 20;  // antenna centre measured from the top edge of the board
+
+/* [Reader clip] */
+clip_h = 8;             // along the board
+clip_t = 1;             // the spring's thickness
+clip_preload = 0.8;     // how far the spring is pressed in when the board is home
 
 /* [Label] */
 label = "Now Playing";
@@ -54,13 +66,12 @@ cover_t = 3;
 screw_d = 2.5;          // M3 x 20 machine screws cut their own thread in the bosses
 screw_clear = 3.4;
 boss_d = 8;
-foot_d = 12;
+foot_d = 16;            // wide enough to hold the cover up around each boss
 foot_h = 4.5;
 head_d = 6.5;           // pan, socket or countersunk M3 head, sunk into the foot
 head_h = 3.2;
-spigot_d = 7;           // centres a foot under its screw
-spigot_h = 1;
 pico_recess = 1;
+cover_play = 0.3;       // around the cover where it sits inside the base
 
 $fn = 48;
 eps = 0.01;
@@ -91,7 +102,9 @@ rest_front = lip_t + slot_w;
 rest_len = rest_height / cos(lean);
 // The header band hangs below the ceiling of the base so the pins and plugs can stick out backwards.
 board_bottom = -(shell + header_band) / cos(lean);
-board_top = board_bottom + rc_h;
+board_top = board_bottom + pocket_h;
+// the board pushed up against the top of the pocket by the spacer
+board_low = board_top - board_h;
 tag_height = board_top - antenna_from_top; // sticker centre above the bottom edge of the sleeve
 echo(str("Sticker centre: ", round(tag_height), " mm above the bottom edge of the sleeve"));
 boss_inset = corner_r + boss_d / 2;
@@ -129,19 +142,19 @@ module rest() {
 // The board slides in from below, up along the backrest, and the spacer standing on the cover holds it there.
 module reader_pocket() {
     in_rest()
-        translate([(rest_width - rc_w - fit) / 2, front_wall, -1.5 * base_h])
-            cube([rc_w + fit, rc_depth, board_top + 1.5 * base_h]);
+        translate([(rest_width - pocket_w - fit) / 2, front_wall, -1.5 * base_h])
+            cube([pocket_w + fit, rc_depth, board_top + 1.5 * base_h]);
 }
 
-// Two legs stand on the cover and carry the bottom edge of the board. A lip behind and beside the board on each leg
-// lets the board itself hold the spacer in place; the cover holds it up once screwed on.
+// Two legs stand on the cover and push the board against the top of its pocket, so it can't slide once the cover is
+// on. A low lip behind the board's bottom edge keeps it against the front wall, and lips beside it centre it.
 module spacer() {
-    bx0 = (rest_width - rc_w) / 2;
-    bx1 = bx0 + rc_w;
+    bx0 = (rest_width - board_w) / 2;
+    bx1 = bx0 + board_w;
     y0 = front_wall + fit / 2;
     y1 = front_wall + rc_depth - fit / 2;
-    top = board_bottom - 0.5;
-    lip_top = board_bottom + spacer_lip;
+    top = board_low - 0.1;
+    lip_top = board_low + spacer_lip;
     intersection() {
         in_rest()
             for (side = [[bx0 - side_lip - spacer_play, bx0 + leg_w, bx0 - side_lip, bx0],
@@ -149,20 +162,20 @@ module spacer() {
                 translate([side[0], y0, -1.5 * base_h])
                     cube([side[1] - side[0], y1 - y0, 1.5 * base_h + top]);
                 // behind the board
-                translate([side[0], front_wall + pcb_t + fit + spacer_play, top - eps])
-                    cube([side[1] - side[0], y1 - front_wall - pcb_t - fit - spacer_play, lip_top - top]);
+                translate([side[0], front_wall + pcb_t + pcb_slot, top - eps])
+                    cube([side[1] - side[0], y1 - front_wall - pcb_t - pcb_slot, back_lip + eps]);
                 // beside the board
                 translate([side[2] + (side[2] < bx0 ? -spacer_play : spacer_play), y0, top - eps])
                     cube([side[3] - side[2], y1 - y0, lip_top - top]);
             }
-        cube([width, depth, base_h - shell]);
+        translate([0, 0, cover_t - eps]) cube([width, depth, base_h - shell - cover_t]);
     }
     hull()
         intersection() {
             in_rest()
                 translate([bx0 - side_lip - spacer_play, y0, -1.5 * base_h])
-                    cube([rc_w + 2 * (side_lip + spacer_play), y1 - y0, 1.5 * base_h]);
-            cube([width, depth, 2]);
+                    cube([board_w + 2 * (side_lip + spacer_play), y1 - y0, 1.5 * base_h]);
+            translate([0, 0, cover_t - eps]) cube([width, depth, 2]);
         }
 }
 
@@ -262,42 +275,63 @@ module body() {
     }
 }
 
-// Printed as it sits, outside face on the bed, with the reader spacer standing on it.
+// Sits inside the base, flush with its bottom, with the bosses coming through it. The feet hold it up and the spacer
+// standing on it is pressed down by the reader, so it can't rattle. Printed as it sits, outside face on the bed.
 module cover() {
     difference() {
         union() {
-            rounded_plate([width, depth, cover_t], corner_r);
-            translate([0, 0, cover_t]) spacer();
+            translate([shell + cover_play, shell + cover_play, 0])
+                rounded_plate([width - 2 * (shell + cover_play), depth - 2 * (shell + cover_play), cover_t], 1);
+            spacer();
         }
         for (p = boss_positions)
-            translate([p.x, p.y, 0]) {
-                translate([0, 0, -eps]) cylinder(d = screw_clear, h = cover_t + 2 * eps);
-                translate([0, 0, -eps]) cylinder(d = spigot_d + 0.4, h = spigot_h + 0.2);
-            }
+            translate([p.x, p.y, -eps]) cylinder(d = boss_d + 2 * cover_play, h = cover_t + 2 * eps);
         // shallow bed that keeps the Pico W lined up with the USB opening
         translate([pico_x - 0.5, pico_y - 0.5, cover_t - pico_recess])
             cube([pico_w + 1, pico_l + 1, pico_recess + eps]);
     }
 }
 
-// One under each corner, held by the same screw as the cover; the head sinks into the foot.
+// One under each corner. The screw goes through it into the boss, and its rim holds up the cover and the base wall.
 module foot() {
     difference() {
-        union() {
-            cylinder(d = foot_d, h = foot_h);
-            translate([0, 0, foot_h - eps]) cylinder(d = spigot_d, h = spigot_h + eps);
-        }
-        translate([0, 0, -eps]) cylinder(d = screw_clear, h = foot_h + spigot_h + 2 * eps);
+        cylinder(d = foot_d, h = foot_h);
+        translate([0, 0, -eps]) cylinder(d = screw_clear, h = foot_h + 2 * eps);
         translate([0, 0, -eps]) cylinder(d = head_d, h = head_h);
     }
+}
+
+// Clips onto the two mounting holes at the board's antenna end, on the side with the parts. Its bow presses on the
+// back of the pocket, so the antenna stays against the front wall however the stand leans. Printed standing up, as
+// exported, with the pegs pointing sideways.
+module clip() {
+    room = rc_depth - pcb_t;
+    reach = room + clip_preload;
+    pad = 5;
+    span = board_holes + pad;
+    peg_d = board_hole_d - 0.4;
+    linear_extrude(clip_h) {
+        for (x = [0, board_holes]) translate([x - pad / 2, 0]) square([pad, clip_t + 0.2]);
+        // the bow, from one pad to the other
+        intersection() {
+            translate([board_holes / 2, 0]) scale([span / 2, reach]) difference() {
+                circle(1, $fn = 96);
+                circle(1 - clip_t / reach, $fn = 96);
+            }
+            translate([-pad / 2, 0]) square([span, reach]);
+        }
+    }
+    for (x = [0, board_holes])
+        translate([x, eps, clip_h / 2]) rotate([90, 0, 0]) cylinder(d = peg_d, h = pcb_t + eps);
 }
 
 if (part == "body") body();
 else if (part == "cover") cover();
 else if (part == "foot") foot();
+else if (part == "clip") clip();
 else {
     body();
-    color("orange") translate([0, 0, -30 - cover_t]) cover();
+    color("orange") translate([0, 0, -30]) cover();
     for (p = boss_positions) translate([p.x, p.y, -50 - foot_h]) foot();
     %in_rest() translate([(rest_width - 314) / 2, -4.5, 0]) cube([314, 4, 314]);
 }
