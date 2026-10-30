@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/covers"
@@ -133,6 +134,47 @@ func (s *Service) ResolveCover(ctx context.Context, userID, albumID int64) error
 		return err
 	}
 	return s.setCover(ctx, albumID, "resolved", &name, &color)
+}
+
+// RecolorCovers recomputes the colour of every stored cover, for when the way colours are picked changes. A cover
+// that can't be read is reported and the rest are still updated.
+func (s *Service) RecolorCovers(ctx context.Context) (int, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT id, cover_path FROM albums WHERE cover_path IS NOT NULL`)
+	if err != nil {
+		return 0, err
+	}
+	type stored struct {
+		id   int64
+		path string
+	}
+	var all []stored
+	for rows.Next() {
+		var c stored
+		if err := rows.Scan(&c.id, &c.path); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		all = append(all, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	n := 0
+	var errs []error
+	for _, c := range all {
+		color, err := s.Covers.Color(c.path)
+		if err == nil {
+			_, err = s.DB.W.ExecContext(ctx, `UPDATE albums SET cover_color = ? WHERE id = ?`, color, c.id)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("album %d: %w", c.id, err))
+			continue
+		}
+		n++
+	}
+	return n, errors.Join(errs...)
 }
 
 func (s *Service) setCover(ctx context.Context, albumID int64, status string, path, color *string) error {

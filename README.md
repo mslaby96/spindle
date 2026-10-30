@@ -50,6 +50,8 @@ All settings are environment variables, usually set in `deploy/.env`.
 
 Forgot your password? `docker compose exec -it spindle /spindle reset-password <username>`
 
+Cover colours look off after an update? `docker compose exec spindle /spindle recolor-covers` picks them again from the stored covers.
+
 ## Building the stand
 
 Parts:
