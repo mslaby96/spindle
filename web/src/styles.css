@@ -477,3 +477,14 @@ button.danger {
 button.danger:hover {
   background: var(--sunk);
 }
+
+.row.actions {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+}
+
+.divider + .list > .card:first-child,
+.divider + .card {
+  border-top: 0;
+}
