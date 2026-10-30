@@ -103,7 +103,7 @@ function ForgottenShelf() {
 
 // The server owns how records file (it drops a leading "The"), so the letter comes from its sort key.
 function letterOf(item: LibraryItem, by: "artist" | "title") {
-  const c = (item[`${by}_key`] ?? item[by]).trim().charAt(0).toUpperCase();
+  const c = item[`${by}_key`].charAt(0).toUpperCase();
   return /[A-Z]/.test(c) ? c : "#";
 }
 
