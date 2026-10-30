@@ -49,6 +49,20 @@ func (s *Store) Save(albumID int64, data []byte) (string, string, error) {
 	return name, DominantColor(img), nil
 }
 
+// Color reads a stored cover and returns its dominant colour as #rrggbb.
+func (s *Store) Color(name string) (string, error) {
+	f, err := os.Open(s.Path(name))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return "", fmt.Errorf("cover %s: %w", name, err)
+	}
+	return DominantColor(img), nil
+}
+
 func (s *Store) Path(name string) string {
 	return filepath.Join(s.Dir, filepath.Base(name))
 }

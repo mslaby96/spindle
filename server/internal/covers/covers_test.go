@@ -127,7 +127,7 @@ func TestDominantColorKeepsGreysAtTheDullThresholds(t *testing.T) {
 			if x < 70 {
 				return color.RGBA{grey, grey, grey, 255}
 			}
-			return color.RGBA{200, 30, 30, 255}
+			return color.White
 		})
 		want := fmt.Sprintf("#%02x%02x%02x", grey, grey, grey)
 		if got := DominantColor(img); got != want {
@@ -161,5 +161,82 @@ func TestSaveAcceptsImagesAtMaxSide(t *testing.T) {
 		if _, _, err := s.Save(1, encode(t, image.NewGray(r))); err != nil {
 			t.Errorf("%v: %v", r, err)
 		}
+	}
+}
+
+func TestDominantColorPrefersSaturatedAreaOverLargerPaleOne(t *testing.T) {
+	img := solid(100, 100, func(x, y int) color.Color {
+		if x < 60 {
+			return color.RGBA{216, 217, 232, 255}
+		}
+		return color.RGBA{130, 40, 50, 255}
+	})
+	if got := DominantColor(img); got != "#822832" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestDominantColorIgnoresSaturatedSpecks(t *testing.T) {
+	img := solid(100, 100, func(x, y int) color.Color {
+		if x < 96 {
+			return color.RGBA{216, 217, 232, 255}
+		}
+		return color.RGBA{200, 30, 30, 255}
+	})
+	if got := DominantColor(img); got != "#d8d9e8" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestDominantColorVividShareThreshold(t *testing.T) {
+	pale, red := color.RGBA{216, 217, 232, 255}, color.RGBA{200, 30, 30, 255}
+	for _, tc := range []struct {
+		columns int
+		want    string
+	}{{3, "#d8d9e8"}, {4, "#c81e1e"}} {
+		img := solid(64, 64, func(x, y int) color.Color {
+			if x < tc.columns {
+				return red
+			}
+			return pale
+		})
+		if got := DominantColor(img); got != tc.want {
+			t.Errorf("%d columns: got %s, want %s", tc.columns, got, tc.want)
+		}
+	}
+}
+
+func TestDominantColorVividChromaThreshold(t *testing.T) {
+	for _, tc := range []struct {
+		red  uint8
+		want string
+	}{{139, "#d8d9e8"}, {140, "#8c6464"}} {
+		img := solid(100, 100, func(x, y int) color.Color {
+			if x < 60 {
+				return color.RGBA{216, 217, 232, 255}
+			}
+			return color.RGBA{tc.red, 100, 100, 255}
+		})
+		if got := DominantColor(img); got != tc.want {
+			t.Errorf("red %d: got %s, want %s", tc.red, got, tc.want)
+		}
+	}
+}
+
+func TestColorReadsAStoredCover(t *testing.T) {
+	s := &Store{Dir: t.TempDir()}
+	name, _, err := s.Save(3, encode(t, solid(20, 20, func(int, int) color.Color { return color.RGBA{10, 120, 60, 255} })))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Color(name); err != nil || got != "#0a783c" {
+		t.Fatalf("got %s: %v", got, err)
+	}
+	if _, err := s.Color("nope.png"); err == nil {
+		t.Fatal("missing file accepted")
+	}
+	os.WriteFile(s.Path("junk.png"), []byte("junk"), 0o640)
+	if _, err := s.Color("junk.png"); err == nil {
+		t.Fatal("junk accepted")
 	}
 }

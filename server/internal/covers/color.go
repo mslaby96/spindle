@@ -5,27 +5,45 @@ import (
 	"image"
 )
 
-const samples = 64
+const (
+	samples = 64
+	// A colourful area has to cover this percentage of the cover before it beats a larger pale one.
+	minVividPercent = 5
+	vividChroma     = 40
+)
 
 // DominantColor samples the image on a grid, groups pixels into coarse colour buckets and returns the average of
-// the most common bucket. Near-white and near-black pixels are ignored so borders and backgrounds don't win.
+// the most common colourful bucket, falling back to the most common bucket when the cover has no colourful area of
+// any size. Near-white and near-black pixels are ignored so borders and backgrounds don't win.
 func DominantColor(img image.Image) string {
 	var all mean
 	buckets := map[int]*mean{}
-	for _, c := range sample(img) {
+	vivid := map[int]*mean{}
+	pixels := sample(img)
+	for _, c := range pixels {
 		all.add(c)
 		if c.dull() {
 			continue
 		}
-		if buckets[c.bucket()] == nil {
-			buckets[c.bucket()] = &mean{}
+		add(buckets, c)
+		if c.vivid() {
+			add(vivid, c)
 		}
-		buckets[c.bucket()].add(c)
+	}
+	if best := largest(vivid); best != nil && best.n*100 >= len(pixels)*minVividPercent {
+		return best.hex()
 	}
 	if best := largest(buckets); best != nil {
 		return best.hex()
 	}
 	return all.hex()
+}
+
+func add(buckets map[int]*mean, c rgb) {
+	if buckets[c.bucket()] == nil {
+		buckets[c.bucket()] = &mean{}
+	}
+	buckets[c.bucket()].add(c)
 }
 
 // largest is the bucket with the most pixels, the lowest key on a tie so the answer doesn't depend on map order.
@@ -46,6 +64,11 @@ type rgb struct{ r, g, b int }
 func (c rgb) dull() bool {
 	lum := (299*c.r + 587*c.g + 114*c.b) / 1000
 	return lum > 235 || lum < 20
+}
+
+// vivid has enough spread between its channels to read as a colour rather than a tinted grey.
+func (c rgb) vivid() bool {
+	return max(c.r, c.g, c.b)-min(c.r, c.g, c.b) >= vividChroma
 }
 
 func (c rgb) bucket() int {
