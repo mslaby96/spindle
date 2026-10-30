@@ -71,7 +71,7 @@ function Layout({ me }: { me: Me }) {
     <div className="shell">
       <header>
         <span className="brand">Spindle</span>
-        <nav>
+        <nav className="tabbar" aria-label="Main">
           <NavLink to="/" end>
             Now playing
           </NavLink>
@@ -81,9 +81,13 @@ function Layout({ me }: { me: Me }) {
           <NavLink to="/library">Library</NavLink>
           <NavLink to="/diary">Diary</NavLink>
           <NavLink to="/stats">Stats</NavLink>
+        </nav>
+        <nav className="utility" aria-label="Collection and account">
           <NavLink to="/catalog">Catalogue</NavLink>
           <NavLink to="/devices">Stands</NavLink>
-          <NavLink to="/settings">{me.username}</NavLink>
+          <NavLink to="/settings" className="account">
+            {me.username}
+          </NavLink>
         </nav>
       </header>
       <main>

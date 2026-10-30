@@ -34,6 +34,7 @@ export function SetupPage() {
 
   return (
     <form className="card narrow" onSubmit={submit}>
+      <span className="brand">Spindle</span>
       <h1>Welcome to Spindle</h1>
       <p className="muted">
         Create your account. The setup code is printed in the server log when Spindle starts for the first time.

@@ -4,7 +4,9 @@ import { Link, useSearchParams } from "react-router";
 
 import { api, type LibraryItem } from "../api/client";
 import { Cover } from "../components/Cover";
-import { formatRating } from "../components/RatingStars";
+import { dye } from "../colors";
+import { Divider } from "../components/Divider";
+import { Rating } from "../components/RatingStars";
 import { formatDate, timeAgo } from "../format";
 
 const sorts = [
@@ -65,8 +67,16 @@ function AllRecords() {
           ))}
         </select>
       </div>
-      {data && <p className="muted">{data.length} records</p>}
-      <Grid items={items ?? []} />
+      {items && (
+        <p className="muted">
+          {needle ? `${items.length} of ${data?.length} records` : `${items.length} records`}
+        </p>
+      )}
+      {sort === "artist" || sort === "title" ? (
+        <Filed items={items ?? []} by={sort} />
+      ) : (
+        <Grid items={items ?? []} />
+      )}
     </>
   );
 }
@@ -79,31 +89,60 @@ function ForgottenShelf() {
   if (!data) return null;
   return (
     <>
-      <h2>Not played in a long time</h2>
+      <Divider color="var(--tomato)">Not played in a long time</Divider>
       {data.not_recently.length === 0 ? (
         <p className="muted">Nothing gathering dust. Nice.</p>
       ) : (
         <Grid items={data.not_recently} />
       )}
-      <h2>Never played since you catalogued it</h2>
-      {data.never.length === 0 ? <p className="muted">You have played every record at least once.</p> : <Grid items={data.never} />}
+      <Divider color="var(--plum)">Never played since you catalogued it</Divider>
+      {data.never.length === 0 ? <p className="muted">You have played every record at least once.</p> : <Grid items={data.never} stickers={false} />}
     </>
   );
 }
 
-function Grid({ items }: { items: LibraryItem[] }) {
+// The server owns how records file (it drops a leading "The"), so the letter comes from its sort key.
+function letterOf(item: LibraryItem, by: "artist" | "title") {
+  const c = (item[`${by}_key`] ?? item[by]).trim().charAt(0).toUpperCase();
+  return /[A-Z]/.test(c) ? c : "#";
+}
+
+function Filed({ items, by }: { items: LibraryItem[]; by: "artist" | "title" }) {
+  const groups: { letter: string; items: LibraryItem[] }[] = [];
+  for (const i of items) {
+    const letter = letterOf(i, by);
+    const last = groups[groups.length - 1];
+    if (last?.letter === letter) last.items.push(i);
+    else groups.push({ letter, items: [i] });
+  }
+  return (
+    <>
+      {groups.map((g) => (
+        <div key={g.letter}>
+          <Divider color={dye(g.letter)} at={g.letter === "#" ? 0 : (g.letter.charCodeAt(0) - 65) / 25}>
+            {g.letter}
+          </Divider>
+          <Grid items={g.items} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function Grid({ items, stickers = true }: { items: LibraryItem[]; stickers?: boolean }) {
   return (
     <ul className="grid">
       {items.map((i) => (
         <li key={i.album_id}>
           <Link to={`/albums/${i.album_id}`} className="tile">
             <Cover albumId={i.album_id} hasCover={i.has_cover} color={i.cover_color} className="tile-cover" />
+            {stickers && !i.last_played_at && <span className="sticker">Unplayed</span>}
             <strong>{i.title}</strong>
             <span className="muted">{i.artist}</span>
             <span className="muted small">
               {i.last_played_at ? `${timeAgo(i.last_played_at)} · ${i.plays}×` : `added ${formatDate(i.added_at)}`}
-              {i.rating !== undefined && ` · ${formatRating(i.rating)}`}
             </span>
+            {i.rating !== undefined && <Rating value={i.rating} />}
           </Link>
         </li>
       ))}

@@ -5,7 +5,8 @@ import { api, type InboxCard } from "../api/client";
 import { inboxKey } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
-import { formatRating, RatingStars } from "../components/RatingStars";
+import { tabStyle } from "../colors";
+import { Rating, RatingStars } from "../components/RatingStars";
 import { formatDateTime, formatLength } from "../format";
 
 export function useInbox() {
@@ -50,9 +51,12 @@ function ListenCard({ card }: { card: InboxCard }) {
 
   if (!album) {
     return (
-      <article className="card listen">
+      <article className="listen">
+        <div className="listen-head">
+          <span className="tab">{formatDateTime(session.started_at)}</span>
+        </div>
         <p>
-          <strong>Unknown sleeve</strong> <span className="muted">· {formatDateTime(session.started_at)} · {formatLength(session.listened_sec || 0)}</span>
+          <strong>Unknown sleeve</strong> <span className="muted">· {formatLength(session.listened_sec || 0)}</span>
         </p>
         <p className="muted">
           Which album is <code>{card.uid}</code>? The listen will be counted once you pick it.
@@ -68,18 +72,24 @@ function ListenCard({ card }: { card: InboxCard }) {
 
   const pending = session.state === "pending_confirmation";
   return (
-    <article className="card listen">
+    <article className="listen" style={tabStyle(album.cover_color)}>
+      <div className="listen-head">
+        <span className="tab">{formatDateTime(session.started_at)}</span>
+      </div>
       <div className="row top">
-        <Cover albumId={album.id} hasCover={album.has_cover} color={album.cover_color} className="thumb-lg" />
+        <Cover albumId={album.id} hasCover={album.has_cover} color={album.cover_color} className="thumb-xl" />
         <div className="grow">
-          <p>
-            <strong>{album.title}</strong> <span className="muted">· {album.artist}</span>
-          </p>
+          <p className="listen-title">{album.title}</p>
+          <p className="artist">{album.artist}</p>
           <p className="muted">
-            {formatDateTime(session.started_at)} · {formatLength(session.listened_sec)}
-            {!session.duration_confirmed && " (unconfirmed)"}
-            {album.rating !== undefined && ` · your rating ${formatRating(album.rating)}`}
+            {formatLength(session.listened_sec)}
+            {album.rating !== undefined && (
+              <>
+                {" "}· your rating <Rating value={album.rating} />
+              </>
+            )}
           </p>
+          {!session.duration_confirmed && <span className="sticker">Unconfirmed</span>}
         </div>
       </div>
 

@@ -136,6 +136,8 @@ export type LibraryItem = {
   last_played_at?: string;
   rating?: number;
   added_at: string;
+  artist_key?: string;
+  title_key?: string;
 };
 
 export type DiaryEntry = {

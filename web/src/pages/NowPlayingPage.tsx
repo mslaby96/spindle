@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 
-import { api } from "../api/client";
-import { nowPlayingKey, type NowPlaying } from "../api/events";
+import { api, type DiaryEntry } from "../api/client";
+import { nowPlayingKey, recentListensKey, type NowPlaying } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
-import { formatCountdown, formatTime } from "../format";
+import { tabStyle } from "../colors";
+import { Divider } from "../components/Divider";
+import { formatCountdown, formatElapsed, formatLength, formatTime, timeAgo } from "../format";
 import { useDevices } from "./DevicesPage";
 
 export function NowPlayingPage() {
@@ -17,9 +20,12 @@ export function NowPlayingPage() {
 
   if (!playing || playing.length === 0) {
     return (
-      <section className="empty">
-        <h1>Nothing on the stand</h1>
-        <p className="muted">Put a sleeve on your stand and it will show up here.</p>
+      <section>
+        <div className="empty">
+          <h1>Nothing on the stand</h1>
+          <p className="muted">Put a sleeve on your stand and it will show up here.</p>
+        </div>
+        <LastOnTheStand />
       </section>
     );
   }
@@ -27,27 +33,34 @@ export function NowPlayingPage() {
   const showStand = (devices?.length ?? 0) > 1;
   return (
     <section>
-      {playing.map((p) => (
-        <article
-          className={p.ends_at ? "card now away" : "card now"}
-          key={p.device_id}
-          style={{ borderColor: p.album?.cover_color }}
-        >
-          {p.album ? (
-            <>
-              <Cover albumId={p.album.id} hasCover={p.album.has_cover} color={p.album.cover_color} />
-              <div>
-                {showStand && <p className="muted">{devices?.find((d) => d.id === p.device_id)?.name}</p>}
-                <h1>{p.album.title}</h1>
-                <p>{p.album.artist}</p>
-                <p className="muted">
-                  {[p.album.year, ...p.album.styles].filter(Boolean).join(" · ")}
-                  {p.started_at && ` · since ${formatTime(p.started_at)}`}
-                </p>
-                {p.ends_at && <EndsIn at={p.ends_at} />}
+      {playing.map((p) =>
+        p.album ? (
+          <article className={p.ends_at ? "now away" : "now"} key={p.device_id} style={tabStyle(p.album.cover_color)}>
+            <div className="stage">
+              <span className="tab">
+                {["On the stand", showStand && devices?.find((d) => d.id === p.device_id)?.name, p.started_at && `since ${formatTime(p.started_at)}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+              <Link to={`/albums/${p.album.id}`} aria-label={`${p.album.title} by ${p.album.artist}`}>
+                <Cover albumId={p.album.id} hasCover={p.album.has_cover} color={p.album.cover_color} />
+              </Link>
+            </div>
+            <div>
+              <div className="now-head">
+                <div className="grow">
+                  <h1>{p.album.title}</h1>
+                  <p className="artist">{p.album.artist}</p>
+                  <p className="muted meta">{[p.album.year, ...p.album.styles.slice(0, 2)].filter(Boolean).join(" · ")}</p>
+                </div>
+                {p.started_at && <Clock since={p.started_at} lengthSec={p.album.duration_sec} />}
               </div>
-            </>
-          ) : (
+              {p.started_at && p.album.duration_sec ? <Progress since={p.started_at} lengthSec={p.album.duration_sec} /> : null}
+              {p.ends_at && <EndsIn at={p.ends_at} />}
+            </div>
+          </article>
+        ) : (
+          <article className="now" key={p.device_id}>
             <div className="grow">
               <h1>New sleeve</h1>
               <p className="muted">
@@ -55,25 +68,75 @@ export function NowPlayingPage() {
               </p>
               {p.uid && <AssignTag uid={p.uid} />}
             </div>
-          )}
-        </article>
-      ))}
+          </article>
+        ),
+      )}
+      <LastOnTheStand />
     </section>
   );
 }
 
-function EndsIn({ at }: { at: string }) {
+function useNow(everyMs: number) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(Date.now()), everyMs);
     return () => clearInterval(t);
-  }, []);
+  }, [everyMs]);
+  return now;
+}
+
+function Clock({ since, lengthSec }: { since: string; lengthSec?: number }) {
+  const now = useNow(1000);
+  return (
+    <p className="clock">
+      <strong>{formatElapsed(now - new Date(since).getTime())}</strong>
+      <span>{lengthSec ? `of ${formatLength(lengthSec)}` : "playing"}</span>
+    </p>
+  );
+}
+
+function Progress({ since, lengthSec }: { since: string; lengthSec: number }) {
+  const now = useNow(5000);
+  const share = Math.min(Math.max((now - new Date(since).getTime()) / (lengthSec * 1000), 0), 1);
+  return (
+    <span className="progress">
+      <span style={{ width: `${share * 100}%` }} />
+    </span>
+  );
+}
+
+function EndsIn({ at }: { at: string }) {
+  const now = useNow(1000);
   const left = new Date(at).getTime() - now;
   return (
-    <p className="ending">
+    <p className="ending" aria-live="polite">
       {left > 0
         ? `Sleeve off the stand. This listen ends in ${formatCountdown(left)} unless you put it back.`
         : "Sleeve off the stand. Wrapping up this listen…"}
     </p>
+  );
+}
+
+function LastOnTheStand() {
+  const { data } = useQuery({
+    queryKey: recentListensKey,
+    queryFn: () => api<DiaryEntry[]>("/api/diary?limit=4"),
+  });
+  if (!data || data.length === 0) return null;
+  return (
+    <>
+      <Divider color="var(--teal)">Last on the stand</Divider>
+      <ul className="shelf">
+        {data.map((e) => (
+          <li key={e.session_id}>
+            <Link to={`/albums/${e.album_id}`} className="tile">
+              <Cover albumId={e.album_id} hasCover={e.has_cover} color={e.cover_color} className="tile-cover" />
+              <strong>{e.title}</strong>
+              <span className="muted small">{timeAgo(e.started_at)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

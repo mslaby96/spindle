@@ -3,7 +3,9 @@ import { Link } from "react-router";
 
 import { api, type DiaryEntry } from "../api/client";
 import { Cover } from "../components/Cover";
-import { formatRating } from "../components/RatingStars";
+import { dye } from "../colors";
+import { Divider } from "../components/Divider";
+import { Rating } from "../components/RatingStars";
 import { formatLength, formatMonth, formatWeekday } from "../format";
 
 const pageSize = 50;
@@ -33,7 +35,7 @@ export function DiaryPage() {
           const d = new Date(e.started_at);
           return (
             <li key={e.session_id}>
-              {header && <h2>{header}</h2>}
+              {header && <Divider color={dye(header)}>{header}</Divider>}
               <Link to={`/albums/${e.album_id}`} className="entry">
                 <span className="day">
                   <strong>{d.getDate()}</strong>
@@ -45,7 +47,7 @@ export function DiaryPage() {
                   <span className="muted block">
                     {formatLength(e.listened_sec)}
                     {e.plays > 1 && ` · ${e.plays}×`}
-                    {e.rating !== undefined && ` · ${formatRating(e.rating)}`}
+                    {e.rating !== undefined && <> · <Rating value={e.rating} /></>}
                   </span>
                   {e.note && <span className="block note">{e.note}</span>}
                 </span>

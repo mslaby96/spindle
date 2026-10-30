@@ -14,6 +14,7 @@ export type NowPlaying = {
 export type CatalogTag = { device_id: number; tag: Tag; new: boolean };
 
 export const nowPlayingKey = ["now-playing"] as const;
+export const recentListensKey = ["diary", "recent"] as const;
 export const catalogModeKey = ["catalog", "mode"] as const;
 export const catalogCurrentKey = ["catalog", "current"] as const;
 export const unassignedKey = ["tags", "unassigned"] as const;
@@ -36,7 +37,7 @@ export function applyAssignedTag(queryClient: QueryClient, tag: Tag) {
 
 // Events missed while the stream was down are not replayed, so everything they feed is fetched again.
 function catchUp(queryClient: QueryClient) {
-  for (const queryKey of [nowPlayingKey, inboxKey, catalogModeKey, unassignedKey, devicesKey]) {
+  for (const queryKey of [nowPlayingKey, inboxKey, recentListensKey, catalogModeKey, unassignedKey, devicesKey]) {
     queryClient.invalidateQueries({ queryKey });
   }
 }
@@ -74,7 +75,10 @@ export function useLiveEvents() {
         queryClient.setQueryData(catalogCurrentKey, data);
         queryClient.invalidateQueries({ queryKey: unassignedKey });
       });
-      on("inbox_changed", () => queryClient.invalidateQueries({ queryKey: inboxKey }));
+      on("inbox_changed", () => {
+        queryClient.invalidateQueries({ queryKey: inboxKey });
+        queryClient.invalidateQueries({ queryKey: recentListensKey });
+      });
       on<Tag>("tag_assigned", (tag) => applyAssignedTag(queryClient, tag));
       on<Device>("device_paired", (device) => {
         queryClient.setQueryData(pairedStandKey, device);

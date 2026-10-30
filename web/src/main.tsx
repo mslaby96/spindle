@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router";
 
 import { App } from "./App";
 import { createQueryClient } from "./api/queryClient";
+import "@fontsource-variable/archivo/wdth.css";
 import "./styles.css";
 
 const queryClient = createQueryClient({ queries: { refetchOnWindowFocus: false } });
