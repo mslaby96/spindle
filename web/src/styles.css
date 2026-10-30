@@ -236,6 +236,19 @@ input, select, textarea {
   font-size: 1rem;
 }
 textarea { resize: vertical; }
+select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: right 1.15rem center, right 0.8rem center;
+  background-size: 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+  font-weight: 600;
+  cursor: pointer;
+}
+select:hover { border-color: var(--ink-2); }
 ::placeholder { color: var(--ink-2); opacity: 1; }
 input[type="checkbox"] { width: 1.15rem; height: 1.15rem; min-height: 0; padding: 0; accent-color: var(--mustard); }
 label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.875rem; font-weight: 650; }
