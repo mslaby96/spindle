@@ -78,15 +78,17 @@ func PrimaryImage(images []Image) string {
 }
 
 func (c *Client) Master(ctx context.Context, id int64) (Master, error) {
-	var m Master
-	err := c.get(ctx, "/masters/"+strconv.FormatInt(id, 10), nil, &m)
-	return m, err
+	return byID[Master](ctx, c, "/masters/", id)
 }
 
 func (c *Client) Release(ctx context.Context, id int64) (Release, error) {
-	var r Release
-	err := c.get(ctx, "/releases/"+strconv.FormatInt(id, 10), nil, &r)
-	return r, err
+	return byID[Release](ctx, c, "/releases/", id)
+}
+
+func byID[T any](ctx context.Context, c *Client, path string, id int64) (T, error) {
+	var v T
+	err := c.get(ctx, path+strconv.FormatInt(id, 10), nil, &v)
+	return v, err
 }
 
 type Result struct {

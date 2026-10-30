@@ -162,3 +162,13 @@ select { font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--line); 
   letter-spacing: 0.15em;
   text-align: center;
 }
+
+.actions {
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+button.danger {
+  color: var(--error, #b00020);
+  border-color: currentColor;
+}

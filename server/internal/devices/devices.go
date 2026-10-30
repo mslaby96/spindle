@@ -3,15 +3,14 @@ package devices
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/secrets"
 )
 
 const tokenPrefix = "spd_"
@@ -62,7 +61,7 @@ func (s *Store) insert(ctx context.Context, db execer, userID int64, name string
 	now := s.Now()
 	res, err := db.ExecContext(ctx,
 		`INSERT INTO devices (user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)`,
-		userID, name, hashToken(token), now.Unix())
+		userID, name, secrets.Hash(token), now.Unix())
 	if err != nil {
 		return Device{}, "", err
 	}
@@ -111,7 +110,7 @@ func (s *Store) Authenticate(ctx context.Context, token string) (Device, error) 
 	}
 	row := s.db.R.QueryRowContext(ctx,
 		`SELECT id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at
-		 FROM devices WHERE token_hash = ? AND revoked_at IS NULL`, hashToken(token))
+		 FROM devices WHERE token_hash = ? AND revoked_at IS NULL`, secrets.Hash(token))
 	d, err := scan(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Device{}, ErrInvalidToken
@@ -140,9 +139,4 @@ func scan(r scanner) (Device, error) {
 		d.LastSeenAt = &t
 	}
 	return d, nil
-}
-
-func hashToken(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
 }

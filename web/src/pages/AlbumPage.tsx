@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 
-import { api, type AlbumDetail, type DiaryEntry } from "../api/client";
+import { api, type Album, type AlbumDetail, type DiaryEntry } from "../api/client";
+import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { formatRating } from "../components/RatingStars";
-import { formatDateTime, formatLength, formatPressing } from "../format";
+import { formatDate, formatDateTime, formatLength, formatPressing } from "../format";
 
 export function AlbumPage() {
   const id = Number(useParams().id);
@@ -19,7 +20,7 @@ export function AlbumPage() {
 
   if (error) return <p className="error">{error.message}</p>;
   if (!data) return null;
-  const { album, stats, releases, history } = data;
+  const { album, stats, releases, history, sleeves } = data;
 
   return (
     <section>
@@ -36,6 +37,17 @@ export function AlbumPage() {
           <AlbumLength albumId={album.id} seconds={album.duration_sec} status={album.duration_status} onSaved={refresh} />
         </div>
       </div>
+
+      {album.removed_at && <RemovedNotice album={album} removedAt={album.removed_at} />}
+
+      {sleeves.length > 0 && (
+        <>
+          <h2>{sleeves.length === 1 ? "Sleeve" : "Sleeves"}</h2>
+          {sleeves.map((uid) => (
+            <Sleeve key={uid} uid={uid} album={album} />
+          ))}
+        </>
+      )}
 
       {releases.length > 0 && (
         <>
@@ -55,7 +67,95 @@ export function AlbumPage() {
           <HistoryRow key={h.session_id} entry={h} onChanged={refresh} />
         ))}
       </ul>
+
+      <AlbumActions album={album} plays={stats.plays} />
     </section>
+  );
+}
+
+function useAlbumChange(albumId: number, action: "remove" | "restore" | "delete") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      action === "delete"
+        ? api(`/api/albums/${albumId}`, { method: "DELETE" })
+        : api(`/api/albums/${albumId}/${action}`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+}
+
+function RemovedNotice({ album, removedAt }: { album: Album; removedAt: string }) {
+  const restore = useAlbumChange(album.id, "restore");
+  return (
+    <div className="card notice">
+      <p>
+        No longer in your collection since {formatDate(removedAt)}. Its listens still count in your diary and stats.
+      </p>
+      <button className="secondary" onClick={() => restore.mutate()} disabled={restore.isPending}>
+        Put back in collection
+      </button>
+      {restore.error && <p className="error">{restore.error.message}</p>}
+    </div>
+  );
+}
+
+function Sleeve({ uid, album }: { uid: string; album: Album }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [fixing, setFixing] = useState(false);
+  return (
+    <div className="card">
+      <div className="row">
+        <code>{uid}</code>
+        <button className="link" onClick={() => setFixing(!fixing)}>
+          {fixing ? "Cancel" : "Wrong album?"}
+        </button>
+      </div>
+      {fixing && (
+        <AssignTag
+          uid={uid}
+          current={album.title}
+          onDone={(tag) => {
+            queryClient.invalidateQueries();
+            if (tag.album && tag.album.id !== album.id) navigate(`/albums/${tag.album.id}`);
+            else setFixing(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AlbumActions({ album, plays }: { album: Album; plays: number }) {
+  const navigate = useNavigate();
+  const remove = useAlbumChange(album.id, "remove");
+  const del = useAlbumChange(album.id, "delete");
+  const listens = plays === 1 ? "1 listen" : `${plays} listens`;
+
+  function removeFromCollection() {
+    if (confirm(`Remove ${album.title} from your collection because you sold it or lost it? Its ${listens} stay in your diary and stats.`)) {
+      remove.mutate();
+    }
+  }
+
+  function deleteAlbum() {
+    if (confirm(plays > 0 ? `Delete ${album.title} and its ${listens}? This can't be undone.` : `Delete ${album.title}? This can't be undone.`)) {
+      del.mutate(undefined, { onSuccess: () => navigate("/library", { replace: true }) });
+    }
+  }
+
+  return (
+    <div className="row actions">
+      {!album.removed_at && (
+        <button className="secondary" onClick={removeFromCollection} disabled={remove.isPending}>
+          Remove from collection
+        </button>
+      )}
+      <button className="secondary danger" onClick={deleteAlbum} disabled={del.isPending}>
+        Delete album
+      </button>
+      {(remove.error ?? del.error) && <p className="error">{(remove.error ?? del.error)?.message}</p>}
+    </div>
   );
 }
 

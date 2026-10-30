@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"net/http"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
+var errAlbumNotFound = errors.New("album not found")
+
 // knownErrors are failures the user can understand or fix. Without a message of its own the error's text is shown.
 var knownErrors = []struct {
 	err     error
@@ -24,10 +27,12 @@ var knownErrors = []struct {
 	{auth.ErrInvalidSetupCode, http.StatusForbidden, ""},
 	{auth.ErrWeakPassword, http.StatusBadRequest, ""},
 	{auth.ErrInvalidCredentials, http.StatusUnauthorized, ""},
+	{errAlbumNotFound, http.StatusNotFound, ""},
 	{devices.ErrNotFound, http.StatusNotFound, ""},
 	{devices.ErrNoName, http.StatusBadRequest, ""},
 	{devices.ErrInvalidCode, http.StatusForbidden, ""},
 	{catalog.ErrNothingToAssign, http.StatusBadRequest, ""},
+	{catalog.ErrUnknownListensChoice, http.StatusBadRequest, ""},
 	{sessions.ErrNotFound, http.StatusNotFound, ""},
 	{sessions.ErrNotPending, http.StatusConflict, ""},
 	{sessions.ErrUnknownResolution, http.StatusBadRequest, ""},
@@ -54,6 +59,30 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		return
 	}
 	s.internal(w, err)
+}
+
+// reply answers with v, or with the failure that kept the request from producing it.
+func (s *Server) reply(w http.ResponseWriter, status int, v any, err error) {
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, status, v)
+}
+
+// fetch answers a GET with what load returns for the signed-in user.
+func fetch[T any](s *Server, load func(ctx context.Context, userID int64) (T, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		v, err := load(r.Context(), userID(r))
+		s.reply(w, http.StatusOK, v, err)
+	}
+}
+
+// act runs a change to the thing named by the id in the path and answers 204.
+func (s *Server) act(w http.ResponseWriter, r *http.Request, change func(ctx context.Context, userID, id int64) error) {
+	if id, ok := pathID(w, r); ok {
+		s.noContent(w, change(r.Context(), userID(r), id))
+	}
 }
 
 // noContent finishes a request that returns nothing on success.

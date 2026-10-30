@@ -24,21 +24,20 @@ type fakeDiscogs struct {
 }
 
 func (f *fakeDiscogs) Master(_ context.Context, id int64) (discogs.Master, error) {
-	f.calls["master"]++
-	m, ok := f.masters[id]
-	if !ok {
-		return m, discogs.ErrNotFound
-	}
-	return m, nil
+	return lookup(f, "master", f.masters, id)
 }
 
 func (f *fakeDiscogs) Release(_ context.Context, id int64) (discogs.Release, error) {
-	f.calls["release"]++
-	r, ok := f.releases[id]
+	return lookup(f, "release", f.releases, id)
+}
+
+func lookup[T any](f *fakeDiscogs, kind string, known map[int64]T, id int64) (T, error) {
+	f.calls[kind]++
+	v, ok := known[id]
 	if !ok {
-		return r, discogs.ErrNotFound
+		return v, discogs.ErrNotFound
 	}
-	return r, nil
+	return v, nil
 }
 
 func (f *fakeDiscogs) Image(_ context.Context, url string) ([]byte, error) {
@@ -76,6 +75,10 @@ func newService(t *testing.T) (*Service, *fakeDiscogs) {
 				Artists: []discogs.Artist{{Name: "Pink Floyd"}},
 				Genres:  []string{"Rock"}, Styles: []string{"Prog Rock", "Psychedelic Rock"},
 				Images: []discogs.Image{{Type: "primary", URI: "https://img/dsotm.png"}},
+			},
+			10414: {
+				ID: 10414, Title: "Wish You Were Here", Year: 1975,
+				Artists: []discogs.Artist{{Name: "Pink Floyd"}}, Genres: []string{"Rock"},
 			},
 		},
 		releases: map[int64]discogs.Release{

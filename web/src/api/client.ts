@@ -2,6 +2,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public data?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -23,12 +24,14 @@ export async function api<T = void>(
   });
   if (!res.ok) {
     let message = res.statusText;
+    let data: Record<string, unknown> | undefined;
     try {
-      message = (await res.json()).error ?? message;
+      data = await res.json();
+      message = (data?.error as string) ?? message;
     } catch {
       // body was not JSON
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, data);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -60,6 +63,7 @@ export type Album = {
   has_cover: boolean;
   duration_sec?: number;
   duration_status: string;
+  removed_at?: string;
 };
 
 export type Release = {
@@ -153,4 +157,4 @@ export type DiaryEntry = {
   note?: string;
 };
 
-export type AlbumDetail = { album: Album; stats: LibraryItem; releases: Release[]; history: DiaryEntry[] };
+export type AlbumDetail = { album: Album; stats: LibraryItem; releases: Release[]; history: DiaryEntry[]; sleeves: string[] };

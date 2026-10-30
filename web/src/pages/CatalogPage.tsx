@@ -69,7 +69,7 @@ export function CatalogPage() {
               <p className="muted">
                 New sleeve <code>{tag.uid}</code>. What is it?
               </p>
-              <AssignTag key={tag.uid} uid={tag.uid} onDone={saved} />
+              <AssignTag key={tag.uid} uid={tag.uid} current={tag.album?.title} onDone={saved} />
             </>
           )}
         </div>

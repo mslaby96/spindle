@@ -15,15 +15,6 @@ func (s *Server) nowPlaying(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-func (s *Server) listInbox(w http.ResponseWriter, r *http.Request) {
-	cards, err := s.Inbox.List(r.Context(), userID(r))
-	if err != nil {
-		s.internal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cards)
-}
-
 func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {

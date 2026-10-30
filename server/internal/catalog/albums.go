@@ -31,6 +31,8 @@ type Album struct {
 	HasCover       bool     `json:"has_cover"`
 	DurationSec    *int     `json:"duration_sec,omitempty"`
 	DurationStatus string   `json:"duration_status"`
+	// RemovedAt is set once the record left the collection; its listens stay in the diary and stats.
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
 }
 
 type Release struct {
@@ -62,7 +64,7 @@ func (s *Service) now() int64 {
 // SaveMaster stores the album for a Discogs master, fetching it only if it's not in the library yet.
 func (s *Service) SaveMaster(ctx context.Context, userID, masterID int64) (Album, error) {
 	if a, err := s.albumBy(ctx, userID, "discogs_master_id", masterID); err == nil || !errors.Is(err, sql.ErrNoRows) {
-		return a, err
+		return s.keep(ctx, a, err)
 	}
 	m, err := s.Discogs.Master(ctx, masterID)
 	if err != nil {
@@ -82,6 +84,7 @@ func (s *Service) SaveMaster(ctx context.Context, userID, masterID int64) (Album
 func (s *Service) SaveRelease(ctx context.Context, userID, releaseID int64) (Album, Release, error) {
 	if r, err := s.releaseBy(ctx, userID, releaseID); err == nil {
 		a, err := s.Album(ctx, userID, r.AlbumID)
+		a, err = s.keep(ctx, a, err)
 		return a, r, err
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return Album{}, Release{}, err
@@ -156,7 +159,7 @@ func (s *Service) insertAlbum(ctx context.Context, userID int64, masterID, relea
 }
 
 const albumColumns = `id, discogs_master_id, discogs_release_id, title, artist, year, genres, styles,
-	coalesce(cover_color, ''), cover_path IS NOT NULL, duration_sec, duration_status`
+	coalesce(cover_color, ''), cover_path IS NOT NULL, duration_sec, duration_status, removed_at`
 
 func (s *Service) Album(ctx context.Context, userID, id int64) (Album, error) {
 	return scanAlbum(s.DB.R.QueryRowContext(ctx,
@@ -194,10 +197,10 @@ type row interface{ Scan(...any) error }
 
 func scanAlbum(r row) (Album, error) {
 	var a Album
-	var master, release, year, duration sql.NullInt64
+	var master, release, year, duration, removed sql.NullInt64
 	var genres, styles string
 	err := r.Scan(&a.ID, &master, &release, &a.Title, &a.Artist, &year, &genres, &styles,
-		&a.CoverColor, &a.HasCover, &duration, &a.DurationStatus)
+		&a.CoverColor, &a.HasCover, &duration, &a.DurationStatus, &removed)
 	if err != nil {
 		return Album{}, err
 	}
@@ -209,6 +212,10 @@ func scanAlbum(r row) (Album, error) {
 	if duration.Valid {
 		d := int(duration.Int64)
 		a.DurationSec = &d
+	}
+	if removed.Valid {
+		t := time.Unix(removed.Int64, 0).UTC()
+		a.RemovedAt = &t
 	}
 	json.Unmarshal([]byte(genres), &a.Genres)
 	json.Unmarshal([]byte(styles), &a.Styles)
@@ -250,7 +257,7 @@ func (s *Service) albumOf(ctx context.Context, userID int64, rel discogs.Release
 	}
 	album, err := s.albumBy(ctx, userID, "discogs_release_id", rel.ID)
 	if !errors.Is(err, sql.ErrNoRows) {
-		return album, err
+		return s.keep(ctx, album, err)
 	}
 	id, err := s.insertAlbum(ctx, userID, nil, &rel.ID, rel.Title, discogs.ArtistNames(rel.Artists), rel.Year,
 		rel.Genres, rel.Styles, discogs.PrimaryImage(rel.Images))

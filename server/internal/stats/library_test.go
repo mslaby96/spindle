@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -82,7 +83,7 @@ func TestLibraryAggregates(t *testing.T) {
 		t.Fatalf("by plays %+v", byPlays)
 	}
 	byTitle, _ := f.st.Library(ctx, 1, "title")
-	if byTitle[0].Title != "Kind of Blue" {
+	if byTitle[0].Title != "The Dark Side Of The Moon" {
 		t.Fatalf("by title %+v", byTitle)
 	}
 }
@@ -231,5 +232,72 @@ func TestDiaryBeforeFirstSessionIDSkipsTheWholeSecond(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].SessionID != older {
 		t.Fatalf("entries %+v", got)
+	}
+}
+
+func TestRemovedAlbumsLeaveTheShelvesButKeepTheirHistory(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	sold := f.album(1, "Sold", "A", `["Jazz"]`, `[]`, now.AddDate(-2, 0, 0))
+	neverPlayed := f.album(1, "Lost", "B", `[]`, `[]`, now.AddDate(-1, 0, 0))
+	f.listen(1, sold, "counted", now.AddDate(0, -7, 0), 40, 1)
+	f.st.DB.W.Exec(`UPDATE albums SET removed_at = ? WHERE id IN (?, ?)`, now.Unix(), sold, neverPlayed)
+
+	library, _ := f.st.Library(ctx, 1, "title")
+	forgotten, _ := f.st.Forgotten(ctx, 1, 180*24*time.Hour)
+	if len(library) != 0 || len(forgotten.NotRecently)+len(forgotten.Never) != 0 {
+		t.Fatalf("removed albums still on the shelves: %+v %+v", library, forgotten)
+	}
+
+	diary, _ := f.st.Diary(ctx, 1, DiaryFilter{})
+	top, _ := f.st.Top(ctx, 1, "all", "plays", 10)
+	if len(diary) != 1 || len(top.Albums) != 1 || top.Albums[0].AlbumID != sold || top.Genres[0].Name != "Jazz" {
+		t.Fatalf("history lost: diary %+v top %+v", diary, top)
+	}
+	if item, err := f.st.AlbumItem(ctx, 1, sold); err != nil || item.Plays != 1 {
+		t.Fatalf("album page: %+v %v", item, err)
+	}
+}
+
+func TestFilingIgnoresALeadingThe(t *testing.T) {
+	for name, want := range map[string]string{
+		"The Beatles":  "beatles",
+		"the the":      "the",
+		"Theatre":      "theatre",
+		"  The  Cure ": "cure",
+		"Talk Talk":    "talk talk",
+		"The":          "the",
+	} {
+		if got := filingKey(name); got != want {
+			t.Errorf("%q: got %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestLibrarySortsByArtistAndTitleIgnoringALeadingThe(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.album(1, "Spirit of Eden", "Talk Talk", `[]`, `[]`, now)
+	f.album(1, "Abbey Road", "The Beatles", `[]`, `[]`, now)
+	f.album(1, "The Dark Side Of The Moon", "Pink Floyd", `[]`, `[]`, now)
+	f.album(1, "Rain Dogs", "Tom Waits", `[]`, `[]`, now)
+
+	titles := func(items []Item) []string {
+		out := []string{}
+		for _, it := range items {
+			out = append(out, it.Title)
+		}
+		return out
+	}
+	byArtist, _ := f.st.Library(ctx, 1, "artist")
+	if got := titles(byArtist); !slices.Equal(got, []string{"Abbey Road", "The Dark Side Of The Moon", "Spirit of Eden", "Rain Dogs"}) {
+		t.Fatalf("by artist %v", got)
+	}
+	byTitle, _ := f.st.Library(ctx, 1, "title")
+	if got := titles(byTitle); !slices.Equal(got, []string{"Abbey Road", "The Dark Side Of The Moon", "Rain Dogs", "Spirit of Eden"}) {
+		t.Fatalf("by title %v", got)
+	}
+	if b := byArtist[0]; b.ArtistKey != "beatles" || b.TitleKey != "abbey road" {
+		t.Fatalf("keys %+v", b)
 	}
 }

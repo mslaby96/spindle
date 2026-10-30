@@ -142,7 +142,7 @@ func TestReassignKeepsHistory(t *testing.T) {
 	s.DB.W.Exec(`INSERT INTO sessions (user_id, device_id, tag_id, state, started_at, last_seen_at)
 		VALUES (1, 1, ?, 'unclassified', 3, 4)`, tag.ID)
 
-	re, err := s.Assign(ctx, 1, "04A1", Assignment{MasterID: 777})
+	re, err := s.Assign(ctx, 1, "04A1", Assignment{MasterID: 777, Listens: KeepListens})
 	if err != nil {
 		t.Fatal(err)
 	}

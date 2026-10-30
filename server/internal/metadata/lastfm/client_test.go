@@ -40,10 +40,19 @@ func TestAlbumLength(t *testing.T) {
 	}
 }
 
-func TestSingleTrackObject(t *testing.T) {
-	c, _ := newClient(t, `{"album":{"tracks":{"track":{"name":"Side Long","duration":1200}}}}`, 200)
-	if d, err := c.AlbumLength(context.Background(), "a", "b"); err != nil || d != 20*time.Minute {
-		t.Fatalf("d=%v err=%v", d, err)
+func TestTracklistsThatAddUp(t *testing.T) {
+	cases := map[string]struct {
+		body string
+		want time.Duration
+	}{
+		"a single track object": {`{"album":{"tracks":{"track":{"name":"Side Long","duration":1200}}}}`, 20 * time.Minute},
+		"a one second track":    {`{"album":{"tracks":{"track":[{"duration":1},{"duration":100}]}}}`, 101 * time.Second},
+	}
+	for name, tc := range cases {
+		c, _ := newClient(t, tc.body, 200)
+		if d, err := c.AlbumLength(context.Background(), "a", "b"); err != nil || d != tc.want {
+			t.Errorf("%s: d=%v err=%v", name, d, err)
+		}
 	}
 }
 
@@ -71,13 +80,6 @@ func TestServerError(t *testing.T) {
 		if _, err := c.AlbumLength(context.Background(), "a", "b"); err == nil {
 			t.Fatalf("status %d: expected error", status)
 		}
-	}
-}
-
-func TestOneSecondTrackCounts(t *testing.T) {
-	c, _ := newClient(t, `{"album":{"tracks":{"track":[{"duration":1},{"duration":100}]}}}`, 200)
-	if d, err := c.AlbumLength(context.Background(), "a", "b"); err != nil || d != 101*time.Second {
-		t.Fatalf("d=%v err=%v", d, err)
 	}
 }
 

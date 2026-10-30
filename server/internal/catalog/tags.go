@@ -66,39 +66,68 @@ func (s *Service) UnassignedTags(ctx context.Context, userID int64) ([]Tag, erro
 }
 
 type Assignment struct {
-	MasterID  int64 `json:"master_id"`
-	ReleaseID int64 `json:"release_id"`
+	MasterID  int64  `json:"master_id"`
+	ReleaseID int64  `json:"release_id"`
+	Listens   string `json:"listens,omitempty"`
 }
 
 // Assign links a tag to an album, and optionally a pressing. Listens already recorded for this tag but not yet tied
-// to an album are attributed to it; listens credited to a previous album keep that album.
+// to an album are attributed to it. When the tag had another album with listens, a.Listens says whether they move to
+// the new album or stay; without it Assign returns a ListensChoiceError and changes nothing. The previous album goes
+// once nothing points at it.
 func (s *Service) Assign(ctx context.Context, userID int64, uid string, a Assignment) (Tag, error) {
 	tag, _, err := s.EnsureTag(ctx, userID, uid)
 	if err != nil {
+		return Tag{}, err
+	}
+	if err := s.checkListensChoice(ctx, tag, a.Listens); err != nil {
 		return Tag{}, err
 	}
 	album, releaseID, err := s.saveAssignment(ctx, userID, a)
 	if err != nil {
 		return Tag{}, err
 	}
+	if err := s.relink(ctx, tag, album.ID, releaseID, a.Listens == MoveListens); err != nil {
+		return Tag{}, err
+	}
+	if tag.Album != nil && tag.Album.ID != album.ID {
+		if err := s.dropIfUnused(ctx, userID, tag.Album.ID); err != nil {
+			return Tag{}, err
+		}
+	}
+	return s.TagByUID(ctx, userID, uid)
+}
 
+func (s *Service) checkListensChoice(ctx context.Context, tag Tag, choice string) error {
+	if choice != "" && choice != MoveListens && choice != KeepListens {
+		return ErrUnknownListensChoice
+	}
+	n, err := s.listensOf(ctx, tag)
+	if err == nil && n > 0 && choice == "" {
+		return &ListensChoiceError{Listens: n}
+	}
+	return err
+}
+
+// relink points the tag at its new album, along with its listens that had none and, when asked, those of the old one.
+func (s *Service) relink(ctx context.Context, tag Tag, albumID int64, releaseID *int64, moveListens bool) error {
 	tx, err := s.DB.W.BeginTx(ctx, nil)
 	if err != nil {
-		return Tag{}, err
+		return err
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `UPDATE tags SET album_id = ?, release_id = ?, assigned_at = ? WHERE id = ?`,
-		album.ID, releaseID, s.now(), tag.ID); err != nil {
-		return Tag{}, err
+		albumID, releaseID, s.now(), tag.ID); err != nil {
+		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET album_id = ?, release_id = ? WHERE tag_id = ? AND album_id IS NULL`,
-		album.ID, releaseID, tag.ID); err != nil {
-		return Tag{}, err
+	moved, args := `album_id IS NULL`, []any{albumID, releaseID, tag.ID}
+	if moveListens && tag.Album != nil {
+		moved, args = `(album_id IS NULL OR album_id = ?)`, append(args, tag.Album.ID)
 	}
-	if err := tx.Commit(); err != nil {
-		return Tag{}, err
+	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET album_id = ?, release_id = ? WHERE tag_id = ? AND `+moved, args...); err != nil {
+		return err
 	}
-	return s.TagByUID(ctx, userID, uid)
+	return tx.Commit()
 }
 
 func (s *Service) saveAssignment(ctx context.Context, userID int64, a Assignment) (Album, *int64, error) {

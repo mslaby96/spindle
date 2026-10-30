@@ -49,6 +49,14 @@ func (s *Store) Save(albumID int64, data []byte) (string, string, error) {
 	return name, DominantColor(img), nil
 }
 
+// Remove deletes a stored cover; one that is already gone is not an error.
+func (s *Store) Remove(name string) error {
+	if err := os.Remove(s.Path(name)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (s *Store) Path(name string) string {
 	return filepath.Join(s.Dir, filepath.Base(name))
 }

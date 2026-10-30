@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/mslaby96/spindle/server/internal/secrets"
 )
 
 // PairingTTL is how long a pairing code shown in the app can be typed into a stand.
@@ -40,7 +42,7 @@ func (s *Store) StartPairing(ctx context.Context, userID int64, name string) (Pa
 	}
 	if _, err := s.db.W.ExecContext(ctx,
 		`INSERT INTO device_pairings (code_hash, user_id, name, expires_at) VALUES (?, ?, ?, ?)`,
-		hashToken(code), userID, name, expires); err != nil {
+		secrets.Hash(code), userID, name, expires); err != nil {
 		return Pairing{}, err
 	}
 	return Pairing{Code: code[:3] + "-" + code[3:], ExpiresAt: time.Unix(expires, 0).UTC()}, nil
@@ -61,7 +63,7 @@ func (s *Store) Pair(ctx context.Context, typed string) (Device, string, error) 
 	var name string
 	err = tx.QueryRowContext(ctx,
 		`DELETE FROM device_pairings WHERE code_hash = ? AND expires_at > ? RETURNING user_id, name`,
-		hashToken(code), s.Now().Unix()).Scan(&userID, &name)
+		secrets.Hash(code), s.Now().Unix()).Scan(&userID, &name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Device{}, "", ErrInvalidCode
 	}

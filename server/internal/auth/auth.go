@@ -7,13 +7,13 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/secrets"
 )
 
 const (
@@ -164,7 +164,7 @@ func (s *Service) CreateSession(ctx context.Context, userID int64, persistent bo
 
 // Lookup validates a session token and slides its expiry forward.
 func (s *Service) Lookup(ctx context.Context, token string) (Session, error) {
-	id := tokenID(token)
+	id := secrets.Hash(token)
 	var sess Session
 	var lastUsed, expires int64
 	err := s.db.R.QueryRowContext(ctx,
@@ -194,7 +194,7 @@ func (s *Service) Lookup(ctx context.Context, token string) (Session, error) {
 }
 
 func (s *Service) DeleteSession(ctx context.Context, token string) error {
-	_, err := s.db.W.ExecContext(ctx, `DELETE FROM login_sessions WHERE id = ?`, tokenID(token))
+	_, err := s.db.W.ExecContext(ctx, `DELETE FROM login_sessions WHERE id = ?`, secrets.Hash(token))
 	return err
 }
 
@@ -210,7 +210,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, current, nex
 	if !ok {
 		return ErrInvalidCredentials
 	}
-	return s.setPassword(ctx, userID, next, tokenID(keepToken))
+	return s.setPassword(ctx, userID, next, secrets.Hash(keepToken))
 }
 
 func (s *Service) ResetPassword(ctx context.Context, username, next string) error {
@@ -257,12 +257,7 @@ func newToken() (token, id string, err error) {
 		return "", "", err
 	}
 	token = base64.RawURLEncoding.EncodeToString(b)
-	return token, tokenID(token), nil
-}
-
-func tokenID(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
+	return token, secrets.Hash(token), nil
 }
 
 var dummyHash, _ = HashPassword("timing-equalizer")
