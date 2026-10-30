@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func (e *testEnv) catalogued(t *testing.T, c *http.Client, uid string) (albumID, tagID int64) {
@@ -114,5 +115,41 @@ func TestChangingTheAlbumOfASleeveWithListensAsksFirst(t *testing.T) {
 	}
 	if resp := do(t, c, "POST", e.http.URL+"/api/tags/04A1B2C3/assign", map[string]any{"master_id": 99, "listens": "maybe"}); resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("unknown choice: %d", resp.StatusCode)
+	}
+}
+
+func TestAlbumChangesTellTheApp(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	id, _ := e.catalogued(t, c, "04A1B2C3")
+	stream := openStream(t, c, e.http.URL+"/api/events")
+	do(t, c, "POST", e.http.URL+"/api/albums/"+strconv.FormatInt(id, 10)+"/remove", nil)
+	select {
+	case ev := <-stream:
+		if ev.name != "inbox_changed" {
+			t.Fatalf("event %+v", ev)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the app was not told")
+	}
+	if resp := do(t, c, "POST", e.http.URL+"/api/albums/999/remove", nil); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing album: %d", resp.StatusCode)
+	}
+	select {
+	case ev := <-stream:
+		t.Fatalf("told about a change that failed: %+v", ev)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestAlbumLengthLimits(t *testing.T) {
+	for seconds, ok := range map[int]bool{-1: false, 0: false, 1: true, 24 * 3600: true, 24*3600 + 1: false} {
+		d, got := albumLength(&seconds)
+		if got != ok || (ok && *d != time.Duration(seconds)*time.Second) {
+			t.Errorf("%d s: %v %v", seconds, d, got)
+		}
+	}
+	if d, ok := albumLength(nil); !ok || d != nil {
+		t.Errorf("no length: %v %v", d, ok)
 	}
 }

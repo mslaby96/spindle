@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -159,5 +160,14 @@ func TestRemoveDeletesTheCoverAndToleratesAMissingOne(t *testing.T) {
 	}
 	if err := s.Remove(name); err != nil {
 		t.Fatalf("removing twice: %v", err)
+	}
+}
+
+func TestRemoveReportsOtherFailures(t *testing.T) {
+	s := &Store{Dir: t.TempDir()}
+	busy := filepath.Join(s.Dir, "busy")
+	os.MkdirAll(filepath.Join(busy, "inside"), 0o755)
+	if err := s.Remove("busy"); err == nil {
+		t.Fatal("a cover that could not be deleted was reported as gone")
 	}
 }

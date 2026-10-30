@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 )
 
 const dsotm, wywh = 10362, 10414
@@ -45,6 +46,8 @@ func count(t *testing.T, s *Service, query string, args ...any) int {
 func TestRemovingFromTheCollectionKeepsTheHistoryAndFreesTheSleeve(t *testing.T) {
 	s, _ := newService(t)
 	ctx := context.Background()
+	removedAt := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	s.Now = func() time.Time { return removedAt }
 	tag := sleeve(t, s, "04A1", dsotm)
 	listen(t, s, tag)
 
@@ -52,7 +55,7 @@ func TestRemovingFromTheCollectionKeepsTheHistoryAndFreesTheSleeve(t *testing.T)
 		t.Fatal(err)
 	}
 	album, err := s.Album(ctx, 1, tag.Album.ID)
-	if err != nil || album.RemovedAt == nil {
+	if err != nil || album.RemovedAt == nil || !album.RemovedAt.Equal(removedAt) {
 		t.Fatalf("album %+v %v", album, err)
 	}
 	if again, _ := s.TagByUID(ctx, 1, "04A1"); again.Album != nil {
@@ -126,6 +129,17 @@ func TestChangingTheAlbumOfASleeveWithListensAsksWhatToDoWithThem(t *testing.T) 
 	}
 	if again, _ := s.TagByUID(ctx, 1, "04A1"); again.Album.ID != tag.Album.ID {
 		t.Fatalf("sleeve changed before answering: %+v", again)
+	}
+}
+
+func TestASingleListenIsEnoughToAsk(t *testing.T) {
+	s, _ := newService(t)
+	tag := sleeve(t, s, "04A1", dsotm)
+	listen(t, s, tag)
+	_, err := s.Assign(context.Background(), 1, "04A1", Assignment{MasterID: wywh})
+	var choice *ListensChoiceError
+	if !errors.As(err, &choice) || choice.Listens != 1 {
+		t.Fatalf("got %v", err)
 	}
 }
 
