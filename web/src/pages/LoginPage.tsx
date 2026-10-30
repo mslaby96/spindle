@@ -31,6 +31,7 @@ export function LoginPage() {
 
   return (
     <form className="card narrow" onSubmit={submit}>
+      <span className="brand">Spindle</span>
       <h1>Sign in</h1>
       <label>
         Username

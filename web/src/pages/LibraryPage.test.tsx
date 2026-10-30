@@ -41,7 +41,8 @@ describe("library", () => {
     });
     renderApp("/library");
     expect(await screen.findByText("3 records")).toBeInTheDocument();
-    expect(screen.getByText(/today · 3× · ★★★★½/)).toBeInTheDocument();
+    expect(screen.getByText(/today · 3×/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "4.5 stars" })).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("Filter library"), "blue");
     expect(screen.getByText("Kind of Blue")).toBeInTheDocument();
@@ -50,6 +51,44 @@ describe("library", () => {
 
     await userEvent.selectOptions(screen.getByLabelText("Sort by"), "plays");
     await waitFor(() => expect(calls.some((c) => c.key === "GET /api/library?sort=plays")).toBe(true));
+  });
+
+  it("counts what the filter leaves and marks records never played", async () => {
+    base({
+      "GET /api/library?sort=last_played": () => [
+        200,
+        [item(1, "Kind of Blue", "Miles Davis", { plays: 3, last_played_at: new Date().toISOString() }), item(2, "Blue Train", "John Coltrane"), item(3, "Rumours", "Fleetwood Mac")],
+      ],
+    });
+    renderApp("/library");
+    expect(await screen.findByText("3 records")).toBeInTheDocument();
+    expect(screen.getAllByText("Unplayed")).toHaveLength(2);
+
+    await userEvent.type(screen.getByLabelText("Filter library"), "blue");
+    expect(screen.getByText("2 of 3 records")).toBeInTheDocument();
+  });
+
+  it("files records behind a divider per first letter, in the server's order", async () => {
+    const keyed = (id: number, title: string, artist: string, artistKey: string) =>
+      item(id, title, artist, { artist_key: artistKey, title_key: title.toLowerCase() });
+    const sorted = [
+      keyed(1, "Abbey Road", "The Beatles", "beatles"),
+      keyed(2, "Bitches Brew", "Miles Davis", "miles davis"),
+      keyed(3, "1999", "Prince", "prince"),
+      keyed(4, "Talk Talk", "Talk Talk", "talk talk"),
+      keyed(5, "Rain Dogs", "Tom Waits", "tom waits"),
+    ];
+    base({
+      "GET /api/library?sort=last_played": () => [200, sorted],
+      "GET /api/library?sort=artist": () => [200, sorted],
+    });
+    renderApp("/library");
+    await screen.findByText("5 records");
+    await userEvent.selectOptions(screen.getByLabelText("Sort by"), "artist");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "B" })).toBeInTheDocument());
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["B", "M", "P", "T"]);
+    const t = screen.getByRole("heading", { name: "T" }).parentElement!;
+    expect(within(t).getAllByRole("link")).toHaveLength(2);
   });
 
   it("shows the forgotten shelf", async () => {

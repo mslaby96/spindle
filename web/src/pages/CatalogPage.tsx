@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type CatalogMode, type Tag } from "../api/client";
 import { catalogCurrentKey, catalogModeKey, unassignedKey, type CatalogTag } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
+import { Divider } from "../components/Divider";
 import { formatPressing } from "../format";
 
 export function CatalogPage() {
@@ -45,7 +46,7 @@ export function CatalogPage() {
       </div>
 
       {active ? (
-        <div className="card">
+        <div className="notice">
           {!tag && <p>Put the next sleeve on the stand.</p>}
           {tag && tag.album && editing !== tag.uid && (
             <div className="saved">
@@ -82,7 +83,7 @@ export function CatalogPage() {
 
       {others.length > 0 && (
         <>
-          <h2>Sleeves waiting for an album</h2>
+          <Divider color="var(--tomato)">Sleeves waiting for an album</Divider>
           <ul className="list">
             {others.map((t) => (
               <li key={t.uid} className="card">

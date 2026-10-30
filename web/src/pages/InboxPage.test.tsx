@@ -47,7 +47,7 @@ describe("inbox", () => {
     });
     renderApp("/inbox");
     expect(await screen.findByText(/stayed on the stand for 3 h 0 min, the album is 46 min/)).toBeInTheDocument();
-    expect(screen.getByText(/\(unconfirmed\)/)).toBeInTheDocument();
+    expect(screen.getByText("Unconfirmed")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "I played it several times" }));
     await waitFor(() =>
@@ -76,7 +76,7 @@ describe("inbox", () => {
   it("does not highlight rating for an album that already has one", async () => {
     setup([{ uid: "04A1", album: { ...album, rating: 8 }, session: session({}) }]);
     renderApp("/inbox");
-    expect(await screen.findByText(/your rating ★★★★/)).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "4 stars" })).toBeInTheDocument();
     expect(screen.queryByText("Rate this album")).not.toBeInTheDocument();
   });
 

@@ -285,3 +285,41 @@ func TestSaveMasterForUnknownUser(t *testing.T) {
 		t.Fatal("album saved for a user that does not exist")
 	}
 }
+
+func TestRecolorCoversRecomputesStoredColours(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	a, _ := s.SaveMaster(ctx, 1, 10362)
+	s.DB.W.Exec(`UPDATE albums SET cover_color = '#000000' WHERE id = ?`, a.ID)
+	if _, err := s.DB.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, created_at)
+		VALUES (1, 1, 'No Cover', 'Nobody', 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.RecolorCovers(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("recoloured %d: %v", n, err)
+	}
+	if a, _ = s.Album(ctx, 1, a.ID); a.CoverColor != "#b41414" {
+		t.Fatalf("colour %s", a.CoverColor)
+	}
+}
+
+func TestRecolorCoversReportsMissingFilesAndCarriesOn(t *testing.T) {
+	s, _ := newService(t)
+	ctx := context.Background()
+	a, _ := s.SaveMaster(ctx, 1, 10362)
+	if _, err := s.DB.W.Exec(`INSERT INTO albums (user_id, discogs_master_id, title, artist, created_at, cover_path, cover_status)
+		VALUES (1, 2, 'Gone', 'Nobody', 1, 'missing.png', 'resolved')`); err != nil {
+		t.Fatal(err)
+	}
+	s.DB.W.Exec(`UPDATE albums SET cover_color = '#000000' WHERE id = ?`, a.ID)
+
+	n, err := s.RecolorCovers(ctx)
+	if err == nil || n != 1 {
+		t.Fatalf("recoloured %d: %v", n, err)
+	}
+	if a, _ = s.Album(ctx, 1, a.ID); a.CoverColor != "#b41414" {
+		t.Fatalf("colour %s", a.CoverColor)
+	}
+}

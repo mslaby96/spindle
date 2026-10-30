@@ -5,7 +5,9 @@ import { useNavigate, useParams } from "react-router";
 import { api, type Album, type AlbumDetail, type DiaryEntry } from "../api/client";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
-import { formatRating } from "../components/RatingStars";
+import { tabStyle } from "../colors";
+import { Divider } from "../components/Divider";
+import { Rating } from "../components/RatingStars";
 import { formatDate, formatDateTime, formatLength, formatPressing } from "../format";
 
 export function AlbumPage() {
@@ -24,15 +26,18 @@ export function AlbumPage() {
 
   return (
     <section>
-      <div className="now card" style={{ borderColor: album.cover_color }}>
-        <Cover albumId={album.id} hasCover={album.has_cover} color={album.cover_color} />
+      <div className="now album-head" style={tabStyle(album.cover_color)}>
+        <div className="stage">
+          {album.genres[0] && <span className="tab">{album.genres[0]}</span>}
+          <Cover albumId={album.id} hasCover={album.has_cover} color={album.cover_color} />
+        </div>
         <div>
           <h1>{album.title}</h1>
-          <p>{album.artist}</p>
-          <p className="muted">{[album.year, ...album.genres, ...album.styles].filter(Boolean).join(" · ")}</p>
-          <p className="muted">
+          <p className="artist">{album.artist}</p>
+          <p className="muted">{[album.year, ...album.genres, ...album.styles.slice(0, 3)].filter(Boolean).join(" · ")}</p>
+          <p className="muted facts">
             {stats.plays} {stats.plays === 1 ? "listen" : "listens"} · {formatLength(stats.listened_sec)} in total
-            {stats.rating !== undefined && ` · ${formatRating(stats.rating)}`}
+            {stats.rating !== undefined && <> · <Rating value={stats.rating} /></>}
           </p>
           <AlbumLength albumId={album.id} seconds={album.duration_sec} status={album.duration_status} onSaved={refresh} />
         </div>
@@ -42,7 +47,7 @@ export function AlbumPage() {
 
       {sleeves.length > 0 && (
         <>
-          <h2>{sleeves.length === 1 ? "Sleeve" : "Sleeves"}</h2>
+          <Divider color={album.cover_color}>{sleeves.length === 1 ? "Sleeve" : "Sleeves"}</Divider>
           {sleeves.map((uid) => (
             <Sleeve key={uid} uid={uid} album={album} />
           ))}
@@ -51,7 +56,7 @@ export function AlbumPage() {
 
       {releases.length > 0 && (
         <>
-          <h2>Your pressing</h2>
+          <Divider color={album.cover_color}>Your pressing</Divider>
           {releases.map((r) => (
             <p key={r.id} className="muted">
               {formatPressing(r)}
@@ -60,7 +65,7 @@ export function AlbumPage() {
         </>
       )}
 
-      <h2>Listens</h2>
+      <Divider color={album.cover_color}>Listens</Divider>
       {history.length === 0 && <p className="muted">Not played yet.</p>}
       <ul className="list">
         {history.map((h) => (
@@ -87,7 +92,7 @@ function useAlbumChange(albumId: number, action: "remove" | "restore" | "delete"
 function RemovedNotice({ album, removedAt }: { album: Album; removedAt: string }) {
   const restore = useAlbumChange(album.id, "restore");
   return (
-    <div className="card notice">
+    <div className="notice">
       <p>
         No longer in your collection since {formatDate(removedAt)}. Its listens still count in your diary and stats.
       </p>
@@ -258,8 +263,13 @@ function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => 
             <p>
               {formatDateTime(entry.started_at)} · {formatLength(entry.listened_sec)}
               {entry.plays > 1 && ` · played ${entry.plays}×`}
-              {!entry.duration_confirmed && " (unconfirmed)"}
-              {entry.rating !== undefined && ` · ${formatRating(entry.rating)}`}
+              {!entry.duration_confirmed && (
+                <>
+                  {" "}
+                  <span className="sticker">Unconfirmed</span>
+                </>
+              )}
+              {entry.rating !== undefined && <> · <Rating value={entry.rating} /></>}
             </p>
             {entry.note && <p className="muted">{entry.note}</p>}
           </div>

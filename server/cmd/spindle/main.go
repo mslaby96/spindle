@@ -58,8 +58,10 @@ func main() {
 		err = healthcheck(cfg)
 	case "reset-password":
 		err = resetPassword(cfg, os.Args[2:])
+	case "recolor-covers":
+		err = recolorCovers(cfg)
 	default:
-		err = fmt.Errorf("unknown command %q (expected serve, healthcheck or reset-password)", cmd)
+		err = fmt.Errorf("unknown command %q (expected serve, healthcheck, reset-password or recolor-covers)", cmd)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -195,6 +197,20 @@ func healthcheck(cfg *config.Config) error {
 		return fmt.Errorf("unhealthy: %s", resp.Status)
 	}
 	return nil
+}
+
+func recolorCovers(cfg *config.Config) error {
+	ctx := context.Background()
+	d, err := db.Open(ctx, filepath.Join(cfg.DataDir, "spindle.db"))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+
+	svc := &catalog.Service{DB: d, Covers: &covers.Store{Dir: filepath.Join(cfg.DataDir, "covers")}}
+	n, err := svc.RecolorCovers(ctx)
+	fmt.Fprintf(os.Stderr, "Recoloured %d covers.\n", n)
+	return err
 }
 
 func resetPassword(cfg *config.Config, args []string) error {

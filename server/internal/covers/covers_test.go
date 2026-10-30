@@ -87,8 +87,9 @@ func split(size, cut int, left, right color.Color) image.Image {
 	})
 }
 
-func TestDominantColorIsTheLargestArea(t *testing.T) {
+func TestDominantColor(t *testing.T) {
 	blue, yellow := color.RGBA{20, 60, 160, 255}, color.RGBA{240, 200, 0, 255}
+	pale, red := color.RGBA{216, 217, 232, 255}, color.RGBA{200, 30, 30, 255}
 	cases := []struct {
 		name string
 		img  image.Image
@@ -98,6 +99,12 @@ func TestDominantColorIsTheLargestArea(t *testing.T) {
 		{"larger yellow on the right", split(100, 30, blue, yellow), "#f0c800"},
 		{"all black", solid(10, 10, func(int, int) color.Color { return color.Black }), "#000000"},
 		{"all white", solid(10, 10, func(int, int) color.Color { return color.White }), "#ffffff"},
+		{"a colourful area over a larger pale one", split(100, 60, pale, color.RGBA{130, 40, 50, 255}), "#822832"},
+		{"colourful specks don't count", split(100, 96, pale, red), "#d8d9e8"},
+		{"colourful area just under 5%", split(64, 3, red, pale), "#d8d9e8"},
+		{"colourful area just over 5%", split(64, 4, red, pale), "#c81e1e"},
+		{"channel spread just under vivid", split(100, 60, pale, color.RGBA{139, 100, 100, 255}), "#d8d9e8"},
+		{"channel spread just vivid", split(100, 60, pale, color.RGBA{140, 100, 100, 255}), "#8c6464"},
 	}
 	for _, tc := range cases {
 		if got := DominantColor(tc.img); got != tc.want {
@@ -117,7 +124,7 @@ func TestDominantColorTieIsStable(t *testing.T) {
 
 func TestDominantColorKeepsGreysAtTheDullThresholds(t *testing.T) {
 	for _, grey := range []uint8{235, 20} {
-		img := split(100, 70, color.RGBA{grey, grey, grey, 255}, color.RGBA{200, 30, 30, 255})
+		img := split(100, 70, color.RGBA{grey, grey, grey, 255}, color.White)
 		want := fmt.Sprintf("#%02x%02x%02x", grey, grey, grey)
 		if got := DominantColor(img); got != want {
 			t.Errorf("grey %d: got %s", grey, got)
@@ -169,5 +176,23 @@ func TestRemoveReportsOtherFailures(t *testing.T) {
 	os.MkdirAll(filepath.Join(busy, "inside"), 0o755)
 	if err := s.Remove("busy"); err == nil {
 		t.Fatal("a cover that could not be deleted was reported as gone")
+	}
+}
+
+func TestColorReadsAStoredCover(t *testing.T) {
+	s := &Store{Dir: t.TempDir()}
+	name, _, err := s.Save(3, encode(t, solid(20, 20, func(int, int) color.Color { return color.RGBA{10, 120, 60, 255} })))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Color(name); err != nil || got != "#0a783c" {
+		t.Fatalf("got %s: %v", got, err)
+	}
+	if _, err := s.Color("nope.png"); err == nil {
+		t.Fatal("missing file accepted")
+	}
+	os.WriteFile(s.Path("junk.png"), []byte("junk"), 0o640)
+	if _, err := s.Color("junk.png"); err == nil {
+		t.Fatal("junk accepted")
 	}
 }

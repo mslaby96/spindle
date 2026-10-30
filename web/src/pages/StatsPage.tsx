@@ -5,6 +5,8 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { api } from "../api/client";
 import { Cover } from "../components/Cover";
+import { tabStyle } from "../colors";
+import { Divider } from "../components/Divider";
 import { formatDayMonth, formatLength } from "../format";
 
 type Ranked = { name: string; value: number };
@@ -83,7 +85,7 @@ export function StatsPage() {
       {top.data && top.data.albums.length > 0 && (
         <div className="columns">
           <div>
-            <h2>Top albums</h2>
+            <Divider color="var(--tomato)">Top albums</Divider>
             <ol className="ranked">
               {top.data.albums.map((a) => (
                 <li key={a.album_id}>
@@ -98,20 +100,20 @@ export function StatsPage() {
               ))}
             </ol>
           </div>
-          <RankedBars title="Top genres" items={top.data.genres} measure={measure} />
-          <RankedBars title="Top styles" items={top.data.styles} measure={measure} />
+          <RankedBars title="Top genres" color="var(--teal)" items={top.data.genres} measure={measure} />
+          <RankedBars title="Top styles" color="var(--cobalt)" items={top.data.styles} measure={measure} />
         </div>
       )}
     </section>
   );
 }
 
-function RankedBars({ title, items, measure }: { title: string; items: Ranked[]; measure: Measure }) {
+function RankedBars({ title, color, items, measure }: { title: string; color: string; items: Ranked[]; measure: Measure }) {
   if (items.length === 0) return null;
   const maxValue = Math.max(...items.map((i) => i.value));
   return (
-    <div>
-      <h2>{title}</h2>
+    <div style={tabStyle(color)}>
+      <Divider>{title}</Divider>
       <ol className="ranked bars">
         {items.map((i) => (
           <li key={i.name}>
@@ -134,7 +136,7 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
   return (
     <div className="card chart">
       <div className="row">
-        <h2>Listens per week</h2>
+        <Divider color="var(--mustard)">Listens per week</Divider>
         <button className="link" onClick={() => setAsTable(!asTable)}>
           {asTable ? "Show chart" : "Show as table"}
         </button>
@@ -165,13 +167,13 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
             <XAxis
               dataKey="start"
               tickFormatter={formatDayMonth}
-              tick={{ fill: "var(--muted)", fontSize: 12 }}
+              tick={{ fill: "var(--ink-2)", fontSize: 12 }}
               axisLine={{ stroke: "var(--grid)" }}
               tickLine={false}
               interval="preserveStartEnd"
               minTickGap={24}
             />
-            <YAxis allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fill: "var(--ink-2)", fontSize: 12 }} axisLine={false} tickLine={false} />
             <Tooltip
               cursor={{ fill: "var(--grid)", opacity: 0.5 }}
               content={({ active, payload }) => {
@@ -187,7 +189,7 @@ function WeeklyChart({ weeks }: { weeks: Week[] }) {
                 );
               }}
             />
-            <Bar dataKey="plays" fill="var(--accent)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+            <Bar dataKey="plays" fill="var(--mustard)" radius={[3, 3, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       )}
