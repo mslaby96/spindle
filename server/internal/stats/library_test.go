@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -82,7 +83,7 @@ func TestLibraryAggregates(t *testing.T) {
 		t.Fatalf("by plays %+v", byPlays)
 	}
 	byTitle, _ := f.st.Library(ctx, 1, "title")
-	if byTitle[0].Title != "Kind of Blue" {
+	if byTitle[0].Title != "The Dark Side Of The Moon" {
 		t.Fatalf("by title %+v", byTitle)
 	}
 }
@@ -255,5 +256,48 @@ func TestRemovedAlbumsLeaveTheShelvesButKeepTheirHistory(t *testing.T) {
 	}
 	if item, err := f.st.AlbumItem(ctx, 1, sold); err != nil || item.Plays != 1 {
 		t.Fatalf("album page: %+v %v", item, err)
+	}
+}
+
+func TestFilingIgnoresALeadingThe(t *testing.T) {
+	for name, want := range map[string]string{
+		"The Beatles":  "beatles",
+		"the the":      "the",
+		"Theatre":      "theatre",
+		"  The  Cure ": "cure",
+		"Talk Talk":    "talk talk",
+		"The":          "the",
+	} {
+		if got := filingKey(name); got != want {
+			t.Errorf("%q: got %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestLibrarySortsByArtistAndTitleIgnoringALeadingThe(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.album(1, "Spirit of Eden", "Talk Talk", `[]`, `[]`, now)
+	f.album(1, "Abbey Road", "The Beatles", `[]`, `[]`, now)
+	f.album(1, "The Dark Side Of The Moon", "Pink Floyd", `[]`, `[]`, now)
+	f.album(1, "Rain Dogs", "Tom Waits", `[]`, `[]`, now)
+
+	titles := func(items []Item) []string {
+		out := []string{}
+		for _, it := range items {
+			out = append(out, it.Title)
+		}
+		return out
+	}
+	byArtist, _ := f.st.Library(ctx, 1, "artist")
+	if got := titles(byArtist); !slices.Equal(got, []string{"Abbey Road", "The Dark Side Of The Moon", "Spirit of Eden", "Rain Dogs"}) {
+		t.Fatalf("by artist %v", got)
+	}
+	byTitle, _ := f.st.Library(ctx, 1, "title")
+	if got := titles(byTitle); !slices.Equal(got, []string{"Abbey Road", "The Dark Side Of The Moon", "Rain Dogs", "Spirit of Eden"}) {
+		t.Fatalf("by title %v", got)
+	}
+	if b := byArtist[0]; b.ArtistKey != "beatles" || b.TitleKey != "abbey road" {
+		t.Fatalf("keys %+v", b)
 	}
 }

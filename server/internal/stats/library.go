@@ -1,8 +1,11 @@
 package stats
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
@@ -29,13 +32,42 @@ type Item struct {
 	LastPlayedAt *time.Time `json:"last_played_at,omitempty"`
 	Rating       *int       `json:"rating,omitempty"`
 	AddedAt      time.Time  `json:"added_at"`
+	// ArtistKey and TitleKey are what the library is filed under, so the app groups records the way they are sorted.
+	ArtistKey string `json:"artist_key"`
+	TitleKey  string `json:"title_key"`
+}
+
+// filingKey is how a record shelf files a name: case doesn't matter and a leading "The" is skipped, so The Beatles
+// sit under B.
+func filingKey(name string) string {
+	key := strings.ToLower(strings.TrimSpace(name))
+	if rest, ok := strings.CutPrefix(key, "the "); ok && strings.TrimSpace(rest) != "" {
+		key = strings.TrimSpace(rest)
+	}
+	return key
+}
+
+// filed orders by filing keys, which SQL can't compute, for the sorts that a reader expects alphabetically.
+var filed = map[string]func(a, b Item) int{
+	"title": func(a, b Item) int {
+		return cmp.Or(strings.Compare(a.TitleKey, b.TitleKey), strings.Compare(a.ArtistKey, b.ArtistKey))
+	},
+	"artist": func(a, b Item) int {
+		return cmp.Or(strings.Compare(a.ArtistKey, b.ArtistKey), cmp.Compare(yearOf(a), yearOf(b)),
+			strings.Compare(a.TitleKey, b.TitleKey))
+	},
+}
+
+func yearOf(it Item) int {
+	if it.Year == nil {
+		return 0
+	}
+	return *it.Year
 }
 
 var sorts = map[string]string{
 	"last_played": "last_played IS NULL, last_played DESC, a.title",
 	"plays":       "plays DESC, last_played DESC, a.title",
-	"title":       "a.title COLLATE NOCASE, a.artist COLLATE NOCASE",
-	"artist":      "a.artist COLLATE NOCASE, a.year, a.title COLLATE NOCASE",
 	"added":       "a.created_at DESC, a.id DESC",
 }
 
@@ -54,6 +86,11 @@ const itemQuery = `
 const onShelf = ` AND a.removed_at IS NULL`
 
 func (st *Stats) Library(ctx context.Context, userID int64, sort string) ([]Item, error) {
+	if byKey, ok := filed[sort]; ok {
+		items, err := st.items(ctx, itemQuery+onShelf+` GROUP BY a.id ORDER BY a.id`, userID)
+		slices.SortStableFunc(items, byKey)
+		return items, err
+	}
 	order, ok := sorts[sort]
 	if !ok {
 		order = sorts["last_played"]
@@ -96,6 +133,7 @@ func (st *Stats) items(ctx context.Context, query string, args ...any) ([]Item, 
 			return nil, err
 		}
 		it.AddedAt = time.Unix(added, 0).UTC()
+		it.ArtistKey, it.TitleKey = filingKey(it.Artist), filingKey(it.Title)
 		if year.Valid {
 			y := int(year.Int64)
 			it.Year = &y
