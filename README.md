@@ -47,10 +47,32 @@ All settings are environment variables, usually set in `deploy/.env`.
 | `SPINDLE_AUTO_RESOLVE_AFTER` | `7d` | Unanswered confirmations count as "forgot to take it off" after this |
 | `SPINDLE_FORGOTTEN_AFTER` | `180d` | When a record lands on the forgotten shelf |
 | `SPINDLE_CATALOG_IDLE` | `10m` | Cataloguing switches off after this long without a new sleeve |
+| `SPINDLE_BACKUP_PATH` | `./backups` | With Docker: the folder on this machine that backups are written to |
+| `SPINDLE_BACKUP_DIR` | `<data>/backups` | Without Docker: where backups are written |
+| `SPINDLE_BACKUP_EVERY` | `24h` | How often a backup is made; `off` turns them off |
+| `SPINDLE_BACKUP_KEEP` | `7` | How many backups are kept; older ones are deleted |
 
 Forgot your password? `docker compose exec -it spindle /spindle reset-password <username>`
 
 Cover colours look off after an update? `docker compose exec spindle /spindle recolor-covers` picks them again from the stored covers.
+
+### Backups
+
+Spindle backs itself up: once a day by default it writes `spindle-backup-<date>-<time>.tar.gz`, with the database and the covers, into `SPINDLE_BACKUP_PATH` and keeps the last seven. The server doesn't have to stop for it. Point `SPINDLE_BACKUP_PATH` at a folder that is itself backed up, or at another disk, so a failing disk doesn't take the backups with it. Running Spindle in the cloud, mount a volume or bucket there instead. On Linux the folder must be writable by the container's user (uid 65532), e.g. `sudo chown 65532 backups`.
+
+To make one right away: `docker compose exec spindle /spindle backup`.
+
+To restore one, stop the server first:
+
+```sh
+docker compose stop spindle
+docker compose run --rm spindle restore /backups/spindle-backup-20261101-030000.tar.gz
+docker compose start spindle
+```
+
+Restore checks the backup before touching anything and moves the data that was there into a `before-restore-*` folder instead of deleting it.
+
+Your own data is also a download away: **Settings → Your data** gives you everything as JSON, or your diary as a CSV for a spreadsheet.
 
 ## Building the stand
 

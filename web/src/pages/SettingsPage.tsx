@@ -58,6 +58,21 @@ export function SettingsPage() {
         {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
         <button>Change password</button>
       </form>
+      <div className="card narrow">
+        <h2>Your data</h2>
+        <p className="muted">
+          Download your collection and listening history to keep or take elsewhere. Backups of the whole server are
+          made by Spindle itself; see its README.
+        </p>
+        <div className="row">
+          <a className="button secondary" href="/api/export.json" download>
+            Everything (JSON)
+          </a>
+          <a className="button secondary" href="/api/export.csv" download>
+            Diary (CSV)
+          </a>
+        </div>
+      </div>
       <button className="secondary" onClick={logout}>
         Sign out
       </button>
