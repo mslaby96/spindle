@@ -70,8 +70,10 @@ foot_d = 16;            // wide enough to hold the cover up around each boss
 foot_h = 4.5;
 head_d = 6.5;           // pan, socket or countersunk M3 head, sunk into the foot
 head_h = 3.2;
-pico_recess = 1;
-cover_play = 0.3;       // around the cover where it sits inside the base
+tray_h = 6;             // extra room under the base for wires and a breadboard
+tray_lip = 2;           // how far the tray's rim reaches up into the base, so the base sits on it in place
+tray_lip_t = 1.5;
+cover_play = 0.3;
 
 $fn = 48;
 eps = 0.01;
@@ -168,14 +170,14 @@ module spacer() {
                 translate([side[2] + (side[2] < bx0 ? -spacer_play : spacer_play), y0, top - eps])
                     cube([side[3] - side[2], y1 - y0, lip_top - top]);
             }
-        translate([0, 0, cover_t - eps]) cube([width, depth, base_h - shell - cover_t]);
+        translate([0, 0, -tray_h - eps]) cube([width, depth, base_h - shell + tray_h]);
     }
     hull()
         intersection() {
             in_rest()
                 translate([bx0 - side_lip - spacer_play, y0, -1.5 * base_h])
                     cube([board_w + 2 * (side_lip + spacer_play), y1 - y0, 1.5 * base_h]);
-            translate([0, 0, cover_t - eps]) cube([width, depth, 2]);
+            translate([0, 0, -tray_h - eps]) cube([width, depth, 2]);
         }
 }
 
@@ -275,21 +277,34 @@ module body() {
     }
 }
 
-// Sits inside the base, flush with its bottom, with the bosses coming through it. The feet hold it up and the spacer
-// standing on it is pressed down by the reader, so it can't rattle. Printed as it sits, outside face on the bed.
-module cover() {
+// A tray under the base, with the base's outline, that adds tray_h of room inside. Its rim reaches a little way into
+// the base so the two line up, posts under the bosses take the screws' pull, and the reader spacer stands on its floor.
+// Drawn where it sits under the body; the exported part is moved up onto the bed.
+module tray() {
+    floor_z = -tray_h - cover_t;
+    inner = [width - 2 * (shell + cover_play), depth - 2 * (shell + cover_play)];
     difference() {
         union() {
-            translate([shell + cover_play, shell + cover_play, 0])
-                rounded_plate([width - 2 * (shell + cover_play), depth - 2 * (shell + cover_play), cover_t], 1);
+            translate([0, 0, floor_z]) difference() {
+                rounded_plate([width, depth, tray_h + cover_t], corner_r);
+                // walls as thick as the base's plus the rim, so the rim stands on them
+                wall = shell + cover_play + tray_lip_t;
+                translate([wall, wall, cover_t]) cube([width - 2 * wall, depth - 2 * wall, tray_h + eps]);
+            }
+            translate([shell + cover_play, shell + cover_play, -eps]) difference() {
+                cube([inner.x, inner.y, tray_lip + eps]);
+                translate([tray_lip_t, tray_lip_t, -eps]) cube([inner.x - 2 * tray_lip_t, inner.y - 2 * tray_lip_t, tray_lip + 3 * eps]);
+            }
+            for (p = boss_positions) translate([p.x, p.y, -tray_h - eps]) cylinder(d = boss_d, h = tray_h + eps);
             spacer();
         }
         for (p = boss_positions)
-            translate([p.x, p.y, -eps]) cylinder(d = boss_d + 2 * cover_play, h = cover_t + 2 * eps);
-        // shallow bed that keeps the Pico W lined up with the USB opening
-        translate([pico_x - 0.5, pico_y - 0.5, cover_t - pico_recess])
-            cube([pico_w + 1, pico_l + 1, pico_recess + eps]);
+            translate([p.x, p.y, floor_z - eps]) cylinder(d = screw_clear, h = tray_h + cover_t + 2 * eps);
     }
+}
+
+module cover() {
+    translate([0, 0, tray_h + cover_t]) tray();
 }
 
 // One under each corner. The screw goes through it into the boss, and its rim holds up the cover and the base wall.
@@ -331,7 +346,7 @@ else if (part == "foot") foot();
 else if (part == "clip") clip();
 else {
     body();
-    color("orange") translate([0, 0, -30]) cover();
+    color("orange") translate([0, 0, -30]) tray();
     for (p = boss_positions) translate([p.x, p.y, -50 - foot_h]) foot();
     %in_rest() translate([(rest_width - 314) / 2, -4.5, 0]) cube([314, 4, 314]);
 }
