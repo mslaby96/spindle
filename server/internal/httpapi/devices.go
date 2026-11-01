@@ -3,11 +3,9 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 )
-
-// EventDevicePaired tells the app that a stand finished setting itself up with a pairing code.
-const EventDevicePaired = "device_paired"
 
 func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -21,7 +19,15 @@ func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
-	s.act(w, r, s.Devices.Revoke)
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := s.Devices.Revoke(r.Context(), userID(r), id)
+	if err == nil {
+		s.Bus.Publish(events.Event{Type: devices.EventRemoved, UserID: userID(r), Data: devices.Removed{ID: id}})
+	}
+	s.noContent(w, err)
 }
 
 func (s *Server) startPairing(w http.ResponseWriter, r *http.Request) {
@@ -50,11 +56,10 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.limiter.Reset(clientIP(r))
-	if err := s.Devices.Touch(r.Context(), dev.ID, req.FW); err != nil {
+	if dev, err = s.Devices.Touch(r.Context(), dev.ID, devices.Report{FW: req.FW}); err != nil {
 		s.internal(w, err)
 		return
 	}
-	dev.FWVersion = req.FW
-	s.Bus.Publish(events.Event{Type: EventDevicePaired, UserID: dev.UserID, Data: dev})
+	s.Bus.Publish(events.Event{Type: devices.EventPaired, UserID: dev.UserID, Data: dev})
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }

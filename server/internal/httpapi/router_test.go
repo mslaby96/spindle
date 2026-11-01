@@ -58,11 +58,16 @@ func newEnv(t *testing.T) *testEnv {
 	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
 	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
 	router := &presence.Router{Mode: mode, Catalog: mode, Sessions: engine, Tolerance: cfg.Sessions.AbsenceTolerance}
+	deviceStore := devices.NewStore(d)
+	watcher := &devices.Watcher{Store: deviceStore, Publish: func(dev devices.Device) {
+		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
+	}}
 	s := New(Deps{
 		Config:    cfg,
 		DB:        d,
 		Auth:      a,
-		Devices:   devices.NewStore(d),
+		Devices:   deviceStore,
+		Watcher:   watcher,
 		Catalog:   catalogSvc,
 		Mode:      mode,
 		Discogs:   dc,

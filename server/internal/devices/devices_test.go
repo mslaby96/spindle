@@ -102,7 +102,7 @@ func TestTouchRecordsLastSeenAndFirmware(t *testing.T) {
 	}
 	seen := created.Add(time.Hour)
 	s.Now = func() time.Time { return seen }
-	if err := s.Touch(ctx, dev.ID, "0.2.0"); err != nil {
+	if _, err := s.Touch(ctx, dev.ID, Report{FW: "0.2.0"}); err != nil {
 		t.Fatal(err)
 	}
 	list, err := s.List(ctx, userA)
@@ -112,5 +112,57 @@ func TestTouchRecordsLastSeenAndFirmware(t *testing.T) {
 	got := list[0]
 	if got.CreatedAt != created || got.LastSeenAt == nil || *got.LastSeenAt != seen || got.FWVersion != "0.2.0" {
 		t.Fatalf("after touch: %+v", got)
+	}
+}
+
+func TestTouchKeepsTheLatestDiagnostics(t *testing.T) {
+	s, userA, _ := newStore(t)
+	ctx := context.Background()
+	dev, _, _ := s.Create(ctx, userA, "Stand")
+	rssi, resets, uptime := -58, 2, int64(3600)
+	got, err := s.Touch(ctx, dev.ID, Report{FW: "0.4.0", RSSI: &rssi, ReaderResets: &resets, UptimeSec: &uptime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Stand" || !got.Online || *got.RSSI != -58 || *got.ReaderResets != 2 || *got.UptimeSec != 3600 {
+		t.Fatalf("touched: %+v", got)
+	}
+	got, _ = s.Touch(ctx, dev.ID, Report{FW: "0.3.0"})
+	if got.RSSI != nil || got.ReaderResets != nil || got.UptimeSec != nil {
+		t.Fatalf("firmware without diagnostics still shows old ones: %+v", got)
+	}
+}
+
+func TestStandGoesOfflineAfterNinetySecondsOfSilence(t *testing.T) {
+	s, userA, _ := newStore(t)
+	ctx := context.Background()
+	seen := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	s.Now = func() time.Time { return seen }
+	dev, _, _ := s.Create(ctx, userA, "Stand")
+	if list, _ := s.List(ctx, userA); list[0].Online {
+		t.Fatal("a stand that never reported is online")
+	}
+	s.Touch(ctx, dev.ID, Report{FW: "0.4.0"})
+	for _, c := range []struct {
+		after  time.Duration
+		online bool
+	}{{0, true}, {OfflineAfter - time.Second, true}, {OfflineAfter, false}} {
+		s.Now = func() time.Time { return seen.Add(c.after) }
+		if list, _ := s.List(ctx, userA); list[0].Online != c.online {
+			t.Errorf("%v after the last report: online %v", c.after, list[0].Online)
+		}
+	}
+}
+
+func TestAllListsEveryUsersStands(t *testing.T) {
+	s, userA, userB := newStore(t)
+	ctx := context.Background()
+	s.Create(ctx, userA, "A")
+	b, _, _ := s.Create(ctx, userB, "B")
+	gone, _, _ := s.Create(ctx, userB, "Gone")
+	s.Revoke(ctx, userB, gone.ID)
+	all, err := s.All(ctx)
+	if err != nil || len(all) != 2 || all[1].ID != b.ID || all[1].UserID != userB {
+		t.Fatalf("all: %+v %v", all, err)
 	}
 }

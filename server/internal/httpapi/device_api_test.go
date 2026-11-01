@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mslaby96/spindle/server/internal/devices"
 )
 
 func (e *testEnv) deviceToken(t *testing.T, c *http.Client) string {
@@ -216,5 +219,75 @@ func TestAnEmptyStandReportsLessOften(t *testing.T) {
 	}
 	if _, out := e.report(t, token, "04A1B2C3"); out.IntervalMS != 1500 {
 		t.Fatalf("stand with a sleeve asked to report every %d ms", out.IntervalMS)
+	}
+}
+
+func nextNamed(t *testing.T, ch <-chan sseEvent, name string) (sseEvent, bool) {
+	t.Helper()
+	for {
+		ev, ok := waitEvent(t, ch)
+		if !ok || ev.name == name {
+			return ev, ok
+		}
+	}
+}
+
+func TestReportCarriesDiagnostics(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	token := e.deviceToken(t, c)
+	resp := do(t, e.client(t), "POST", e.http.URL+"/api/device/v1/report",
+		map[string]any{"uid": nil, "fw": "0.4.0", "seq": 1, "rssi": -61, "reader_resets": 1, "uptime_sec": 7200},
+		"Authorization", "Bearer "+token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("report with diagnostics: %d", resp.StatusCode)
+	}
+	var list []devices.Device
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/devices", nil).Body).Decode(&list)
+	if len(list) != 1 || !list[0].Online || *list[0].RSSI != -61 || *list[0].ReaderResets != 1 || *list[0].UptimeSec != 7200 {
+		t.Fatalf("devices: %+v", list)
+	}
+}
+
+func TestUnknownDiagnosticsAreLeftOut(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	e.report(t, e.deviceToken(t, c), nil)
+	b, _ := io.ReadAll(do(t, c, "GET", e.http.URL+"/api/devices", nil).Body)
+	if !strings.Contains(string(b), `"online":true`) || strings.Contains(string(b), "rssi") ||
+		strings.Contains(string(b), "reader_resets") || strings.Contains(string(b), "uptime_sec") {
+		t.Fatalf("devices: %s", b)
+	}
+}
+
+func TestStandGoingQuietAndComingBackIsAnnounced(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	token := e.deviceToken(t, c)
+	e.report(t, token, nil)
+	stream := openStream(t, c, e.http.URL+"/api/events")
+	e.srv.Watcher.Check(context.Background())
+
+	later := time.Now().Add(devices.OfflineAfter)
+	e.srv.Devices.Now = func() time.Time { return later }
+	e.srv.Watcher.Check(context.Background())
+	if ev, ok := nextNamed(t, stream, devices.EventStatus); !ok || !strings.Contains(ev.data, `"online":false`) {
+		t.Fatalf("went quiet: %+v %v", ev, ok)
+	}
+	e.report(t, token, nil)
+	if ev, ok := nextNamed(t, stream, devices.EventStatus); !ok || !strings.Contains(ev.data, `"online":true`) {
+		t.Fatalf("came back: %+v %v", ev, ok)
+	}
+}
+
+func TestRemovingAStandIsAnnounced(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	var created struct{ Device devices.Device }
+	json.NewDecoder(do(t, c, "POST", e.http.URL+"/api/devices", map[string]string{"name": "Stand"}).Body).Decode(&created)
+	stream := openStream(t, c, e.http.URL+"/api/events")
+	do(t, c, "DELETE", e.http.URL+"/api/devices/"+jsonNumber(created.Device.ID), nil)
+	if ev, ok := nextNamed(t, stream, devices.EventRemoved); !ok || !strings.Contains(ev.data, `"id":`+jsonNumber(created.Device.ID)) {
+		t.Fatalf("removed: %+v %v", ev, ok)
 	}
 }

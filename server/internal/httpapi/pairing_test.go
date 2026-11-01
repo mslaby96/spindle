@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mslaby96/spindle/server/internal/devices"
 )
 
 func TestStandPairsWithCodeFromTheApp(t *testing.T) {
@@ -47,7 +49,7 @@ func TestStandPairsWithCodeFromTheApp(t *testing.T) {
 
 	select {
 	case ev := <-stream:
-		if ev.name != EventDevicePaired || !strings.Contains(ev.data, `"name":"Living room"`) {
+		if ev.name != devices.EventPaired || !strings.Contains(ev.data, `"name":"Living room"`) {
 			t.Fatalf("event %+v", ev)
 		}
 	case <-time.After(3 * time.Second):

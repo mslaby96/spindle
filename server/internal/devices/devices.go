@@ -13,7 +13,12 @@ import (
 	"github.com/mslaby96/spindle/server/internal/secrets"
 )
 
-const tokenPrefix = "spd_"
+const (
+	tokenPrefix = "spd_"
+	// OfflineAfter is three missed heartbeats of an empty stand.
+	OfflineAfter = 90 * time.Second
+	columns      = `id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at, rssi, reader_resets, uptime_sec`
+)
 
 var (
 	ErrNotFound     = errors.New("device not found")
@@ -28,6 +33,19 @@ type Device struct {
 	FWVersion  string     `json:"fw_version,omitempty"`
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
+	Online     bool       `json:"online"`
+	// The diagnostics come from the last report and are missing when the stand's firmware doesn't send them.
+	RSSI         *int   `json:"rssi,omitempty"`
+	ReaderResets *int   `json:"reader_resets,omitempty"`
+	UptimeSec    *int64 `json:"uptime_sec,omitempty"`
+}
+
+// Report is what a stand says about itself each time it reports.
+type Report struct {
+	FW           string
+	RSSI         *int
+	ReaderResets *int
+	UptimeSec    *int64
 }
 
 type Store struct {
@@ -73,16 +91,23 @@ func (s *Store) insert(ctx context.Context, db execer, userID int64, name string
 }
 
 func (s *Store) List(ctx context.Context, userID int64) ([]Device, error) {
-	rows, err := s.db.R.QueryContext(ctx,
-		`SELECT id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at
-		 FROM devices WHERE user_id = ? AND revoked_at IS NULL ORDER BY id`, userID)
+	return s.query(ctx, `SELECT `+columns+` FROM devices WHERE user_id = ? AND revoked_at IS NULL ORDER BY id`, userID)
+}
+
+// All lists every user's stands.
+func (s *Store) All(ctx context.Context) ([]Device, error) {
+	return s.query(ctx, `SELECT `+columns+` FROM devices WHERE revoked_at IS NULL ORDER BY id`)
+}
+
+func (s *Store) query(ctx context.Context, query string, args ...any) ([]Device, error) {
+	rows, err := s.db.R.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Device{}
 	for rows.Next() {
-		d, err := scan(rows)
+		d, err := s.scan(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -109,34 +134,51 @@ func (s *Store) Authenticate(ctx context.Context, token string) (Device, error) 
 		return Device{}, ErrInvalidToken
 	}
 	row := s.db.R.QueryRowContext(ctx,
-		`SELECT id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at
-		 FROM devices WHERE token_hash = ? AND revoked_at IS NULL`, secrets.Hash(token))
-	d, err := scan(row)
+		`SELECT `+columns+` FROM devices WHERE token_hash = ? AND revoked_at IS NULL`, secrets.Hash(token))
+	d, err := s.scan(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Device{}, ErrInvalidToken
 	}
 	return d, err
 }
 
-func (s *Store) Touch(ctx context.Context, id int64, fwVersion string) error {
-	_, err := s.db.W.ExecContext(ctx, `UPDATE devices SET last_seen_at = ?, fw_version = ? WHERE id = ?`,
-		s.Now().Unix(), fwVersion, id)
-	return err
+// Touch records a report and returns the stand as it is now.
+func (s *Store) Touch(ctx context.Context, id int64, r Report) (Device, error) {
+	row := s.db.W.QueryRowContext(ctx, `UPDATE devices SET last_seen_at = ?, fw_version = ?, rssi = ?, reader_resets = ?,
+		uptime_sec = ? WHERE id = ? RETURNING `+columns, s.Now().Unix(), r.FW, r.RSSI, r.ReaderResets, r.UptimeSec, id)
+	return s.scan(row)
 }
 
 type scanner interface{ Scan(...any) error }
 
-func scan(r scanner) (Device, error) {
+func (s *Store) scan(r scanner) (Device, error) {
 	var d Device
-	var lastSeen sql.NullInt64
+	var lastSeen, rssi, resets, uptime sql.NullInt64
 	var created int64
-	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created); err != nil {
+	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created, &rssi, &resets, &uptime); err != nil {
 		return Device{}, err
 	}
 	d.CreatedAt = time.Unix(created, 0).UTC()
 	if lastSeen.Valid {
 		t := time.Unix(lastSeen.Int64, 0).UTC()
 		d.LastSeenAt = &t
+		d.Online = s.Now().Sub(t) < OfflineAfter
 	}
+	d.RSSI, d.ReaderResets, d.UptimeSec = intPtr(rssi), intPtr(resets), int64Ptr(uptime)
 	return d, nil
+}
+
+func intPtr(v sql.NullInt64) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int64)
+	return &n
+}
+
+func int64Ptr(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Int64
 }

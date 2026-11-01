@@ -120,6 +120,11 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 	go resolver.Run(ctx)
 	go engine.RunSweeper(ctx, 10*time.Second)
+	deviceStore := devices.NewStore(d)
+	watcher := &devices.Watcher{Store: deviceStore, Publish: func(dev devices.Device) {
+		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
+	}}
+	go watcher.Run(ctx, 5*time.Second)
 	if cfg.Backup.Every > 0 {
 		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
 		go backups.Run(ctx, cfg.Backup.Every, func(path string, err error) {
@@ -160,7 +165,8 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Config:    cfg,
 			DB:        d,
 			Auth:      authSvc,
-			Devices:   devices.NewStore(d),
+			Devices:   deviceStore,
+			Watcher:   watcher,
 			Catalog:   catalogSvc,
 			Mode:      mode,
 			Durations: resolver,

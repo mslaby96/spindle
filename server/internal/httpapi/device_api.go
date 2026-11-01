@@ -43,9 +43,12 @@ func (s *Server) device(h http.HandlerFunc) http.Handler {
 }
 
 type reportRequest struct {
-	UID *string `json:"uid"`
-	FW  string  `json:"fw"`
-	Seq int64   `json:"seq"`
+	UID          *string `json:"uid"`
+	FW           string  `json:"fw"`
+	Seq          int64   `json:"seq"`
+	RSSI         *int    `json:"rssi"`
+	ReaderResets *int    `json:"reader_resets"`
+	UptimeSec    *int64  `json:"uptime_sec"`
 }
 
 type reportResponse struct {
@@ -67,10 +70,14 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.Devices.Touch(r.Context(), dev.ID, req.FW); err != nil {
+	dev, err := s.Devices.Touch(r.Context(), dev.ID, devices.Report{
+		FW: req.FW, RSSI: req.RSSI, ReaderResets: req.ReaderResets, UptimeSec: req.UptimeSec,
+	})
+	if err != nil {
 		s.internal(w, err)
 		return
 	}
+	s.Watcher.Seen(dev)
 	led, err := s.Presence.Observe(r.Context(), presence.Observation{
 		UserID:   dev.UserID,
 		DeviceID: dev.ID,

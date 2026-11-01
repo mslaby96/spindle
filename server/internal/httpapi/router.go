@@ -27,6 +27,7 @@ type Deps struct {
 	DB        *db.DB
 	Auth      *auth.Service
 	Devices   *devices.Store
+	Watcher   *devices.Watcher
 	Catalog   *catalog.Service
 	Mode      *catalog.Mode
 	Discogs   *discogs.Client
