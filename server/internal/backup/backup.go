@@ -128,16 +128,8 @@ func writeArchive(target, snapshot, coverDir string) error {
 	if err := addFile(tw, snapshot, database); err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(coverDir)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := addCovers(tw, coverDir); err != nil {
 		return err
-	}
-	for _, e := range entries {
-		if e.Type().IsRegular() {
-			if err := addFile(tw, filepath.Join(coverDir, e.Name()), path.Join(covers, e.Name())); err != nil {
-				return err
-			}
-		}
 	}
 	if err := tw.Close(); err != nil {
 		return err
@@ -146,6 +138,25 @@ func writeArchive(target, snapshot, coverDir string) error {
 		return err
 	}
 	return f.Sync()
+}
+
+func addCovers(tw *tar.Writer, coverDir string) error {
+	entries, err := os.ReadDir(coverDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		if err := addFile(tw, filepath.Join(coverDir, e.Name()), path.Join(covers, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func addFile(tw *tar.Writer, from, name string) error {
@@ -199,22 +210,32 @@ func Restore(archive, dataDir string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	if err := extract(archive, tmp); err != nil {
-		return err
-	}
-	if err := check(filepath.Join(tmp, database)); err != nil {
+	if err := unpack(archive, tmp); err != nil {
 		return err
 	}
 	if err := moveAside(dataDir); err != nil {
 		return err
 	}
-	if err := os.Rename(filepath.Join(tmp, database), filepath.Join(dataDir, database)); err != nil {
+	return moveIn(tmp, dataDir)
+}
+
+// unpack extracts the archive and checks that what came out is a healthy Spindle database.
+func unpack(archive, dir string) error {
+	if err := extract(archive, dir); err != nil {
 		return err
 	}
-	if err := os.Rename(filepath.Join(tmp, covers), filepath.Join(dataDir, covers)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	return check(filepath.Join(dir, database))
+}
+
+func moveIn(from, dataDir string) error {
+	if err := os.Rename(filepath.Join(from, database), filepath.Join(dataDir, database)); err != nil {
 		return err
 	}
-	return nil
+	err := os.Rename(filepath.Join(from, covers), filepath.Join(dataDir, covers))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // extract only takes the database and flat cover files, so an archive can't write anywhere else.
@@ -240,22 +261,25 @@ func extract(archive, dir string) error {
 		if !allowed(h) {
 			return fmt.Errorf("not a Spindle backup: unexpected entry %q", h.Name)
 		}
-		target := filepath.Join(dir, filepath.FromSlash(h.Name))
-		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-			return err
-		}
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(out, tr)
-		if cerr := out.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
+		if err := writeEntry(tr, filepath.Join(dir, filepath.FromSlash(h.Name))); err != nil {
 			return err
 		}
 	}
+}
+
+func writeEntry(r io.Reader, target string) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(out, r)
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 func allowed(h *tar.Header) bool {
