@@ -123,6 +123,7 @@ func TestStandDiscovery(t *testing.T) {
 			Via      string `json:"via_device"`
 		}
 		Avty string `json:"avty_t"`
+		QoS  int
 		Cmps map[string]struct {
 			P, Dev string
 			DevCla string `json:"dev_cla"`
@@ -135,7 +136,7 @@ func TestStandDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if msg.Dev.IDs[0] != "spindle_stand_7" || msg.Dev.Name != "Living room" || msg.Dev.SW != "0.4.0" ||
-		msg.Dev.Via != "spindle_1" || msg.Avty != AvailabilityTopic {
+		msg.Dev.Via != "spindle_1" || msg.Avty != AvailabilityTopic || msg.QoS != 1 {
 		t.Fatalf("device %+v", msg)
 	}
 	conn := msg.Cmps["spindle_stand_7_connectivity"]
@@ -192,9 +193,11 @@ func TestInstallTopicNamesTheStand(t *testing.T) {
 	if user, stand, ok := installTarget(StandInstallTopic(3, 12)); !ok || user != 3 || stand != 12 {
 		t.Fatalf("%d %d %v", user, stand, ok)
 	}
-	for _, topic := range []string{"spindle/3/stand/x/install", "spindle/3/stand/12", "homeassistant/status", "spindle/3/stand/12/install/more"} {
-		if _, _, ok := installTarget(topic); ok {
-			t.Errorf("%s accepted", topic)
+	for _, topic := range []string{"spindle/3/stand/x/install", "spindle/x/stand/12/install", "spindle/3/stand/12",
+		"homeassistant/status", "spindle/3/stand/12/install/more", "other/3/stand/12/install", "spindle/3/stands/12/install",
+		"spindle/3/stand/12/remove"} {
+		if user, stand, ok := installTarget(topic); ok || user != 0 || stand != 0 {
+			t.Errorf("%s accepted as %d %d", topic, user, stand)
 		}
 	}
 }

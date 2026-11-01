@@ -17,6 +17,8 @@ var built = fstest.MapFS{
 	"config.json":                            {Data: []byte("{}")},
 	"tests/test_ota.py":                      {Data: []byte("x")},
 	".gitkeep":                               {Data: nil},
+	"oled.py":                                {Data: []byte("x")},
+	"tests/main.py":                          {Data: []byte("x")},
 }
 
 func TestLoadTakesTheStandsCode(t *testing.T) {
@@ -48,7 +50,10 @@ func TestLoadTakesTheStandsCode(t *testing.T) {
 	if data, ok := b.File("main.py"); !ok || string(data) != "import ota\n" {
 		t.Fatalf("file %q %v", data, ok)
 	}
-	for _, p := range []string{"config.json", "tests/test_ota.py", "nope.py", ""} {
+	if data, ok := b.File("app/runner.py"); !ok || string(data) != "def run(): pass\n" {
+		t.Fatalf("first file %q %v", data, ok)
+	}
+	for _, p := range []string{"oled.py", "tests/main.py", "config.json", "tests/test_ota.py", "nope.py", ""} {
 		if _, ok := b.File(p); ok {
 			t.Errorf("%q is served", p)
 		}

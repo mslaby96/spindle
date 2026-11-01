@@ -91,6 +91,9 @@ func TestAFailedUpdateIsShownUntilDismissed(t *testing.T) {
 	if err := s.CancelUpdate(ctx, userA, dev.ID); err != nil {
 		t.Fatal(err)
 	}
+	if len(*notified) != 4 || (*notified)[3].Update != nil {
+		t.Fatalf("dismissing was not announced: %+v", *notified)
+	}
 	if list, _ := s.List(ctx, userA); list[0].Update != nil {
 		t.Fatalf("dismissed: %+v", list[0].Update)
 	}

@@ -41,7 +41,10 @@ func installTarget(topic string) (userID, standID int64, ok bool) {
 	}
 	u, err1 := strconv.ParseInt(parts[1], 10, 64)
 	s, err2 := strconv.ParseInt(parts[3], 10, 64)
-	return u, s, err1 == nil && err2 == nil
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return u, s, true
 }
 
 func objectID(userID int64) string { return "spindle_" + strconv.FormatInt(userID, 10) }
