@@ -143,6 +143,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 		Current: func(ctx context.Context, userID int64) ([]sessions.NowPlaying, error) {
 			return engine.Current(ctx, userID, catalogSvc.Album)
 		},
+		Stands:  deviceStore.List,
 		Version: version,
 		Log:     log,
 	}

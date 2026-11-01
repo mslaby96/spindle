@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
 
@@ -21,7 +22,17 @@ func StateTopic(userID int64) string      { return baseTopic(userID) + "/now_pla
 func AttributesTopic(userID int64) string { return baseTopic(userID) + "/now_playing/attributes" }
 func CoverTopic(userID int64) string      { return baseTopic(userID) + "/cover" }
 
+func StandTopic(userID, standID int64) string {
+	return baseTopic(userID) + "/stand/" + strconv.FormatInt(standID, 10)
+}
+
 func objectID(userID int64) string { return "spindle_" + strconv.FormatInt(userID, 10) }
+
+func standObjectID(standID int64) string { return "spindle_stand_" + strconv.FormatInt(standID, 10) }
+
+func standDiscoveryTopic(prefix string, standID int64) string {
+	return prefix + "/device/" + standObjectID(standID) + "/config"
+}
 
 // Discovery returns the device-based discovery message that makes Home Assistant create one Spindle device with a
 // "Now playing" sensor and a cover image.
@@ -62,6 +73,78 @@ func Discovery(prefix string, userID int64, version string) (string, []byte) {
 	}
 	b, _ := json.Marshal(msg)
 	return prefix + "/device/" + id + "/config", b
+}
+
+// StandDiscovery makes a stand its own Home Assistant device, linked to the user's Spindle, with its connection and
+// diagnostics. Diagnostics a stand doesn't send render as None, which Home Assistant shows as unknown.
+func StandDiscovery(prefix string, userID int64, d devices.Device) (string, []byte) {
+	id := standObjectID(d.ID)
+	state := StandTopic(userID, d.ID)
+	diagnostic := func(name, key string, extra map[string]any) map[string]any {
+		c := map[string]any{
+			"p":       "sensor",
+			"name":    name,
+			"uniq_id": id + "_" + key,
+			"stat_t":  state,
+			"val_tpl": "{{ value_json.get('" + key + "') }}",
+			"ent_cat": "diagnostic",
+		}
+		for k, v := range extra {
+			c[k] = v
+		}
+		return c
+	}
+	msg := map[string]any{
+		"dev": map[string]any{
+			"ids":        []string{id},
+			"name":       d.Name,
+			"mf":         "Spindle",
+			"mdl":        "Spindle stand",
+			"sw":         d.FWVersion,
+			"via_device": objectID(userID),
+		},
+		"o":      map[string]any{"name": "Spindle", "url": "https://github.com/mslaby96/spindle"},
+		"avty_t": AvailabilityTopic,
+		"qos":    1,
+		"cmps": map[string]any{
+			id + "_connectivity": map[string]any{
+				"p":       "binary_sensor",
+				"name":    "Connection",
+				"uniq_id": id + "_connectivity",
+				"dev_cla": "connectivity",
+				"stat_t":  state,
+				"val_tpl": "{{ value_json.connectivity }}",
+				"ent_cat": "diagnostic",
+			},
+			id + "_rssi": diagnostic("Wi-Fi signal", "rssi", map[string]any{
+				"dev_cla": "signal_strength", "unit_of_meas": "dBm", "stat_cla": "measurement",
+			}),
+			id + "_reader_resets": diagnostic("Reader resets", "reader_resets", map[string]any{
+				"stat_cla": "total_increasing", "icon": "mdi:restart",
+			}),
+			id + "_uptime_sec": diagnostic("Uptime", "uptime_sec", map[string]any{
+				"dev_cla": "duration", "unit_of_meas": "s",
+			}),
+		},
+	}
+	b, _ := json.Marshal(msg)
+	return standDiscoveryTopic(prefix, d.ID), b
+}
+
+type standState struct {
+	Connectivity string `json:"connectivity"`
+	RSSI         *int   `json:"rssi,omitempty"`
+	ReaderResets *int   `json:"reader_resets,omitempty"`
+	UptimeSec    *int64 `json:"uptime_sec,omitempty"`
+}
+
+func StandState(d devices.Device) []byte {
+	s := standState{Connectivity: "OFF", RSSI: d.RSSI, ReaderResets: d.ReaderResets, UptimeSec: d.UptimeSec}
+	if d.Online {
+		s.Connectivity = "ON"
+	}
+	b, _ := json.Marshal(s)
+	return b
 }
 
 type Attributes struct {

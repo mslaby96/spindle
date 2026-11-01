@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mslaby96/spindle/server/internal/catalog"
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
 
@@ -107,5 +108,54 @@ func TestInvalidCoverColorIsLeftOut(t *testing.T) {
 		if a.Color != "" || a.RGB != nil {
 			t.Fatalf("%q gave %s", c, attrs)
 		}
+	}
+}
+
+func TestStandDiscovery(t *testing.T) {
+	topic, payload := StandDiscovery("homeassistant", 1, devices.Device{ID: 7, Name: "Living room", FWVersion: "0.4.0"})
+	if topic != "homeassistant/device/spindle_stand_7/config" {
+		t.Fatalf("topic %s", topic)
+	}
+	var msg struct {
+		Dev struct {
+			IDs      []string
+			Name, SW string
+			Via      string `json:"via_device"`
+		}
+		Avty string `json:"avty_t"`
+		Cmps map[string]struct {
+			P, Dev string
+			DevCla string `json:"dev_cla"`
+			EntCat string `json:"ent_cat"`
+			StatT  string `json:"stat_t"`
+			UniqID string `json:"uniq_id"`
+		}
+	}
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Dev.IDs[0] != "spindle_stand_7" || msg.Dev.Name != "Living room" || msg.Dev.SW != "0.4.0" ||
+		msg.Dev.Via != "spindle_1" || msg.Avty != AvailabilityTopic {
+		t.Fatalf("device %+v", msg)
+	}
+	conn := msg.Cmps["spindle_stand_7_connectivity"]
+	if conn.P != "binary_sensor" || conn.DevCla != "connectivity" || conn.StatT != StandTopic(1, 7) {
+		t.Fatalf("connectivity %+v", conn)
+	}
+	for _, key := range []string{"spindle_stand_7_rssi", "spindle_stand_7_reader_resets", "spindle_stand_7_uptime_sec"} {
+		c, ok := msg.Cmps[key]
+		if !ok || c.P != "sensor" || c.EntCat != "diagnostic" || c.UniqID != key || c.StatT != StandTopic(1, 7) {
+			t.Errorf("%s: %+v", key, c)
+		}
+	}
+}
+
+func TestStandStateLeavesOutWhatIsUnknown(t *testing.T) {
+	resets := 0
+	if got := string(StandState(devices.Device{Online: true, ReaderResets: &resets})); got != `{"connectivity":"ON","reader_resets":0}` {
+		t.Fatalf("online %s", got)
+	}
+	if got := string(StandState(devices.Device{})); got != `{"connectivity":"OFF"}` {
+		t.Fatalf("offline %s", got)
 	}
 }

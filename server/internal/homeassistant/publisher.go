@@ -2,6 +2,7 @@ package homeassistant
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/covers"
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
@@ -27,14 +29,19 @@ const coverSide = 600
 
 type CurrentFunc func(ctx context.Context, userID int64) ([]sessions.NowPlaying, error)
 
+type StandsFunc func(ctx context.Context, userID int64) ([]devices.Device, error)
+
 type Publisher struct {
 	Cfg     config.MQTT
 	DB      *db.DB
 	Bus     *events.Bus
 	Covers  *covers.Store
 	Current CurrentFunc
-	Version string
-	Log     *slog.Logger
+	Stands  StandsFunc
+	// StandsEvery is how often the stands' diagnostics are sent again, a minute unless set.
+	StandsEvery time.Duration
+	Version     string
+	Log         *slog.Logger
 }
 
 // Run keeps Home Assistant in sync with what is playing until ctx ends. Without an MQTT URL it does nothing.
@@ -57,6 +64,8 @@ func (p *Publisher) Run(ctx context.Context) error {
 
 	evs, cancel := p.Bus.SubscribeAll()
 	defer cancel()
+	refresh := time.NewTicker(cmp.Or(p.StandsEvery, time.Minute))
+	defer refresh.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,6 +73,10 @@ func (p *Publisher) Run(ctx context.Context) error {
 			return nil
 		case <-resync:
 			p.resync(ctx, cm)
+		case <-refresh.C:
+			if err := p.syncStands(ctx, cm); err != nil {
+				p.Log.Warn("Home Assistant stands", "err", err)
+			}
 		case e := <-evs:
 			p.handle(ctx, cm, e)
 		}
@@ -71,9 +84,24 @@ func (p *Publisher) Run(ctx context.Context) error {
 }
 
 func (p *Publisher) handle(ctx context.Context, cm *autopaho.ConnectionManager, e events.Event) {
-	if np, ok := e.Data.(sessions.NowPlaying); ok && e.Type == sessions.EventNowPlaying {
-		p.publishNowPlaying(ctx, cm, e.UserID, np)
+	switch data := e.Data.(type) {
+	case sessions.NowPlaying:
+		if e.Type == sessions.EventNowPlaying {
+			p.publishNowPlaying(ctx, cm, e.UserID, data)
+		}
+	case devices.Device:
+		p.publishStand(ctx, cm, e.UserID, data)
+	case devices.Removed:
+		// empty retained messages make Home Assistant drop the device and forget its last state
+		p.publish(ctx, cm, standDiscoveryTopic(p.Cfg.Prefix, data.ID), nil)
+		p.publish(ctx, cm, StandTopic(e.UserID, data.ID), nil)
 	}
+}
+
+func (p *Publisher) publishStand(ctx context.Context, cm *autopaho.ConnectionManager, userID int64, d devices.Device) {
+	topic, payload := StandDiscovery(p.Cfg.Prefix, userID, d)
+	p.publish(ctx, cm, topic, payload)
+	p.publish(ctx, cm, StandTopic(userID, d.ID), StandState(d))
 }
 
 // signal coalesces requests: raising it while one is already pending does nothing.
@@ -141,11 +169,12 @@ func (p *Publisher) goOffline(cm *autopaho.ConnectionManager) {
 	cm.Disconnect(ctx)
 }
 
-func (p *Publisher) syncAll(ctx context.Context, cm *autopaho.ConnectionManager) error {
+func (p *Publisher) users(ctx context.Context) ([]int64, error) {
 	rows, err := p.DB.R.QueryContext(ctx, `SELECT id FROM users`)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer rows.Close()
 	var users []int64
 	for rows.Next() {
 		var id int64
@@ -153,7 +182,31 @@ func (p *Publisher) syncAll(ctx context.Context, cm *autopaho.ConnectionManager)
 			users = append(users, id)
 		}
 	}
-	rows.Close()
+	return users, rows.Err()
+}
+
+func (p *Publisher) syncStands(ctx context.Context, cm *autopaho.ConnectionManager) error {
+	users, err := p.users(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range users {
+		stands, err := p.Stands(ctx, id)
+		if err != nil {
+			return err
+		}
+		for _, d := range stands {
+			p.publishStand(ctx, cm, id, d)
+		}
+	}
+	return nil
+}
+
+func (p *Publisher) syncAll(ctx context.Context, cm *autopaho.ConnectionManager) error {
+	users, err := p.users(ctx)
+	if err != nil {
+		return err
+	}
 	for _, id := range users {
 		topic, payload := Discovery(p.Cfg.Prefix, id, p.Version)
 		p.publish(ctx, cm, topic, payload)
@@ -167,7 +220,7 @@ func (p *Publisher) syncAll(ctx context.Context, cm *autopaho.ConnectionManager)
 		}
 		p.publishNowPlaying(ctx, cm, id, np)
 	}
-	return nil
+	return p.syncStands(ctx, cm)
 }
 
 func (p *Publisher) publishNowPlaying(ctx context.Context, cm *autopaho.ConnectionManager, userID int64, np sessions.NowPlaying) {

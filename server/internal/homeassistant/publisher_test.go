@@ -28,6 +28,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/covers"
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
@@ -137,7 +138,7 @@ func startPublisher(t *testing.T, ctx context.Context) *harness {
 	return startPublisherWith(t, ctx, func(context.Context, int64) ([]sessions.NowPlaying, error) { return nil, nil })
 }
 
-func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc) *harness {
+func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc, stands ...StandsFunc) *harness {
 	t.Helper()
 	server, broker := startBroker(t)
 	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "spindle.db"))
@@ -154,8 +155,12 @@ func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc) 
 		Bus:     h.bus,
 		Covers:  &covers.Store{Dir: t.TempDir()},
 		Current: current,
+		Stands:  func(context.Context, int64) ([]devices.Device, error) { return nil, nil },
 		Version: "test",
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	if len(stands) > 0 {
+		h.p.Stands, h.p.StandsEvery = stands[0], 50*time.Millisecond
 	}
 	go func() { h.done <- h.p.Run(ctx) }()
 	eventually(t, "online", func() bool { s, _ := h.ha.last(AvailabilityTopic); return s == "online" })
@@ -331,4 +336,37 @@ func TestPublisherGoesOfflineWhenStopped(t *testing.T) {
 		t.Fatal("publisher did not stop")
 	}
 	eventually(t, "offline", func() bool { s, _ := h.ha.last(AvailabilityTopic); return s == "offline" })
+}
+
+func TestPublisherShowsEachStand(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var mu sync.Mutex
+	rssi := -60
+	stand := devices.Device{ID: 7, UserID: 1, Name: "Living room", FWVersion: "0.4.0", Online: true, RSSI: &rssi}
+	h := startPublisherWith(t, ctx, func(context.Context, int64) ([]sessions.NowPlaying, error) { return nil, nil },
+		func(context.Context, int64) ([]devices.Device, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			return []devices.Device{stand}, nil
+		})
+	discovery := "homeassistant/device/spindle_stand_7/config"
+	eventually(t, "stand discovery", func() bool { s, _ := h.ha.last(discovery); return strings.Contains(s, "Living room") })
+	eventually(t, "stand online", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return strings.Contains(s, `"ON"`) })
+
+	offline := stand
+	offline.Online = false
+	h.bus.Publish(events.Event{Type: devices.EventStatus, UserID: 1, Data: offline})
+	eventually(t, "stand offline", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return strings.Contains(s, `"OFF"`) })
+
+	mu.Lock()
+	stand.RSSI = nil
+	mu.Unlock()
+	eventually(t, "diagnostics refreshed", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return !strings.Contains(s, "rssi") })
+
+	h.bus.Publish(events.Event{Type: devices.EventRemoved, UserID: 1, Data: devices.Removed{ID: 7}})
+	eventually(t, "stand removed", func() bool { s, ok := h.ha.last(discovery); return ok && s == "" })
+	if s, _ := h.ha.last(StandTopic(1, 7)); s != "" {
+		t.Fatalf("removed stand keeps its state %q", s)
+	}
 }
