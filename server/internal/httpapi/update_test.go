@@ -74,7 +74,11 @@ func TestStandUpdatesWhenAsked(t *testing.T) {
 	if u := s.stand(t).Update; u == nil || u.State != devices.UpdateInstalling {
 		t.Fatalf("installing: %+v", u)
 	}
+	stream := openStream(t, s.c, s.http.URL+"/api/events")
 	s.reportAs(t, testFirmware, nil, "")
+	if ev, ok := nextNamed(t, stream, devices.EventStatus); !ok || !strings.Contains(ev.data, `"fw_version":"`+testFirmware+`"`) {
+		t.Fatalf("the finished update is announced with the old firmware: %+v %v", ev, ok)
+	}
 	if d := s.stand(t); d.Update != nil || d.UpdateAvailable != "" || d.FWVersion != testFirmware {
 		t.Fatalf("after the update: %+v", d)
 	}

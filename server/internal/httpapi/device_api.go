@@ -94,13 +94,14 @@ func reportedUID(raw *string) (string, bool) {
 }
 
 func (s *Server) observe(ctx context.Context, dev devices.Device, req reportRequest, uid string) (reportResponse, error) {
-	if err := s.Devices.Settle(ctx, dev.ID, req.FW, req.UpdateFailed); err != nil {
-		return reportResponse{}, err
-	}
 	dev, err := s.Devices.Touch(ctx, dev.ID, devices.Report{
 		FW: req.FW, RSSI: req.RSSI, ReaderResets: req.ReaderResets, UptimeSec: req.UptimeSec,
 	})
 	if err != nil {
+		return reportResponse{}, err
+	}
+	// after Touch, so a finished update is announced with the firmware it ended on
+	if err := s.Devices.Settle(ctx, dev.ID, req.FW, req.UpdateFailed); err != nil {
 		return reportResponse{}, err
 	}
 	s.Watcher.Seen(dev)
