@@ -32,8 +32,10 @@ def read_config():
 
 
 def watchdog(cfg):
-    # The watchdog cannot be stopped once started, so allow turning it off while developing over USB.
-    return WDT(timeout=WDT_TIMEOUT_MS) if cfg.get("watchdog", True) else _NoWatchdog()
+    # The watchdog cannot be stopped once started, so allow turning it off while developing over USB. A new firmware on
+    # trial already has one running from main.py, which then has to be fed.
+    on = cfg.get("watchdog", True) or ota.trying(ota.Flash())
+    return WDT(timeout=WDT_TIMEOUT_MS) if on else _NoWatchdog()
 
 
 class _NoWatchdog:
