@@ -63,3 +63,11 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	s.Bus.Publish(events.Event{Type: devices.EventPaired, UserID: dev.UserID, Data: dev})
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }
+
+func (s *Server) requestWiFiChange(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Devices.RequestWiFiChange)
+}
+
+func (s *Server) cancelWiFiChange(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Devices.CancelWiFiChange)
+}

@@ -166,3 +166,43 @@ func TestAllListsEveryUsersStands(t *testing.T) {
 		t.Fatalf("all: %+v %v", all, err)
 	}
 }
+
+func TestWiFiChangeIsHandedOverOnce(t *testing.T) {
+	s, userA, userB := newStore(t)
+	ctx := context.Background()
+	dev, _, _ := s.Create(ctx, userA, "Stand")
+	if err := s.RequestWiFiChange(ctx, userB, dev.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other user's stand: %v", err)
+	}
+	if err := s.RequestWiFiChange(ctx, userA, dev.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := s.List(ctx, userA); !list[0].WiFiChangePending {
+		t.Fatalf("not pending: %+v", list[0])
+	}
+	if taken, err := s.TakeWiFiChange(ctx, dev.ID); !taken || err != nil {
+		t.Fatalf("first take: %v %v", taken, err)
+	}
+	if taken, _ := s.TakeWiFiChange(ctx, dev.ID); taken {
+		t.Fatal("handed over twice")
+	}
+	if list, _ := s.List(ctx, userA); list[0].WiFiChangePending {
+		t.Fatal("still pending after the stand took it")
+	}
+}
+
+func TestWiFiChangeCanBeCancelled(t *testing.T) {
+	s, userA, userB := newStore(t)
+	ctx := context.Background()
+	dev, _, _ := s.Create(ctx, userA, "Stand")
+	s.RequestWiFiChange(ctx, userA, dev.ID)
+	if err := s.CancelWiFiChange(ctx, userB, dev.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other user's stand: %v", err)
+	}
+	if err := s.CancelWiFiChange(ctx, userA, dev.ID); err != nil {
+		t.Fatal(err)
+	}
+	if taken, _ := s.TakeWiFiChange(ctx, dev.ID); taken {
+		t.Fatal("cancelled change handed over")
+	}
+}

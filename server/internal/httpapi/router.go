@@ -62,6 +62,8 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/devices", s.user(s.createDevice))
 	s.mux.Handle("DELETE /api/devices/{id}", s.user(s.revokeDevice))
 	s.mux.Handle("POST /api/devices/pairing", s.user(s.startPairing))
+	s.mux.Handle("POST /api/devices/{id}/wifi-change", s.user(s.requestWiFiChange))
+	s.mux.Handle("DELETE /api/devices/{id}/wifi-change", s.user(s.cancelWiFiChange))
 	s.mux.Handle("GET /api/events", s.user(s.events))
 	s.mux.Handle("GET /api/now-playing", s.user(s.nowPlaying))
 	s.mux.Handle("POST /api/now-playing/{id}/end", s.user(s.endListen))

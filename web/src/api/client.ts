@@ -50,6 +50,8 @@ export type Device = {
   rssi?: number;
   reader_resets?: number;
   uptime_sec?: number;
+  // Set until the stand next reports and is told to forget its Wi-Fi.
+  wifi_change_pending: boolean;
 };
 
 export const meKey = ["me"] as const;

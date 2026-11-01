@@ -291,3 +291,48 @@ func TestRemovingAStandIsAnnounced(t *testing.T) {
 		t.Fatalf("removed: %+v %v", ev, ok)
 	}
 }
+
+func TestStandIsAskedToChangeItsWiFi(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	var created struct {
+		Device devices.Device
+		Token  string
+	}
+	json.NewDecoder(do(t, c, "POST", e.http.URL+"/api/devices", map[string]string{"name": "Stand"}).Body).Decode(&created)
+	url := e.http.URL + "/api/devices/" + jsonNumber(created.Device.ID) + "/wifi-change"
+	if resp := do(t, c, "POST", url, nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("request: %d", resp.StatusCode)
+	}
+	stream := openStream(t, c, e.http.URL+"/api/events")
+	if _, out := e.report(t, created.Token, nil); out.Command != "change_wifi" {
+		t.Fatalf("first report: %+v", out)
+	}
+	if ev, ok := nextNamed(t, stream, devices.EventStatus); !ok || !strings.Contains(ev.data, `"wifi_change_pending":false`) {
+		t.Fatalf("handed over: %+v %v", ev, ok)
+	}
+	if _, out := e.report(t, created.Token, nil); out.Command != "" {
+		t.Fatalf("second report: %+v", out)
+	}
+}
+
+func TestWiFiChangeCancelledBeforeTheStandAsked(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	var created struct {
+		Device devices.Device
+		Token  string
+	}
+	json.NewDecoder(do(t, c, "POST", e.http.URL+"/api/devices", map[string]string{"name": "Stand"}).Body).Decode(&created)
+	url := e.http.URL + "/api/devices/" + jsonNumber(created.Device.ID) + "/wifi-change"
+	do(t, c, "POST", url, nil)
+	if resp := do(t, c, "DELETE", url, nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("cancel: %d", resp.StatusCode)
+	}
+	if _, out := e.report(t, created.Token, nil); out.Command != "" {
+		t.Fatalf("report after cancel: %+v", out)
+	}
+	if resp := do(t, c, "POST", e.http.URL+"/api/devices/999/wifi-change", nil); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown stand: %d", resp.StatusCode)
+	}
+}

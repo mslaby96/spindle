@@ -17,7 +17,8 @@ const (
 	tokenPrefix = "spd_"
 	// OfflineAfter is three missed heartbeats of an empty stand.
 	OfflineAfter = 90 * time.Second
-	columns      = `id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at, rssi, reader_resets, uptime_sec`
+	columns      = `id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at, rssi, reader_resets, uptime_sec,
+		wifi_change_requested_at IS NOT NULL`
 )
 
 var (
@@ -38,6 +39,8 @@ type Device struct {
 	RSSI         *int   `json:"rssi,omitempty"`
 	ReaderResets *int   `json:"reader_resets,omitempty"`
 	UptimeSec    *int64 `json:"uptime_sec,omitempty"`
+	// WiFiChangePending is set until the stand next reports and is told to forget its Wi-Fi.
+	WiFiChangePending bool `json:"wifi_change_pending"`
 }
 
 // Report is what a stand says about itself each time it reports.
@@ -117,9 +120,34 @@ func (s *Store) query(ctx context.Context, query string, args ...any) ([]Device,
 }
 
 func (s *Store) Revoke(ctx context.Context, userID, id int64) error {
-	res, err := s.db.W.ExecContext(ctx,
-		`UPDATE devices SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
+	return s.update(ctx, `UPDATE devices SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
 		s.Now().Unix(), id, userID)
+}
+
+// RequestWiFiChange asks the stand to forget its Wi-Fi, but not its pairing, and open its setup network.
+func (s *Store) RequestWiFiChange(ctx context.Context, userID, id int64) error {
+	return s.update(ctx, `UPDATE devices SET wifi_change_requested_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
+		s.Now().Unix(), id, userID)
+}
+
+func (s *Store) CancelWiFiChange(ctx context.Context, userID, id int64) error {
+	return s.update(ctx, `UPDATE devices SET wifi_change_requested_at = NULL WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
+		id, userID)
+}
+
+// TakeWiFiChange reports whether a change was requested and clears it, so the stand is told only once.
+func (s *Store) TakeWiFiChange(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.W.ExecContext(ctx,
+		`UPDATE devices SET wifi_change_requested_at = NULL WHERE id = ? AND wifi_change_requested_at IS NOT NULL`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (s *Store) update(ctx context.Context, query string, args ...any) error {
+	res, err := s.db.W.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -155,7 +183,8 @@ func (s *Store) scan(r scanner) (Device, error) {
 	var d Device
 	var lastSeen, rssi, resets, uptime sql.NullInt64
 	var created int64
-	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created, &rssi, &resets, &uptime); err != nil {
+	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created, &rssi, &resets, &uptime,
+		&d.WiFiChangePending); err != nil {
 		return Device{}, err
 	}
 	d.CreatedAt = time.Unix(created, 0).UTC()

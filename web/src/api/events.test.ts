@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Device } from "./client";
 import { applyDeviceRemoved, applyDeviceStatus, devicesKey } from "./events";
 
-const stand = (id: number, online: boolean): Device => ({ id, name: `Stand ${id}`, created_at: "2026-11-01T10:00:00Z", online });
+const stand = (id: number, online: boolean): Device => ({ id, name: `Stand ${id}`, created_at: "2026-11-01T10:00:00Z", online, wifi_change_pending: false });
 
 describe("stand events", () => {
   it("updates the stand whose status changed and leaves the others", () => {

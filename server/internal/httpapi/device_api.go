@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
@@ -51,9 +52,13 @@ type reportRequest struct {
 	UptimeSec    *int64  `json:"uptime_sec"`
 }
 
+// commandChangeWiFi tells the stand to forget its Wi-Fi and open its setup network, keeping its pairing.
+const commandChangeWiFi = "change_wifi"
+
 type reportResponse struct {
 	LED        presence.LED `json:"led"`
 	IntervalMS int64        `json:"interval_ms"`
+	Command    string       `json:"command,omitempty"`
 }
 
 func (s *Server) report(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +97,24 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 	if uid == "" {
 		interval = idleInterval
 	}
-	writeJSON(w, http.StatusOK, reportResponse{LED: led, IntervalMS: interval.Milliseconds()})
+	resp := reportResponse{LED: led, IntervalMS: interval.Milliseconds()}
+	if dev.WiFiChangePending {
+		if resp.Command, err = s.handOver(r.Context(), dev); err != nil {
+			s.internal(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handOver(ctx context.Context, dev devices.Device) (string, error) {
+	taken, err := s.Devices.TakeWiFiChange(ctx, dev.ID)
+	if err != nil || !taken {
+		return "", err
+	}
+	dev.WiFiChangePending = false
+	s.Bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
+	return commandChangeWiFi, nil
 }
 
 func normalizeUID(s string) (string, bool) {
