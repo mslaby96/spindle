@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
 import { devicesKey, pairedStandKey } from "../api/events";
-import { formatCountdown, formatDateTime, formatUptime, signalStrength } from "../format";
+import { formatCountdown, formatDateTime, formatDbm, formatUptime, signalStrength } from "../format";
 
 type Pairing = { code: string; expires_at: string };
 
@@ -84,10 +84,7 @@ export function DevicesPage() {
                   d.last_seen_at && <span className="sticker">Offline</span>
                 )}
               </p>
-              <p className="muted">
-                {d.online ? "" : d.last_seen_at ? `Offline since ${formatDateTime(d.last_seen_at)}` : "Never connected"}
-                {d.fw_version && `${d.online ? "" : " · "}firmware ${d.fw_version}`}
-              </p>
+              <StandState device={d} />
               <Diagnostics device={d} />
             </div>
             <button
@@ -119,11 +116,17 @@ export function DevicesPage() {
   );
 }
 
+function StandState({ device: d }: { device: Device }) {
+  const state = d.online ? undefined : d.last_seen_at ? `Offline since ${formatDateTime(d.last_seen_at)}` : "Never connected";
+  const line = [state, d.fw_version && `firmware ${d.fw_version}`].filter(Boolean).join(" · ");
+  return line ? <p className="muted">{line}</p> : null;
+}
+
 function Diagnostics({ device: d }: { device: Device }) {
   const parts = [
     d.rssi !== undefined && (
       <>
-        Wi-Fi {signalStrength(d.rssi)} <span className="dbm">−{Math.abs(d.rssi)} dBm</span>
+        Wi-Fi {signalStrength(d.rssi)} <span className="dbm">{formatDbm(d.rssi)}</span>
       </>
     ),
     d.reader_resets !== undefined && `${d.reader_resets} reader ${d.reader_resets === 1 ? "reset" : "resets"}`,

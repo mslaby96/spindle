@@ -60,6 +60,13 @@ describe("stand status", () => {
     expect(r.queryByText(/^up /)).not.toBeInTheDocument();
   });
 
+  it("adds no empty line under an online stand that never sent its firmware version", async () => {
+    setup([stand({ fw_version: undefined })]);
+    const r = await row("Living room");
+    expect(within(r).getByText("Online")).toBeInTheDocument();
+    for (const p of r.querySelectorAll("p")) expect(p.textContent?.trim()).not.toBe("");
+  });
+
   it("shows a stand that never connected", async () => {
     setup([stand({ online: false, last_seen_at: undefined, fw_version: undefined })]);
     const r = within(await row("Living room"));

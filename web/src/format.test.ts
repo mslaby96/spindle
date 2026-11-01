@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatElapsed, formatLength, formatUptime, signalStrength } from "./format";
+import { formatDbm, formatElapsed, formatLength, formatUptime, signalStrength } from "./format";
 
 describe("formatLength", () => {
   it("rounds to whole minutes before splitting off hours", () => {
@@ -56,5 +56,16 @@ describe("formatUptime", () => {
   it("switches to days after that", () => {
     expect(formatUptime(48 * 3600)).toBe("2 days");
     expect(formatUptime(10 * 86_400 + 5 * 3600)).toBe("10 days");
+  });
+});
+
+describe("formatDbm", () => {
+  it("writes a typographic minus for negative values", () => {
+    expect(formatDbm(-58)).toBe("−58 dBm");
+  });
+
+  it("writes zero and positive values without a sign", () => {
+    expect(formatDbm(0)).toBe("0 dBm");
+    expect(formatDbm(3)).toBe("3 dBm");
   });
 });
