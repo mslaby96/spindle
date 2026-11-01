@@ -138,3 +138,86 @@ describe("changing a stand's Wi-Fi", () => {
     expect(r.queryByText(/opening its setup network/)).not.toBeInTheDocument();
   });
 });
+
+describe("updating a stand's firmware", () => {
+  it("offers the newer version and asks for it", async () => {
+    let update: unknown;
+    const calls = setup(() => [stand({ fw_version: "0.5.0", update_available: "0.6.0", update })], {
+      "POST /api/devices/3/update": () => {
+        update = { version: "0.6.0", state: "requested" };
+        return [204];
+      },
+    });
+    const r = within(await row("Living room"));
+    expect(r.getByText(/firmware 0\.5\.0 · 0\.6\.0 available/)).toBeInTheDocument();
+    await userEvent.click(r.getByRole("button", { name: "Update" }));
+    expect(await r.findByText(/waits until no record is on the stand/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.key === "POST /api/devices/3/update")).toHaveLength(1);
+    expect(r.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
+  });
+
+  it("offers nothing when the stand is up to date", async () => {
+    setup([stand({ fw_version: "0.6.0" })]);
+    const r = within(await row("Living room"));
+    expect(r.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
+    expect(r.queryByText(/available/)).not.toBeInTheDocument();
+    expect(r.queryByText(/now on/)).not.toBeInTheDocument();
+  });
+
+  it("lets a requested update be cancelled", async () => {
+    let update: unknown = { version: "0.6.0", state: "requested" };
+    const calls = setup(() => [stand({ fw_version: "0.5.0", update_available: "0.6.0", update })], {
+      "DELETE /api/devices/3/update": () => {
+        update = undefined;
+        return [204];
+      },
+    });
+    const r = within(await row("Living room"));
+    await userEvent.click(r.getByRole("button", { name: "Cancel" }));
+    expect(await r.findByRole("button", { name: "Update" })).toBeInTheDocument();
+    expect(calls.some((c) => c.key === "DELETE /api/devices/3/update")).toBe(true);
+    expect(r.queryByText(/now on/)).not.toBeInTheDocument();
+  });
+
+  it("shows an installing update without a way to cancel it", async () => {
+    setup([stand({ fw_version: "0.5.0", update_available: "0.6.0", update: { version: "0.6.0", state: "installing" } })]);
+    const r = within(await row("Living room"));
+    expect(r.getByText(/Installing 0\.6\.0/)).toBeInTheDocument();
+    expect(r.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(r.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
+  });
+
+  it("explains a failed update, lets it be dismissed or tried again", async () => {
+    let update: unknown = { version: "0.6.0", state: "failed" };
+    const calls = setup(() => [stand({ fw_version: "0.5.0", update_available: "0.6.0", update })], {
+      "DELETE /api/devices/3/update": () => {
+        update = undefined;
+        return [204];
+      },
+    });
+    const r = within(await row("Living room"));
+    expect(r.getByText(/0\.6\.0 didn't take/)).toBeInTheDocument();
+    expect(r.getByText(/back on 0\.5\.0/)).toBeInTheDocument();
+    expect(r.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    await userEvent.click(r.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(r.queryByText(/didn't take/)).not.toBeInTheDocument());
+    expect(calls.some((c) => c.key === "DELETE /api/devices/3/update")).toBe(true);
+  });
+
+  it("says when the stand is on the new version", async () => {
+    setup([stand({ fw_version: "0.5.0", update_available: "0.6.0", update: { version: "0.6.0", state: "installing" } })]);
+    const r = within(await row("Living room"));
+    await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0));
+    act(() => FakeEventSource.instances.at(-1)!.emit("device_status", stand({ fw_version: "0.6.0" })));
+    expect(await r.findByText(/now on 0\.6\.0/)).toBeInTheDocument();
+  });
+
+  it("shows why the server refused an update", async () => {
+    setup([stand({ fw_version: "0.5.0", update_available: "0.6.0" })], {
+      "POST /api/devices/3/update": () => [409, { error: "already up to date" }],
+    });
+    const r = within(await row("Living room"));
+    await userEvent.click(r.getByRole("button", { name: "Update" }));
+    expect(await r.findByText("already up to date")).toBeInTheDocument();
+  });
+});
