@@ -3,11 +3,29 @@ import types
 import unittest
 
 
+class FakePin:
+    def __init__(self):
+        self.levels = []
+
+    def value(self, v):
+        self.levels.append(v)
+
+
 class FakeRC:
     OK, ERR, REQALL = 0, 2, 0x52
 
     def __init__(self, **_):
         self.antenna = True
+        self.regs = {0x2A: 0x8D, 0x2B: 0x3E, 0x15: 0x40, 0x11: 0x3D, 0x37: 0x82}
+        self.inits = 0
+        self.rst = FakePin()
+
+    def _rreg(self, reg):
+        return self.regs.get(reg, 0)
+
+    def init(self):
+        self.inits += 1
+        self.regs.update({0x2A: 0x8D, 0x2B: 0x3E, 0x15: 0x40, 0x11: 0x3D})
 
     def antenna_on(self, on=True):
         self.antenna = on
@@ -48,6 +66,22 @@ class ReaderTest(unittest.TestCase):
         r.read(antenna_stays_on=False)
         self.assertEqual(r.read(antenna_stays_on=True), "04A1B2C3")
         self.assertTrue(r._rc.antenna)
+
+
+class HealTest(unittest.TestCase):
+    def test_a_healthy_reader_is_left_alone(self):
+        r = Reader()
+        self.assertFalse(r.heal_if_stuck())
+        self.assertEqual(r._rc.inits, 0)
+
+    def test_a_reader_that_lost_its_settings_is_reset_and_set_up_again(self):
+        r = Reader()
+        r._rc.regs.update({0x2A: 0x00, 0x11: 0x3F})
+        self.assertTrue(r.heal_if_stuck())
+        self.assertEqual(r._rc.rst.levels, [0, 1])
+        self.assertEqual(r._rc.inits, 1)
+        self.assertEqual(r.resets, 1)
+        self.assertFalse(r.heal_if_stuck())
 
 
 if __name__ == "__main__":

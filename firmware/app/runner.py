@@ -5,7 +5,7 @@ import machine
 import rp2
 from machine import WDT
 
-from app import pace, report
+from app import health, pace, report
 from app.debounce import Debouncer
 from app.hold import Hold
 from app.led import Led
@@ -16,6 +16,8 @@ WDT_TIMEOUT_MS = 8000
 FORGET_HOLD_MS = 5000
 # After this long without the usual Wi-Fi the setup network opens, while the stand keeps trying the old one.
 SETUP_AFTER_OFFLINE_MS = 5 * 60 * 1000
+# How often an empty stand checks that the reader hasn't got stuck.
+READER_CHECK_MS = 30000
 
 
 def read_config():
@@ -51,6 +53,14 @@ def read_tag(reader, antenna_stays_on):
         return None
 
 
+def heal(reader):
+    try:
+        if reader.heal_if_stuck():
+            print("reader was stuck and has been reset, {} times so far".format(reader.resets))
+    except Exception as e:
+        print("reader check failed:", e)
+
+
 def run():
     led = Led()
     raw = read_config()
@@ -73,6 +83,7 @@ def run():
 
     wdt = watchdog(cfg)
     forget = Hold(FORGET_HOLD_MS)
+    checkup = health.Checkup(READER_CHECK_MS, time.ticks_ms(), time.ticks_diff)
     debounce = Debouncer()
     url = cfg["server"] + "/api/device/v1/report"
 
@@ -90,7 +101,10 @@ def run():
 
         if time.ticks_diff(now, next_read) >= 0:
             # the candidate counts as present too, so a sleeve being put on is confirmed at full speed
-            now_pace = pace.pace(debounce.current is not None or debounce.candidate is not None)
+            present = debounce.current is not None or debounce.candidate is not None
+            if checkup.due(now, empty=not present):
+                heal(reader)
+            now_pace = pace.pace(present)
             uid = debounce.feed(read_tag(reader, now_pace.antenna_stays_on))
             wifi.save_power(now_pace.radio_saves_power)
             next_read = time.ticks_add(now, now_pace.read_every_ms)

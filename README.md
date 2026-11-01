@@ -141,6 +141,8 @@ You can still configure a stand by hand: press **Set up over USB instead** in th
 
 To check the reader before setting everything up, upload `app` and `lib/mfrc522.py` as above and run `mpremote run tools/scan.py`. It prints the tag UID whenever a sleeve comes near.
 
+An empty stand checks its reader every 30 seconds, and if the reader has got stuck, as cheap RC522 boards sometimes do after a dip in power, it resets it and carries on.
+
 While you're tinkering over USB, set `"watchdog": false` in `config.json`. The watchdog can't be stopped once it runs and keeps resetting the board after you interrupt it.
 
 ### What the LED means

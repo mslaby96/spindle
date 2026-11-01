@@ -2,6 +2,7 @@ import time
 
 from mfrc522 import MFRC522
 
+from app import health
 from app.report import uid_hex
 
 # a tag needs a few milliseconds of field to power up before it can answer
@@ -15,6 +16,8 @@ class Reader:
         p.update(pins or {})
         self._rc = MFRC522(sck=p["sck"], mosi=p["mosi"], miso=p["miso"], rst=p["rst"], cs=p["cs"], spi_id=p["spi_id"])
         self._field = True
+        self._version = self._rc._rreg(health.VERSION_REG)
+        self.resets = 0
 
     def read(self, antenna_stays_on=True):
         """With antenna_stays_on False the field is only up for the read itself, which is most of what the reader draws."""
@@ -28,6 +31,19 @@ class Reader:
             if not antenna_stays_on:
                 self._rc.antenna_on(False)
                 self._field = False
+
+    def heal_if_stuck(self):
+        """Resets and sets up the reader again when it no longer holds its settings. Returns whether it had to."""
+        if health.healthy(self._rc._rreg, self._version):
+            return False
+        self._rc.rst.value(0)
+        time.sleep_ms(10)
+        self._rc.rst.value(1)
+        time.sleep_ms(50)
+        self._rc.init()
+        self._field = True
+        self.resets += 1
+        return True
 
     def _read(self):
         # WUPA also wakes a tag that was halted after the previous read, so a sleeve left on the stand keeps answering.
