@@ -45,6 +45,11 @@ export type Device = {
   fw_version?: string;
   last_seen_at?: string;
   created_at: string;
+  online: boolean;
+  // From the stand's last report; missing when its firmware doesn't send them.
+  rssi?: number;
+  reader_resets?: number;
+  uptime_sec?: number;
 };
 
 export const meKey = ["me"] as const;

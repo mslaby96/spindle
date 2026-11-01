@@ -35,6 +35,14 @@ export function applyAssignedTag(queryClient: QueryClient, tag: Tag) {
   queryClient.invalidateQueries({ queryKey: unassignedKey });
 }
 
+export function applyDeviceStatus(queryClient: QueryClient, device: Device) {
+  queryClient.setQueryData<Device[]>(devicesKey, (prev) => prev?.map((d) => (d.id === device.id ? device : d)));
+}
+
+export function applyDeviceRemoved(queryClient: QueryClient, removed: { id: number }) {
+  queryClient.setQueryData<Device[]>(devicesKey, (prev) => prev?.filter((d) => d.id !== removed.id));
+}
+
 // Events missed while the stream was down are not replayed, so everything they feed is fetched again.
 function catchUp(queryClient: QueryClient) {
   for (const queryKey of [nowPlayingKey, inboxKey, recentListensKey, catalogModeKey, unassignedKey, devicesKey]) {
@@ -84,6 +92,8 @@ export function useLiveEvents() {
         queryClient.setQueryData(pairedStandKey, device);
         queryClient.invalidateQueries({ queryKey: devicesKey });
       });
+      on<Device>("device_status", (device) => applyDeviceStatus(queryClient, device));
+      on<{ id: number }>("device_removed", (removed) => applyDeviceRemoved(queryClient, removed));
       source.onopen = () => {
         if (opened) catchUp(queryClient);
         opened = true;
