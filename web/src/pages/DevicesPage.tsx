@@ -3,17 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
 import { devicesKey, pairedStandKey } from "../api/events";
-import { formatCountdown, formatFull } from "../format";
+import { formatCountdown, formatDateTime, formatUptime, signalStrength } from "../format";
 
 type Pairing = { code: string; expires_at: string };
 
-export function useDevices() {
-  return useQuery({ queryKey: devicesKey, queryFn: () => api<Device[]>("/api/devices") });
+// The Stands page polls for fresh diagnostics; going online or offline arrives as an event everywhere.
+export function useDevices(refetchInterval?: number) {
+  return useQuery({ queryKey: devicesKey, queryFn: () => api<Device[]>("/api/devices"), refetchInterval });
 }
 
 export function DevicesPage() {
   const queryClient = useQueryClient();
-  const { data: devices } = useDevices();
+  const { data: devices } = useDevices(30_000);
   const [name, setName] = useState("");
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -75,11 +76,19 @@ export function DevicesPage() {
         {devices?.map((d) => (
           <li key={d.id} className="card row">
             <div>
-              <strong>{d.name}</strong>
-              <p className="muted">
-                {d.last_seen_at ? `Last seen ${formatFull(d.last_seen_at)}` : "Never connected"}
-                {d.fw_version && ` · firmware ${d.fw_version}`}
+              <p className="stand-name">
+                <strong>{d.name}</strong>
+                {d.online ? (
+                  <span className="sticker calm">Online</span>
+                ) : (
+                  d.last_seen_at && <span className="sticker">Offline</span>
+                )}
               </p>
+              <p className="muted">
+                {d.online ? "" : d.last_seen_at ? `Offline since ${formatDateTime(d.last_seen_at)}` : "Never connected"}
+                {d.fw_version && `${d.online ? "" : " · "}firmware ${d.fw_version}`}
+              </p>
+              <Diagnostics device={d} />
             </div>
             <button
               className="secondary"
@@ -107,6 +116,27 @@ export function DevicesPage() {
       )}
       {(startPairing.error ?? createToken.error) && <p className="error">{(startPairing.error ?? createToken.error)?.message}</p>}
     </section>
+  );
+}
+
+function Diagnostics({ device: d }: { device: Device }) {
+  const parts = [
+    d.rssi !== undefined && (
+      <>
+        Wi-Fi {signalStrength(d.rssi)} <span className="dbm">−{Math.abs(d.rssi)} dBm</span>
+      </>
+    ),
+    d.reader_resets !== undefined && `${d.reader_resets} reader ${d.reader_resets === 1 ? "reset" : "resets"}`,
+    d.uptime_sec !== undefined && `up ${formatUptime(d.uptime_sec)}`,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <p className="muted small diagnostics">
+      {parts.map((p, i) => (
+        <span key={i}>{p}</span>
+      ))}
+      {!d.online && <span>last known</span>}
+    </p>
   );
 }
 

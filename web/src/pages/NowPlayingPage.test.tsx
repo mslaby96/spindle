@@ -102,3 +102,30 @@ describe("ending a listen early", () => {
     expect(screen.queryByRole("button", { name: "End listen now" })).not.toBeInTheDocument();
   });
 });
+
+describe("stand not answering", () => {
+  const stands = (...online: boolean[]) => ({
+    "GET /api/devices": () => [200, online.map((o, i) => ({ id: i + 1, name: `Stand ${i + 1}`, created_at: "2026-01-01T00:00:00Z", online: o }))] as [number, unknown],
+  });
+
+  it("says so when every stand is offline", async () => {
+    setup([], [], stands(false));
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "Your stand isn't answering" })).toBeInTheDocument();
+    expect(screen.getByText(/plugged in/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See your stands" })).toHaveAttribute("href", "/devices");
+  });
+
+  it("speaks of stands when there are several and all are offline", async () => {
+    setup([], [], stands(false, false));
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "Your stands aren't answering" })).toBeInTheDocument();
+  });
+
+  it("keeps the usual empty state while any stand is online", async () => {
+    setup([], [], stands(false, true));
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();
+    expect(screen.queryByText(/answering/)).not.toBeInTheDocument();
+  });
+});

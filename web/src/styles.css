@@ -322,6 +322,11 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .tile strong, .tile .muted { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile .rating { margin-top: 0.2rem; font-size: 0.875rem; }
 .narrow .brand { padding-bottom: 1.5rem; }
+.sticker.calm { background: var(--teal); color: #fff; }
+.stand-name { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin: 0; }
+.diagnostics { display: flex; flex-wrap: wrap; gap: 0 0.5rem; margin: 0.15rem 0 0; }
+.diagnostics span:not(:last-child)::after { content: " ·"; }
+.dbm { font-variant-numeric: tabular-nums; }
 .tile .sticker { position: absolute; top: -0.4rem; right: -0.3rem; }
 
 /* Diary */
