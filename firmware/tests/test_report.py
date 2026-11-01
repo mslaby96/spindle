@@ -86,9 +86,27 @@ class SetupNeededTest(unittest.TestCase):
         cfg = {"ssid": "home", "password": "pw", "server": "http://x", "token": "spd_x", "pins": {"sck": 10}, "led_pin": 15}
         self.assertEqual(report.forget_network(cfg), {"pins": {"sck": 10}, "led_pin": 15})
 
+    def test_changing_the_network_keeps_the_pairing(self):
+        cfg = {"ssid": "home", "password": "pw", "server": "http://x", "token": "spd_x", "pins": {"sck": 10}}
+        kept = report.keep_pairing(cfg)
+        self.assertEqual(kept, {"server": "http://x", "token": "spd_x", "pins": {"sck": 10}})
+        self.assertTrue(report.needs_setup(kept))
+        self.assertTrue(report.paired(kept))
+        self.assertFalse(report.paired(report.forget_network(cfg)))
+        self.assertFalse(report.paired(None))
+
     def test_joining_a_network_keeps_the_hardware_settings(self):
         cfg = report.join_network({"pins": {"sck": 10}, "ssid": "old"}, "home", "pw", "http://x", "spd_x")
         self.assertEqual(cfg, {"pins": {"sck": 10}, "ssid": "home", "password": "pw", "server": "http://x", "token": "spd_x"})
+
+
+class CommandTest(unittest.TestCase):
+    def test_change_wifi(self):
+        self.assertEqual(report.command({"led": "idle", "command": "change_wifi"}), "change_wifi")
+
+    def test_anything_else_is_no_command(self):
+        for body in ({"led": "idle"}, {"command": "format_disk"}, None, "oops"):
+            self.assertIsNone(report.command(body), body)
 
 
 class RetryTest(unittest.TestCase):

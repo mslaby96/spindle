@@ -5,6 +5,7 @@ MAX_INTERVAL_MS = 60000
 MAX_RETRY_MS = 30000
 REQUIRED = ("ssid", "password", "server", "token")
 PIN_NAMES = ("sck", "mosi", "miso", "cs", "rst", "spi_id")
+COMMANDS = ("change_wifi",)
 
 
 def uid_hex(raw):
@@ -46,6 +47,12 @@ def parse(body):
     return led, max(MIN_INTERVAL_MS, min(MAX_INTERVAL_MS, interval))
 
 
+def command(body):
+    """What the server asks the stand to do besides showing its state, or None."""
+    c = body.get("command") if isinstance(body, dict) else None
+    return c if c in COMMANDS else None
+
+
 def retry_delay(interval, failures):
     return min(interval * 2 ** min(failures, 10), MAX_RETRY_MS)
 
@@ -56,6 +63,15 @@ def needs_setup(cfg):
 
 def forget_network(cfg):
     return {k: v for k, v in cfg.items() if k not in REQUIRED}
+
+
+def keep_pairing(cfg):
+    """Forgets only the Wi-Fi, so the stand can join another network and stay the same stand in Spindle."""
+    return {k: v for k, v in cfg.items() if k not in ("ssid", "password")}
+
+
+def paired(cfg):
+    return bool(cfg) and bool(cfg.get("server")) and bool(cfg.get("token"))
 
 
 def join_network(cfg, ssid, password, server, token):

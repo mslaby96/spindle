@@ -29,7 +29,13 @@ class SetupPortal:
         self._wdt = wdt
         self._ap = network.WLAN(network.AP_IF)
         self._sta = network.WLAN(network.STA_IF)
-        self._view = {"state": "form", "networks": [], "values": {"server": self._cfg.get("server", "")}, "error": None}
+        self._view = {
+            "state": "form",
+            "networks": [],
+            "values": {"server": self._cfg.get("server", "")},
+            "error": None,
+            "paired": report.paired(self._cfg),
+        }
         self._pending = None
         self._done_at = None
 
@@ -118,7 +124,7 @@ class SetupPortal:
             conn.close()
 
     def _join(self, setup):
-        error = self._connect(setup) or self._pair(setup)
+        error = self._connect(setup) or (self._check(setup) if self._view["paired"] else self._pair(setup))
         if error:
             self._view.update(state="form", error=error)
 
@@ -149,6 +155,25 @@ class SetupPortal:
         token = body.get("token") if isinstance(body, dict) else None
         if status != 200 or not token:
             return "The Spindle server answered with an error ({}).".format(status)
+        return self._finish(setup, token)
+
+    def _check(self, setup):
+        """A paired stand only makes sure the server still knows it on the new network."""
+        try:
+            status, _ = post_json(setup["server"] + "/api/device/v1/report", self._cfg["token"], report.build(None, VERSION, 0))
+        except Exception as e:
+            print("server check failed:", e)
+            return "Couldn't reach the Spindle server at " + setup["server"] + ". Check the address."
+        self._wdt.feed()
+        if status == 401:
+            self._cfg = {k: v for k, v in self._cfg.items() if k != "token"}
+            self._view["paired"] = False
+            return "This stand was removed from Spindle. Get a pairing code in the app to add it again."
+        if status != 200:
+            return "The Spindle server answered with an error ({}).".format(status)
+        return self._finish(setup, self._cfg["token"])
+
+    def _finish(self, setup, token):
         save_config(report.join_network(self._cfg, setup["ssid"], setup["password"], setup["server"], token))
         self._view["state"] = "done"
         self._done_at = time.ticks_ms()

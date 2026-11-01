@@ -142,6 +142,12 @@ def run():
                 failures = 0
                 state, interval = report.parse(body)
                 led.show(state)
+                if report.command(body) == "change_wifi":
+                    from app.setup import save_config
+
+                    print("the app asked to change the Wi-Fi")
+                    save_config(report.keep_pairing(cfg))
+                    machine.reset()
             elif status == 401:
                 failures += 1
                 print("server rejected the device token")

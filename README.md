@@ -135,7 +135,9 @@ If your MicroPython build doesn't include `requests`, run `mpremote mip install 
 4. Pick your Wi-Fi, type its password, the server address (the one you open Spindle at, e.g. `http://192.168.1.10:8080`, or your cloud address) and the pairing code.
 5. The stand joins your Wi-Fi, swaps the code for its own token and restarts. The app shows it as connected.
 
-To set it up again, for example after changing your router, hold the BOOTSEL button on the Pico for five seconds while the stand is running. The stand also opens its setup network on its own when it can't reach your Wi-Fi for five minutes, and keeps trying the old network meanwhile.
+To move a stand to another Wi-Fi, press **Change Wi-Fi** next to it on the Stands page. Within half a minute it forgets its network and opens its setup network again; this time the page asks only for the Wi-Fi and the server address, as the stand stays paired and keeps its history. The stand also opens its setup network on its own when it can't reach your Wi-Fi for five minutes, and keeps trying the old network meanwhile, so a router that is already gone is covered too.
+
+Holding the BOOTSEL button on the Pico for five seconds while the stand is running forgets everything, pairing included, and starts over from step 2.
 
 You can still configure a stand by hand: press **Set up over USB instead** in the app, copy `firmware/config.example.json` to `config.json` with your Wi-Fi, server and that token, and upload it with `mpremote cp config.json :`.
 

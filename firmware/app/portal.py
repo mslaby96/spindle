@@ -77,18 +77,23 @@ def parse_form(body):
     return form
 
 
-def check_setup(form):
-    """Returns what to connect with, or None and a message saying what to fix."""
+def check_setup(form, paired=False):
+    """Returns what to connect with, or None and a message saying what to fix. A paired stand keeps its token, so it
+    needs no pairing code."""
     ssid = (form.get("other") or "").strip() or (form.get("ssid") or "").strip()
     if not ssid:
         return None, "Pick your Wi-Fi network or type its name."
     server = (form.get("server") or "").strip().rstrip("/")
     if not (server.startswith("http://") or server.startswith("https://")) or len(server) < 10:
         return None, "The server address must start with http:// or https://."
+    network = {"ssid": ssid, "password": form.get("password") or "", "server": server}
+    if paired:
+        return network, None
     code = (form.get("code") or "").replace("-", "").replace(" ", "").upper()
     if len(code) != 6:
         return None, "The pairing code has six characters, as shown in the Spindle app."
-    return {"ssid": ssid, "password": form.get("password") or "", "server": server, "code": code}, None
+    network["code"] = code
+    return network, None
 
 
 def escape(s):
@@ -114,7 +119,7 @@ def _page(title, body, refresh=None):
     )
 
 
-def setup_page(networks, values=None, error=None):
+def setup_page(networks, values=None, error=None, paired=False):
     values = values or {}
     best = {}
     for ssid, rssi in networks:
@@ -133,14 +138,15 @@ def setup_page(networks, values=None, error=None):
         '<label for="server">Spindle server</label>'
         '<input id="server" name="server" inputmode="url" placeholder="http://192.168.1.10:8080" value="' +
         escape(values.get("server", "")) + '">'
-        '<p class="muted">The address you open Spindle at, as seen from your home network.</p>'
-        '<label for="code">Pairing code</label>'
-        '<input id="code" name="code" autocapitalize="characters" autocomplete="off" placeholder="K7F-29Q" value="' +
-        escape(values.get("code", "")) + '">'
-        '<p class="muted">In the Spindle app go to Stands and press Add stand.</p>'
+        '<p class="muted">The address you open Spindle at, as seen from your home network.</p>' +
+        ("" if paired else
+         '<label for="code">Pairing code</label>'
+         '<input id="code" name="code" autocapitalize="characters" autocomplete="off" placeholder="K7F-29Q" value="' +
+         escape(values.get("code", "")) + '">'
+         '<p class="muted">In the Spindle app go to Stands and press Add stand.</p>') +
         "<button>Connect</button></form>"
     )
-    return _page("Set up your stand", body)
+    return _page("Connect your stand" if paired else "Set up your stand", body)
 
 
 def working_page():
@@ -237,12 +243,12 @@ def route(req, own_ip, view):
         if view["state"] != "form":
             return response(303, location="/"), None
         form = parse_form(req.body)
-        setup, error = check_setup(form)
+        setup, error = check_setup(form, view.get("paired", False))
         if error:
-            return response(200, setup_page(view["networks"], form, error)), None
+            return response(200, setup_page(view["networks"], form, error, view.get("paired", False))), None
         return response(303, location="/"), setup
     if view["state"] == "working":
         return response(200, working_page()), None
     if view["state"] == "done":
         return response(200, done_page()), None
-    return response(200, setup_page(view["networks"], view["values"], view["error"])), None
+    return response(200, setup_page(view["networks"], view["values"], view["error"], view.get("paired", False))), None

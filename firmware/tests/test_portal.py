@@ -69,6 +69,14 @@ class CheckSetupTest(unittest.TestCase):
             self.assertIsNone(setup)
             self.assertIn(field, error.lower())
 
+    def test_a_paired_stand_needs_no_code(self):
+        setup, error = portal.check_setup(self.valid(code=""), paired=True)
+        self.assertIsNone(error)
+        self.assertEqual(setup, {"ssid": "Home", "password": "secret", "server": "http://192.168.1.10:8080"})
+
+    def test_a_paired_stand_still_needs_a_server(self):
+        self.assertIsNone(portal.check_setup(self.valid(server="spindle"), paired=True)[0])
+
     def test_https_server_is_fine(self):
         self.assertEqual(portal.check_setup(self.valid(server="https://spindle.example.com"))[0]["server"],
                          "https://spindle.example.com")
@@ -92,6 +100,12 @@ class PageTest(unittest.TestCase):
         self.assertIn('<option value="Home" selected>', page)
         self.assertIn('value="http://10.0.0.2:8080"', page)
         self.assertIn('value="K7F29Q"', page)
+
+    def test_a_paired_stand_asks_only_for_the_network(self):
+        page = portal.setup_page([("Home", -40)], {"server": "http://10.0.0.2:8080"}, paired=True)
+        self.assertNotIn('name="code"', page)
+        self.assertIn("http://10.0.0.2:8080", page)
+        self.assertIn('name="code"', portal.setup_page([("Home", -40)]))
 
     def test_never_echoes_the_password(self):
         self.assertNotIn("hunter2", portal.setup_page([], {"password": "hunter2"}))
@@ -201,6 +215,13 @@ class RouteTest(unittest.TestCase):
         self.assertIn(b"All set", portal.route(get, self.IP, self.view(state="done"))[0])
         failed = portal.route(get, self.IP, self.view(error="Couldn't join Home."))[0]
         self.assertIn(b"Couldn't join Home.", failed)
+
+    def test_a_paired_stand_takes_the_form_without_a_code(self):
+        body = b"ssid=Home&other=&password=pw&server=http%3A%2F%2F192.168.1.10%3A8080"
+        resp, setup = portal.route(self.post(body), self.IP, self.view(paired=True))
+        self.assertEqual(setup["ssid"], "Home")
+        page, _ = portal.route(request(b"GET / HTTP/1.1\r\nHost: 192.168.4.1\r\n\r\n"), self.IP, self.view(paired=True))
+        self.assertNotIn(b'name="code"', page)
 
     def test_second_submit_while_connecting_is_ignored(self):
         resp, setup = portal.route(self.post(self.FORM), self.IP, self.view(state="working"))
