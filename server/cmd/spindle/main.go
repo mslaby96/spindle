@@ -121,7 +121,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	go resolver.Run(ctx)
 	go engine.RunSweeper(ctx, 10*time.Second)
 	if cfg.Backup.Every > 0 {
-		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: time.Now}
+		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
 		go backups.Run(ctx, cfg.Backup.Every, func(path string, err error) {
 			if err != nil {
 				log.Error("backup failed", "dir", cfg.Backup.Dir, "err", err)
@@ -236,7 +236,7 @@ func backupNow(cfg *config.Config) error {
 		return err
 	}
 	defer d.Close()
-	s := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: time.Now}
+	s := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
 	path, err := s.Create(ctx)
 	if err == nil {
 		fmt.Println("Backup written to", path)
@@ -248,10 +248,14 @@ func restore(cfg *config.Config, args []string) error {
 	if len(args) != 1 {
 		return errors.New("usage: spindle restore <backup.tar.gz> (stop the server first)")
 	}
-	if err := backup.Restore(args[0], cfg.DataDir); err != nil {
+	aside, err := backup.Restore(args[0], cfg.DataDir)
+	if err != nil {
 		return err
 	}
-	fmt.Println("Restored. The data that was there before is in a before-restore folder in", cfg.DataDir)
+	fmt.Println("Restored.")
+	if aside != "" {
+		fmt.Println("The data that was there before is in", aside)
+	}
 	return nil
 }
 
@@ -276,4 +280,9 @@ func resetPassword(cfg *config.Config, args []string) error {
 	}
 	fmt.Fprintln(os.Stderr, "Password changed. All sessions were logged out.")
 	return nil
+}
+
+// localNow names backups in the owner's time zone, which a container doesn't know about by itself.
+func localNow(cfg *config.Config) func() time.Time {
+	return func() time.Time { return time.Now().In(cfg.Location) }
 }

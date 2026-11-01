@@ -67,8 +67,9 @@ func TestBackupOfARunningServerHasTheDataAndCovers(t *testing.T) {
 		t.Fatalf("named %s", path)
 	}
 	restored := t.TempDir()
-	if err := Restore(path, restored); err != nil {
-		t.Fatal(err)
+	aside, err := Restore(path, restored)
+	if err != nil || aside != "" {
+		t.Fatalf("%q %v", aside, err)
 	}
 	if got := users(t, filepath.Join(restored, "spindle.db")); !slices.Equal(got, []string{"maciej"}) {
 		t.Fatalf("users %v", got)
@@ -108,15 +109,15 @@ func TestRestoreKeepsTheCurrentDataAside(t *testing.T) {
 	d.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('later', 'h', 2)`)
 	d.Close()
 
-	if err := Restore(path, dir); err != nil {
+	aside, err := Restore(path, dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got := users(t, filepath.Join(dir, "spindle.db")); !slices.Equal(got, []string{"maciej"}) {
 		t.Fatalf("restored users %v", got)
 	}
-	aside, _ := filepath.Glob(filepath.Join(dir, "before-restore-*", "spindle.db"))
-	if len(aside) != 1 || !slices.Equal(users(t, aside[0]), []string{"maciej", "later"}) {
-		t.Fatalf("previous data not kept: %v", aside)
+	if !slices.Equal(users(t, filepath.Join(aside, "spindle.db")), []string{"maciej", "later"}) {
+		t.Fatalf("previous data not kept in %q", aside)
 	}
 }
 
@@ -124,7 +125,7 @@ func TestRestoreRefusesWhileTheServerRuns(t *testing.T) {
 	dir, d := dataDir(t)
 	s := &Store{DB: d, DataDir: dir, Dir: t.TempDir(), Keep: 7, Now: time.Now}
 	path, _ := s.Create(context.Background())
-	if err := Restore(path, dir); !errors.Is(err, ErrServerRunning) {
+	if _, err := Restore(path, dir); !errors.Is(err, ErrServerRunning) {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -154,7 +155,7 @@ func TestRestoreRejectsBrokenOrUnsafeArchives(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := Restore(craftedArchive(t, files), dir); err == nil {
+			if _, err := Restore(craftedArchive(t, files), dir); err == nil {
 				t.Fatal("accepted")
 			}
 			if left, _ := filepath.Glob(filepath.Join(dir, "*")); len(left) != 0 {
@@ -209,7 +210,7 @@ func TestEveryCoverGoesIntoTheBackup(t *testing.T) {
 	s := &Store{DB: d, DataDir: dir, Dir: t.TempDir(), Keep: 7, Now: time.Now}
 	path, _ := s.Create(context.Background())
 	restored := t.TempDir()
-	if err := Restore(path, restored); err != nil {
+	if _, err := Restore(path, restored); err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range map[string]string{"1.jpeg": "cover one", "2.jpeg": "cover two"} {
@@ -253,7 +254,7 @@ func TestRestoreKeepsADatabaseWithoutCoversAside(t *testing.T) {
 	path, _ := s.Create(context.Background())
 	d.Close()
 	os.RemoveAll(filepath.Join(dir, "covers"))
-	if err := Restore(path, dir); err != nil {
+	if _, err := Restore(path, dir); err != nil {
 		t.Fatal(err)
 	}
 	if aside, _ := filepath.Glob(filepath.Join(dir, "before-restore-*", "spindle.db")); len(aside) != 1 {

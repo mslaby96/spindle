@@ -197,26 +197,28 @@ func prune(dir string, keep int) error {
 }
 
 // Restore puts a backup's database and covers into dataDir. The server must be stopped. Whatever was there before is
-// moved into a before-restore-* folder next to it rather than deleted.
-func Restore(archive, dataDir string) error {
+// moved into a before-restore-* folder next to it rather than deleted; Restore returns that folder, or "" if there was
+// nothing to move.
+func Restore(archive, dataDir string) (string, error) {
 	if _, err := os.Stat(filepath.Join(dataDir, database+"-wal")); err == nil {
-		return ErrServerRunning
+		return "", ErrServerRunning
 	}
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
-		return err
+		return "", err
 	}
 	tmp, err := os.MkdirTemp(dataDir, ".restore-")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer os.RemoveAll(tmp)
 	if err := unpack(archive, tmp); err != nil {
-		return err
+		return "", err
 	}
-	if err := moveAside(dataDir); err != nil {
-		return err
+	aside, err := moveAside(dataDir)
+	if err != nil {
+		return "", err
 	}
-	return moveIn(tmp, dataDir)
+	return aside, moveIn(tmp, dataDir)
 }
 
 // unpack extracts the archive and checks that what came out is a healthy Spindle database.
@@ -306,7 +308,7 @@ func check(dbPath string) error {
 	return nil
 }
 
-func moveAside(dataDir string) error {
+func moveAside(dataDir string) (string, error) {
 	var present []string
 	for _, n := range []string{database, database + "-shm", covers} {
 		if _, err := os.Stat(filepath.Join(dataDir, n)); err == nil {
@@ -314,16 +316,16 @@ func moveAside(dataDir string) error {
 		}
 	}
 	if len(present) == 0 {
-		return nil
+		return "", nil
 	}
 	aside := filepath.Join(dataDir, "before-restore-"+time.Now().Format(stamp))
 	if err := os.Mkdir(aside, 0o750); err != nil {
-		return err
+		return "", err
 	}
 	for _, n := range present {
 		if err := os.Rename(filepath.Join(dataDir, n), filepath.Join(aside, n)); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return aside, nil
 }
