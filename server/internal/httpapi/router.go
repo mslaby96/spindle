@@ -63,6 +63,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/devices/pairing", s.user(s.startPairing))
 	s.mux.Handle("GET /api/events", s.user(s.events))
 	s.mux.Handle("GET /api/now-playing", s.user(s.nowPlaying))
+	s.mux.Handle("POST /api/now-playing/{id}/end", s.user(s.endListen))
 	s.mux.Handle("GET /api/inbox", s.user(fetch(s, s.Inbox.List)))
 	s.mux.Handle("POST /api/sessions/{id}/resolve", s.user(s.resolveSession))
 	s.mux.Handle("PUT /api/sessions/{id}/review", s.user(s.reviewSession))

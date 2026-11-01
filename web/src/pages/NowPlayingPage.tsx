@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 
 import { api, type DiaryEntry } from "../api/client";
-import { nowPlayingKey, recentListensKey, type NowPlaying } from "../api/events";
+import { inboxKey, nowPlayingKey, recentListensKey, type NowPlaying } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
@@ -56,7 +56,7 @@ export function NowPlayingPage() {
                 {p.started_at && <Clock since={p.started_at} lengthSec={p.album.duration_sec} />}
               </div>
               {p.started_at && p.album.duration_sec ? <Progress since={p.started_at} lengthSec={p.album.duration_sec} /> : null}
-              {p.ends_at && <EndsIn at={p.ends_at} />}
+              {p.ends_at && <EndsIn at={p.ends_at} deviceId={p.device_id} />}
             </div>
           </article>
         ) : (
@@ -105,15 +105,28 @@ function Progress({ since, lengthSec }: { since: string; lengthSec: number }) {
   );
 }
 
-function EndsIn({ at }: { at: string }) {
+function EndsIn({ at, deviceId }: { at: string; deviceId: number }) {
   const now = useNow(1000);
+  const queryClient = useQueryClient();
+  const end = useMutation({
+    mutationFn: () => api(`/api/now-playing/${deviceId}/end`, { method: "POST" }),
+    onSuccess: () => {
+      for (const queryKey of [nowPlayingKey, recentListensKey, inboxKey]) queryClient.invalidateQueries({ queryKey });
+    },
+  });
   const left = new Date(at).getTime() - now;
   return (
-    <p className="ending" aria-live="polite">
-      {left > 0
-        ? `Sleeve off the stand. This listen ends in ${formatCountdown(left)} unless you put it back.`
-        : "Sleeve off the stand. Wrapping up this listen…"}
-    </p>
+    <div className="ending" aria-live="polite">
+      <p>
+        {left > 0
+          ? `Sleeve off the stand. This listen ends in ${formatCountdown(left)} unless you put it back.`
+          : "Sleeve off the stand. Wrapping up this listen…"}
+      </p>
+      <button className="secondary" onClick={() => end.mutate()} disabled={end.isPending}>
+        End listen now
+      </button>
+      {end.error && <p className="error">{end.error.message}</p>}
+    </div>
   );
 }
 

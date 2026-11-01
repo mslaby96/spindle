@@ -52,6 +52,7 @@ var (
 	ErrNotFound          = errors.New("session not found")
 	ErrNotPending        = errors.New("session is not waiting for confirmation")
 	ErrUnknownResolution = errors.New("resolution must be forgot, repeated or longer")
+	ErrSleeveOnStand     = errors.New("the sleeve is still on the stand")
 )
 
 type Tags interface {
@@ -226,6 +227,32 @@ func (e *Engine) ClassifyAlbum(ctx context.Context, userID, albumID int64) error
 		}
 	}
 	return nil
+}
+
+// EndNow ends a listen whose sleeve is off the stand without waiting for the absence tolerance to run out. It ends when
+// the sleeve was last seen, as it would have anyway.
+func (e *Engine) EndNow(ctx context.Context, userID, deviceID int64) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var id, lastSeen int64
+	err := e.DB.R.QueryRowContext(ctx,
+		`SELECT id, last_seen_at FROM sessions WHERE user_id = ? AND device_id = ? AND state = 'active'`, userID, deviceID).
+		Scan(&id, &lastSeen)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if !e.away[deviceID] && !e.offStand(lastSeen) {
+		return ErrSleeveOnStand
+	}
+	return e.close(ctx, userID, id)
+}
+
+// offStand tells whether the stand has stopped reporting a listen's sleeve.
+func (e *Engine) offStand(lastSeen int64) bool {
+	return e.Now().Sub(time.Unix(lastSeen, 0)) > staleReport
 }
 
 func (e *Engine) Resolve(ctx context.Context, userID, sessionID int64, r Resolution) error {
@@ -437,8 +464,8 @@ func (e *Engine) Current(ctx context.Context, userID int64, albums func(context.
 		}
 		t := time.Unix(started, 0).UTC()
 		r.np.Active, r.np.StartedAt = true, &t
-		if seen := time.Unix(lastSeen, 0); e.Now().Sub(seen) > staleReport {
-			ends := seen.Add(e.Cfg.AbsenceTolerance).UTC()
+		if e.offStand(lastSeen) {
+			ends := time.Unix(lastSeen, 0).Add(e.Cfg.AbsenceTolerance).UTC()
 			r.np.EndsAt = &ends
 		}
 		list = append(list, r)

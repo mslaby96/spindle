@@ -1,4 +1,5 @@
 import { act, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FakeEventSource, mockApi, renderApp } from "../test-utils";
@@ -30,14 +31,15 @@ const recent = (id: number, title: string) => ({
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup(playing: unknown[], diary: unknown[] = []) {
+function setup(playing: unknown[] | (() => unknown[]), diary: unknown[] = [], extra: Record<string, () => [number, unknown?]> = {}) {
   return mockApi({
     "GET /api/setup": () => [200, { needed: false }],
     "GET /api/me": () => [200, me],
     "GET /api/devices": () => [200, []],
     "GET /api/inbox": () => [200, []],
-    "GET /api/now-playing": () => [200, playing],
+    "GET /api/now-playing": () => [200, typeof playing === "function" ? playing() : playing],
     "GET /api/diary?limit=4": () => [200, diary],
+    ...extra,
   });
 }
 
@@ -78,5 +80,25 @@ describe("now playing", () => {
     const before = calls.filter((c) => c.key === "GET /api/diary?limit=4").length;
     act(() => FakeEventSource.instances[0].emit("inbox_changed", {}));
     await waitFor(() => expect(calls.filter((c) => c.key === "GET /api/diary?limit=4").length).toBe(before + 1));
+  });
+});
+
+describe("ending a listen early", () => {
+  const away = { device_id: 3, active: true, uid: "04A1", album, started_at: new Date(Date.now() - 600_000).toISOString(), ends_at: new Date(Date.now() + 80_000).toISOString() };
+
+  it("ends it at once while the sleeve is off the stand", async () => {
+    let playing: unknown[] = [away];
+    const calls = setup(() => playing, [], { "POST /api/now-playing/3/end": () => ((playing = []), [204]) });
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "End listen now" }));
+    expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();
+    expect(calls.some((c) => c.key === "POST /api/now-playing/3/end")).toBe(true);
+  });
+
+  it("isn't offered while the sleeve is on the stand", async () => {
+    setup([{ ...away, ends_at: undefined }]);
+    renderApp();
+    await screen.findByRole("heading", { name: "Damn" });
+    expect(screen.queryByRole("button", { name: "End listen now" })).not.toBeInTheDocument();
   });
 });

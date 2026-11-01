@@ -182,3 +182,27 @@ func TestNormalizeUID(t *testing.T) {
 		}
 	}
 }
+
+func TestEndingAListenEarlyFromTheApp(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	token := e.deviceToken(t, c)
+	e.report(t, token, "04A1B2C3")
+	url := e.http.URL + "/api/now-playing/1/end"
+
+	if resp := do(t, c, "POST", url, nil); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("with the sleeve on the stand: %d", resp.StatusCode)
+	}
+	e.report(t, token, nil)
+	if resp := do(t, c, "POST", url, nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("after taking it off: %d", resp.StatusCode)
+	}
+	var playing []any
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/now-playing", nil).Body).Decode(&playing)
+	if len(playing) != 0 {
+		t.Fatalf("still playing %+v", playing)
+	}
+	if resp := do(t, c, "POST", url, nil); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("nothing left to end: %d", resp.StatusCode)
+	}
+}

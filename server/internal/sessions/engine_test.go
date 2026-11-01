@@ -837,3 +837,52 @@ func TestSweeperWithoutLoggerSurvivesFailingSweeps(t *testing.T) {
 	cancel()
 	<-stopped
 }
+
+func TestEndingAListenOnceTheSleeveIsOff(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 40*time.Minute)
+	removedAt := v.clock.now()
+	v.see(t, "")
+	v.clock.advance(20 * time.Second)
+	drainEvents(v.events)
+
+	if err := v.e.EndNow(context.Background(), 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	s := v.only(t)
+	if s.State != StateCounted || s.EndedAt == nil || !s.EndedAt.Equal(removedAt) {
+		t.Fatalf("session %+v, want ended when the sleeve came off", s)
+	}
+	evs := drainEvents(v.events)
+	if len(evs) == 0 || evs[0].Type != EventNowPlaying || evs[0].Data.(NowPlaying).Active {
+		t.Fatalf("events %+v", evs)
+	}
+}
+
+func TestAListenWithTheSleeveStillOnCantBeEnded(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 10*time.Minute)
+	if err := v.e.EndNow(context.Background(), 1, 1); !errors.Is(err, ErrSleeveOnStand) {
+		t.Fatalf("got %v", err)
+	}
+	if s := v.only(t); s.State != StateActive {
+		t.Fatalf("session %+v", s)
+	}
+}
+
+func TestEndingWhenNothingIsPlaying(t *testing.T) {
+	v := newEnv(t)
+	for _, tc := range []struct{ user, device int64 }{{1, 1}, {2, 1}, {1, 9}} {
+		if err := v.e.EndNow(context.Background(), tc.user, tc.device); !errors.Is(err, ErrNotFound) {
+			t.Errorf("user %d device %d: %v", tc.user, tc.device, err)
+		}
+	}
+	v.album(t, tagA, minutes(42))
+	v.play(t, tagA, 10*time.Minute)
+	v.see(t, "")
+	if err := v.e.EndNow(context.Background(), 2, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("someone else's stand: %v", err)
+	}
+}

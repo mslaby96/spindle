@@ -35,6 +35,7 @@ var knownErrors = []struct {
 	{catalog.ErrUnknownListensChoice, http.StatusBadRequest, ""},
 	{sessions.ErrNotFound, http.StatusNotFound, ""},
 	{sessions.ErrNotPending, http.StatusConflict, ""},
+	{sessions.ErrSleeveOnStand, http.StatusConflict, ""},
 	{sessions.ErrUnknownResolution, http.StatusBadRequest, ""},
 	{sessions.ErrInvalidTimes, http.StatusBadRequest, ""},
 	{inbox.ErrNotFound, http.StatusNotFound, ""},

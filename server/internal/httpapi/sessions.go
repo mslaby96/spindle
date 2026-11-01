@@ -49,3 +49,8 @@ func (s *Server) dismissSession(w http.ResponseWriter, r *http.Request) {
 		s.noContent(w, s.Inbox.Dismiss(r.Context(), userID(r), id))
 	}
 }
+
+// endListen ends the listen on a stand whose sleeve is off, without waiting for the countdown.
+func (s *Server) endListen(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Sessions.EndNow)
+}
