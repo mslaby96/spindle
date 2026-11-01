@@ -84,6 +84,7 @@ def run():
     wdt = watchdog(cfg)
     forget = Hold(FORGET_HOLD_MS)
     checkup = health.Checkup(READER_CHECK_MS, time.ticks_ms(), time.ticks_diff)
+    uptime = report.Uptime(time.ticks_ms(), time.ticks_diff)
     debounce = Debouncer()
     url = cfg["server"] + "/api/device/v1/report"
 
@@ -129,7 +130,10 @@ def run():
             seq += 1
             attempted = debounce.current
             try:
-                status, body = post_json(url, cfg["token"], report.build(debounce.current, VERSION, seq))
+                payload = report.build(
+                    debounce.current, VERSION, seq, wifi.rssi(), reader.resets, uptime.seconds(time.ticks_ms())
+                )
+                status, body = post_json(url, cfg["token"], payload)
             except Exception as e:
                 print("report failed:", e)
                 status, body = 0, None

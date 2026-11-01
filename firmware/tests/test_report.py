@@ -10,6 +10,15 @@ class BuildTest(unittest.TestCase):
             {"uid": "04A1B2C3D4E5F6", "fw": "0.1.0", "seq": 7},
         )
 
+    def test_diagnostics_go_along(self):
+        self.assertEqual(
+            report.build(None, "0.4.0", 3, rssi=-61, reader_resets=1, uptime_s=7200),
+            {"uid": None, "fw": "0.4.0", "seq": 3, "rssi": -61, "reader_resets": 1, "uptime_sec": 7200},
+        )
+
+    def test_unknown_signal_is_left_out(self):
+        self.assertNotIn("rssi", report.build(None, "0.4.0", 3, rssi=None, reader_resets=0, uptime_s=5))
+
     def test_empty_payload(self):
         self.assertEqual(report.build(None, "0.1.0", 1)["uid"], None)
 
@@ -92,3 +101,23 @@ class RetryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UptimeTest(unittest.TestCase):
+    def test_counts_whole_seconds_since_start(self):
+        u = report.Uptime(start_ms=1000)
+        self.assertEqual(u.seconds(1999), 0)
+        self.assertEqual(u.seconds(4500), 3)
+
+    def test_keeps_counting_past_the_millisecond_counter_wrapping(self):
+        period = 1 << 30
+
+        def ticks_diff(a, b):
+            return ((a - b + period // 2) % period) - period // 2
+
+        u = report.Uptime(start_ms=0, diff=ticks_diff)
+        now = 0
+        for _ in range(30):
+            now = (now + 100_000_000) % period
+            seconds = u.seconds(now)
+        self.assertEqual(seconds, 3_000_000)

@@ -28,6 +28,14 @@ class WiFi:
             self._saving = on
             self._wlan.config(pm=self._wlan.PM_POWERSAVE if on else self._wlan.PM_PERFORMANCE)
 
+    def rssi(self):
+        if not self._wlan.isconnected():
+            return None
+        try:
+            return self._wlan.status("rssi")
+        except Exception:
+            return None
+
     def down_ms(self):
         if self._down_since is None:
             return 0

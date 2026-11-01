@@ -28,7 +28,9 @@ class FakeWLAN:
     def isconnected(self):
         return self.state == "up"
 
-    def status(self):
+    def status(self, param=None):
+        if param == "rssi":
+            return -63
         return network.STAT_CONNECTING if self.state == "connecting" else 0
 
     def disconnect(self):
@@ -96,6 +98,11 @@ class WiFiTest(unittest.TestCase):
         self.wifi.save_power(True)
         self.wifi.save_power(False)
         self.assertEqual(self.wifi._wlan.configs, [{"pm": FakeWLAN.PM_POWERSAVE}, {"pm": FakeWLAN.PM_PERFORMANCE}])
+
+    def test_reports_signal_only_while_connected(self):
+        self.assertIsNone(self.wifi.rssi())
+        self.wifi._wlan.state = "up"
+        self.assertEqual(self.wifi.rssi(), -63)
 
 
 if __name__ == "__main__":

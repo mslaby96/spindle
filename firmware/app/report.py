@@ -11,8 +11,27 @@ def uid_hex(raw):
     return "".join("{:02X}".format(b) for b in raw)
 
 
-def build(uid, fw, seq):
-    return {"uid": uid.upper() if uid else None, "fw": fw, "seq": seq}
+def build(uid, fw, seq, rssi=None, reader_resets=None, uptime_s=None):
+    payload = {"uid": uid.upper() if uid else None, "fw": fw, "seq": seq}
+    for key, value in (("rssi", rssi), ("reader_resets", reader_resets), ("uptime_sec", uptime_s)):
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
+class Uptime:
+    """Counts time since start in steps, so the millisecond counter wrapping after about twelve days doesn't matter as
+    long as it is asked at least every few days."""
+
+    def __init__(self, start_ms, diff=lambda a, b: a - b):
+        self._last = start_ms
+        self._ms = 0
+        self._diff = diff
+
+    def seconds(self, now_ms):
+        self._ms += self._diff(now_ms, self._last)
+        self._last = now_ms
+        return self._ms // 1000
 
 
 def parse(body):
