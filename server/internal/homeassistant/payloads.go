@@ -1,9 +1,11 @@
 package homeassistant
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mslaby96/spindle/server/internal/devices"
@@ -24,6 +26,22 @@ func CoverTopic(userID int64) string      { return baseTopic(userID) + "/cover" 
 
 func StandTopic(userID, standID int64) string {
 	return baseTopic(userID) + "/stand/" + strconv.FormatInt(standID, 10)
+}
+
+func StandUpdateTopic(userID, standID int64) string { return StandTopic(userID, standID) + "/update" }
+
+// StandInstallTopic is where Home Assistant's Install button for a stand's firmware lands.
+func StandInstallTopic(userID, standID int64) string { return StandTopic(userID, standID) + "/install" }
+
+// installTarget reads the user and stand out of an install topic.
+func installTarget(topic string) (userID, standID int64, ok bool) {
+	parts := strings.Split(topic, "/")
+	if len(parts) != 5 || parts[0] != "spindle" || parts[2] != "stand" || parts[4] != "install" {
+		return 0, 0, false
+	}
+	u, err1 := strconv.ParseInt(parts[1], 10, 64)
+	s, err2 := strconv.ParseInt(parts[3], 10, 64)
+	return u, s, err1 == nil && err2 == nil
 }
 
 func objectID(userID int64) string { return "spindle_" + strconv.FormatInt(userID, 10) }
@@ -116,6 +134,15 @@ func StandDiscovery(prefix string, userID int64, d devices.Device) (string, []by
 				"val_tpl": "{{ value_json.connectivity }}",
 				"ent_cat": "diagnostic",
 			},
+			id + "_firmware": map[string]any{
+				"p":       "update",
+				"name":    "Firmware",
+				"uniq_id": id + "_firmware",
+				"dev_cla": "firmware",
+				"stat_t":  StandUpdateTopic(userID, d.ID),
+				"cmd_t":   StandInstallTopic(userID, d.ID),
+				"pl_inst": "install",
+			},
 			id + "_rssi": diagnostic("Wi-Fi signal", "rssi", map[string]any{
 				"dev_cla": "signal_strength", "unit_of_meas": "dBm", "stat_cla": "measurement",
 			}),
@@ -144,6 +171,20 @@ func StandState(d devices.Device) []byte {
 		s.Connectivity = "ON"
 	}
 	b, _ := json.Marshal(s)
+	return b
+}
+
+type updateState struct {
+	Installed  string `json:"installed_version"`
+	Latest     string `json:"latest_version"`
+	InProgress bool   `json:"in_progress"`
+}
+
+// StandUpdateState is what Home Assistant's update entity expects: the installed and latest firmware.
+func StandUpdateState(d devices.Device) []byte {
+	u := updateState{Installed: d.FWVersion, Latest: cmp.Or(d.UpdateAvailable, d.FWVersion)}
+	u.InProgress = d.Update != nil && d.Update.State != devices.UpdateFailed
+	b, _ := json.Marshal(u)
 	return b
 }
 

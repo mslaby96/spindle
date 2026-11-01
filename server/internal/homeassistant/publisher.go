@@ -31,6 +31,9 @@ type CurrentFunc func(ctx context.Context, userID int64) ([]sessions.NowPlaying,
 
 type StandsFunc func(ctx context.Context, userID int64) ([]devices.Device, error)
 
+// InstallFunc asks a stand to update its firmware.
+type InstallFunc func(ctx context.Context, userID, standID int64) error
+
 type Publisher struct {
 	Cfg     config.MQTT
 	DB      *db.DB
@@ -38,6 +41,7 @@ type Publisher struct {
 	Covers  *covers.Store
 	Current CurrentFunc
 	Stands  StandsFunc
+	Install InstallFunc
 	// StandsEvery is how often the stands' diagnostics are sent again, a minute unless set.
 	StandsEvery time.Duration
 	Version     string
@@ -101,6 +105,7 @@ func (p *Publisher) handle(ctx context.Context, cm *autopaho.ConnectionManager, 
 		// empty retained messages make Home Assistant drop the device and forget its last state
 		p.publish(ctx, cm, standDiscoveryTopic(p.Cfg.Prefix, data.ID), nil)
 		p.publish(ctx, cm, StandTopic(e.UserID, data.ID), nil)
+		p.publish(ctx, cm, StandUpdateTopic(e.UserID, data.ID), nil)
 	}
 }
 
@@ -108,6 +113,7 @@ func (p *Publisher) publishStand(ctx context.Context, cm *autopaho.ConnectionMan
 	topic, payload := StandDiscovery(p.Cfg.Prefix, userID, d)
 	p.publish(ctx, cm, topic, payload)
 	p.publish(ctx, cm, StandTopic(userID, d.ID), StandState(d))
+	p.publish(ctx, cm, StandUpdateTopic(userID, d.ID), StandUpdateState(d))
 }
 
 // signal coalesces requests: raising it while one is already pending does nothing.
@@ -134,7 +140,9 @@ func (p *Publisher) clientConfig(ctx context.Context, u *url.URL, resync func())
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			p.Log.Info("connected to MQTT broker")
 			go func() {
-				if _, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{{Topic: haStatus, QoS: 1}}}); err != nil {
+				if _, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
+					{Topic: haStatus, QoS: 1}, {Topic: "spindle/+/stand/+/install", QoS: 1},
+				}}); err != nil {
 					p.Log.Warn("subscribe to Home Assistant status", "err", err)
 				}
 			}()
@@ -148,10 +156,19 @@ func (p *Publisher) clientConfig(ctx context.Context, u *url.URL, resync func())
 					if pr.Packet.Topic == haStatus && string(pr.Packet.Payload) == "online" {
 						resync()
 					}
+					if user, stand, ok := installTarget(pr.Packet.Topic); ok {
+						go p.install(ctx, user, stand)
+					}
 					return true, nil
 				},
 			},
 		},
+	}
+}
+
+func (p *Publisher) install(ctx context.Context, userID, standID int64) {
+	if err := p.Install(ctx, userID, standID); err != nil {
+		p.Log.Warn("firmware update from Home Assistant", "stand", standID, "err", err)
 	}
 }
 

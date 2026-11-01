@@ -152,6 +152,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			return engine.Current(ctx, userID, catalogSvc.Album)
 		},
 		Stands:  deviceStore.List,
+		Install: deviceStore.RequestUpdate,
 		Version: version,
 		Log:     log,
 	}

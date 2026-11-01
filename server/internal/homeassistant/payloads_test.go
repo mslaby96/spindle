@@ -142,6 +142,13 @@ func TestStandDiscovery(t *testing.T) {
 	if conn.P != "binary_sensor" || conn.DevCla != "connectivity" || conn.StatT != StandTopic(1, 7) {
 		t.Fatalf("connectivity %+v", conn)
 	}
+	fw := msg.Cmps["spindle_stand_7_firmware"]
+	if fw.P != "update" || fw.DevCla != "firmware" || fw.StatT != StandUpdateTopic(1, 7) {
+		t.Fatalf("firmware %+v", fw)
+	}
+	if !strings.Contains(string(payload), `"cmd_t":"`+StandInstallTopic(1, 7)+`"`) || !strings.Contains(string(payload), `"pl_inst":"install"`) {
+		t.Fatalf("no install command in %s", payload)
+	}
 	for _, key := range []string{"spindle_stand_7_rssi", "spindle_stand_7_reader_resets", "spindle_stand_7_uptime_sec"} {
 		c, ok := msg.Cmps[key]
 		if !ok || c.P != "sensor" || c.EntCat != "diagnostic" || c.UniqID != key || c.StatT != StandTopic(1, 7) {
@@ -157,5 +164,37 @@ func TestStandStateLeavesOutWhatIsUnknown(t *testing.T) {
 	}
 	if got := string(StandState(devices.Device{})); got != `{"connectivity":"OFF"}` {
 		t.Fatalf("offline %s", got)
+	}
+}
+
+func TestStandUpdateState(t *testing.T) {
+	cases := []struct {
+		d    devices.Device
+		want string
+	}{
+		{devices.Device{FWVersion: "0.6.0"}, `{"installed_version":"0.6.0","latest_version":"0.6.0","in_progress":false}`},
+		{devices.Device{FWVersion: "0.5.0", UpdateAvailable: "0.6.0"}, `{"installed_version":"0.5.0","latest_version":"0.6.0","in_progress":false}`},
+		{devices.Device{FWVersion: "0.5.0", UpdateAvailable: "0.6.0", Update: &devices.Update{Version: "0.6.0", State: devices.UpdateRequested}},
+			`{"installed_version":"0.5.0","latest_version":"0.6.0","in_progress":true}`},
+		{devices.Device{FWVersion: "0.5.0", UpdateAvailable: "0.6.0", Update: &devices.Update{Version: "0.6.0", State: devices.UpdateInstalling}},
+			`{"installed_version":"0.5.0","latest_version":"0.6.0","in_progress":true}`},
+		{devices.Device{FWVersion: "0.5.0", UpdateAvailable: "0.6.0", Update: &devices.Update{Version: "0.6.0", State: devices.UpdateFailed}},
+			`{"installed_version":"0.5.0","latest_version":"0.6.0","in_progress":false}`},
+	}
+	for _, c := range cases {
+		if got := string(StandUpdateState(c.d)); got != c.want {
+			t.Errorf("%+v: %s", c.d, got)
+		}
+	}
+}
+
+func TestInstallTopicNamesTheStand(t *testing.T) {
+	if user, stand, ok := installTarget(StandInstallTopic(3, 12)); !ok || user != 3 || stand != 12 {
+		t.Fatalf("%d %d %v", user, stand, ok)
+	}
+	for _, topic := range []string{"spindle/3/stand/x/install", "spindle/3/stand/12", "homeassistant/status", "spindle/3/stand/12/install/more"} {
+		if _, _, ok := installTarget(topic); ok {
+			t.Errorf("%s accepted", topic)
+		}
 	}
 }

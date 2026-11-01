@@ -131,6 +131,8 @@ type harness struct {
 	bus    *events.Bus
 	db     *db.DB
 	done   chan error
+	// installs gets the user and stand of every Install pressed in Home Assistant
+	installs chan [2]int64
 }
 
 func startPublisher(t *testing.T, ctx context.Context) *harness {
@@ -148,7 +150,8 @@ func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc, 
 	t.Cleanup(func() { d.Close() })
 	d.W.Exec(`INSERT INTO users (username, password_hash, created_at) VALUES ('a', 'h', 1)`)
 
-	h := &harness{ha: listen(t, t.Context(), broker), broker: server, bus: events.NewBus(), db: d, done: make(chan error, 1)}
+	h := &harness{ha: listen(t, t.Context(), broker), broker: server, bus: events.NewBus(), db: d, done: make(chan error, 1),
+		installs: make(chan [2]int64, 4)}
 	h.p = &Publisher{
 		Cfg:     config.MQTT{URL: broker, Prefix: "homeassistant"},
 		DB:      d,
@@ -156,6 +159,7 @@ func startPublisherWith(t *testing.T, ctx context.Context, current CurrentFunc, 
 		Covers:  &covers.Store{Dir: t.TempDir()},
 		Current: current,
 		Stands:  func(context.Context, int64) ([]devices.Device, error) { return nil, nil },
+		Install: func(_ context.Context, user, stand int64) error { h.installs <- [2]int64{user, stand}; return nil },
 		Version: "test",
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
@@ -363,6 +367,17 @@ func TestPublisherShowsEachStand(t *testing.T) {
 	stand.RSSI = nil
 	mu.Unlock()
 	eventually(t, "diagnostics refreshed", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return !strings.Contains(s, "rssi") })
+
+	h.ha.cm.Publish(ctx, &paho.Publish{Topic: StandInstallTopic(1, 7), Payload: []byte("install"), QoS: 1})
+	select {
+	case got := <-h.installs:
+		if got != [2]int64{1, 7} {
+			t.Fatalf("installed %v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Install from Home Assistant never arrived")
+	}
+	eventually(t, "update state", func() bool { s, _ := h.ha.last(StandUpdateTopic(1, 7)); return strings.Contains(s, `"0.4.0"`) })
 
 	h.bus.Publish(events.Event{Type: devices.EventRemoved, UserID: 1, Data: devices.Removed{ID: 7}})
 	eventually(t, "stand removed", func() bool { s, ok := h.ha.last(discovery); return ok && s == "" })
