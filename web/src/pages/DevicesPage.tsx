@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
@@ -74,26 +74,7 @@ export function DevicesPage() {
       )}
       <ul className="list">
         {devices?.map((d) => (
-          <li key={d.id} className="card row">
-            <div>
-              <p className="stand-name">
-                <strong>{d.name}</strong>
-                {d.online ? (
-                  <span className="sticker calm">Online</span>
-                ) : (
-                  d.last_seen_at && <span className="sticker">Offline</span>
-                )}
-              </p>
-              <StandState device={d} />
-              <Diagnostics device={d} />
-            </div>
-            <button
-              className="secondary"
-              onClick={() => confirm(`Remove ${d.name}? Its token will stop working.`) && revoke.mutate(d.id)}
-            >
-              Remove
-            </button>
-          </li>
+          <StandRow key={d.id} device={d} onRemove={() => revoke.mutate(d.id)} />
         ))}
       </ul>
       {!pairing && (
@@ -113,6 +94,107 @@ export function DevicesPage() {
       )}
       {(startPairing.error ?? createToken.error) && <p className="error">{(startPairing.error ?? createToken.error)?.message}</p>}
     </section>
+  );
+}
+
+function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => void }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [handedOver, setHandedOver] = useState(false);
+  const wasPending = useRef(d.wifi_change_pending);
+  const cancelled = useRef(false);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: devicesKey });
+  const request = useMutation({
+    mutationFn: () => api(`/api/devices/${d.id}/wifi-change`, { method: "POST" }),
+    onSuccess: () => {
+      cancelled.current = false;
+      setConfirming(false);
+      refresh();
+    },
+  });
+  const cancel = useMutation({
+    mutationFn: () => api(`/api/devices/${d.id}/wifi-change`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
+
+  // A request that disappears without being cancelled was picked up by the stand.
+  useEffect(() => {
+    if (wasPending.current && !d.wifi_change_pending && !cancelled.current) setHandedOver(true);
+    wasPending.current = d.wifi_change_pending;
+  }, [d.wifi_change_pending]);
+
+  const error = request.error ?? cancel.error;
+  return (
+    <li className="card stand">
+      <div className="row">
+        <div>
+          <p className="stand-name">
+            <strong>{d.name}</strong>
+            {d.online ? <span className="sticker calm">Online</span> : d.last_seen_at && <span className="sticker">Offline</span>}
+          </p>
+          <StandState device={d} />
+          <Diagnostics device={d} />
+        </div>
+        <div className="stand-actions">
+          {!d.wifi_change_pending && !confirming && (
+            <button className="secondary" onClick={() => setConfirming(true)}>
+              Change Wi-Fi
+            </button>
+          )}
+          <button className="secondary" onClick={() => confirm(`Remove ${d.name}? Its token will stop working.`) && onRemove()}>
+            Remove
+          </button>
+        </div>
+      </div>
+      {confirming && (
+        <div className="confirm">
+          <p>
+            {d.name} will forget its Wi-Fi and open its own network, named Spindle- and four characters. Join it from your
+            phone and open <code>http://spindle.setup</code> to pick the new network. It stays the same stand, history
+            included.
+          </p>
+          <div className="choices">
+            <button onClick={() => request.mutate()} disabled={request.isPending}>
+              Forget Wi-Fi
+            </button>
+            <button className="secondary" onClick={() => setConfirming(false)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+      {d.wifi_change_pending && (
+        <p className="pending">
+          <span className="sticker">Wi-Fi change</span>
+          <span>
+            Waiting for {d.name} to pick this up
+            {d.online ? "…" : ", it will when it comes back online."}
+          </span>
+          <button
+            className="link"
+            onClick={() => {
+              cancelled.current = true;
+              cancel.mutate();
+            }}
+            disabled={cancel.isPending}
+          >
+            Cancel
+          </button>
+        </p>
+      )}
+      {handedOver && (
+        <div className="notice" role="status">
+          <p>
+            {d.name} is opening its setup network. On your phone join the Wi-Fi named Spindle- and four characters, then
+            open <code>http://spindle.setup</code> and pick the new network.
+          </p>
+          <button className="secondary" onClick={() => setHandedOver(false)}>
+            Done
+          </button>
+        </div>
+      )}
+      {error && <p className="error">{error.message}</p>}
+    </li>
   );
 }
 
