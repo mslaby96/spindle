@@ -155,14 +155,33 @@ def done_page():
 # Phones fetch one of these to see whether a network reaches the internet. Answering as the real servers would keeps
 # them from opening a captive portal sheet, which on an iPhone closes, and leaves the network, as soon as you switch to
 # another app to copy a password. The setup page is opened in the browser instead.
-_ONLINE = {
-    "/hotspot-detect.html": (200, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"),
-    "/library/test/success.html": (200, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"),
-    "/generate_204": (204, ""),
-    "/gen_204": (204, ""),
+_SUCCESS = (200, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>")
+_NO_CONTENT = (204, "")
+# iOS asks several of its own hosts, some with made-up paths, so those answer whatever the path.
+_ONLINE_HOSTS = {
+    "captive.apple.com": _SUCCESS,
+    "www.apple.com": _SUCCESS,
+    "www.appleiphonecell.com": _SUCCESS,
+    "www.itools.info": _SUCCESS,
+    "www.ibook.info": _SUCCESS,
+    "www.airport.us": _SUCCESS,
+    "www.thinkdifferent.us": _SUCCESS,
+    "connectivitycheck.gstatic.com": _NO_CONTENT,
+    "connectivitycheck.android.com": _NO_CONTENT,
+    "clients3.google.com": _NO_CONTENT,
+}
+_ONLINE_PATHS = {
+    "/generate_204": _NO_CONTENT,
+    "/gen_204": _NO_CONTENT,
     "/connecttest.txt": (200, "Microsoft Connect Test"),
     "/ncsi.txt": (200, "Microsoft NCSI"),
 }
+
+
+def online_answer(req):
+    """What a connectivity check expects to see when the network reaches the internet, or None for other requests."""
+    host = req.host.split(":")[0].lower()
+    return _ONLINE_HOSTS.get(host) or _ONLINE_PATHS.get(req.path.split("?")[0])
 
 
 def redirect_elsewhere(req, own_ip):
@@ -209,9 +228,9 @@ def route(req, own_ip, view):
     what was typed last. Returns the response and, for a valid form, what to connect with."""
     if req is None or not req.method:
         return response(404, "Not found"), None
-    if req.method == "GET" and req.path in _ONLINE and redirect_elsewhere(req, own_ip):
-        status, body = _ONLINE[req.path]
-        return response(status, body), None
+    online = online_answer(req) if redirect_elsewhere(req, own_ip) else None
+    if online:
+        return response(*online), None
     if redirect_elsewhere(req, own_ip):
         return response(302, location="http://" + own_ip + "/"), None
     if req.method == "POST" and req.path == "/setup":

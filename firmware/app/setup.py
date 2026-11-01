@@ -105,6 +105,8 @@ class SetupPortal:
                     break
                 data += chunk
                 req = portal.parse_request(data)
+            if req:
+                print("setup page request:", req.method, req.host, req.path)
             resp, setup = portal.route(req, self._ip, self._view)
             conn.sendall(resp)
             if setup:

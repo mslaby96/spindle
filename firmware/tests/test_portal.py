@@ -164,6 +164,15 @@ class RouteTest(unittest.TestCase):
         windows, _ = self.probe(b"www.msftconnecttest.com", b"/connecttest.txt")
         self.assertTrue(windows.endswith(b"Microsoft Connect Test"))
 
+    def test_apple_and_google_check_hosts_are_online_whatever_the_path(self):
+        for host, path in [(b"captive.apple.com", b"/"), (b"www.apple.com", b"/library/test/success.html"),
+                           (b"www.ibook.info", b"/x3k2/p0q9/abc.html"), (b"captive.apple.com", b"/hotspot-detect.html?x=1")]:
+            resp, _ = self.probe(host, path)
+            self.assertIn(b"<TITLE>Success</TITLE>", resp, host + path)
+        for host in (b"clients3.google.com", b"connectivitycheck.android.com", b"www.google.com"):
+            resp, _ = self.probe(host, b"/generate_204")
+            self.assertTrue(resp.startswith(b"HTTP/1.1 204"), host)
+
     def test_any_other_name_leads_to_the_setup_page(self):
         resp, setup = self.probe(b"spindle.setup", b"/")
         self.assertTrue(resp.startswith(b"HTTP/1.1 302"))
