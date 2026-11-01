@@ -178,6 +178,7 @@ func TestNormalizeUID(t *testing.T) {
 		"04a1b2c3":             "04A1B2C3",
 		"04:A1:B2:C3:D4:E5:F6": "04A1B2C3D4E5F6",
 		" 04a1b2c3d4e5f6 ":     "04A1B2C3D4E5F6",
+		"0102030405060708090a": "0102030405060708090A",
 	}
 	for in, want := range cases {
 		if got, ok := normalizeUID(in); !ok || got != want {

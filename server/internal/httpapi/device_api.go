@@ -67,44 +67,44 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	uid := ""
-	if req.UID != nil {
-		var ok bool
-		if uid, ok = normalizeUID(*req.UID); !ok {
-			writeError(w, http.StatusBadRequest, "uid must be 4 to 10 bytes of hex")
-			return
-		}
+	uid, ok := reportedUID(req.UID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "uid must be 4 to 10 bytes of hex")
+		return
 	}
-	dev, err := s.Devices.Touch(r.Context(), dev.ID, devices.Report{
+	resp, err := s.observe(r.Context(), dev, req, uid)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func reportedUID(raw *string) (string, bool) {
+	if raw == nil {
+		return "", true
+	}
+	return normalizeUID(*raw)
+}
+
+func (s *Server) observe(ctx context.Context, dev devices.Device, req reportRequest, uid string) (reportResponse, error) {
+	dev, err := s.Devices.Touch(ctx, dev.ID, devices.Report{
 		FW: req.FW, RSSI: req.RSSI, ReaderResets: req.ReaderResets, UptimeSec: req.UptimeSec,
 	})
 	if err != nil {
-		s.internal(w, err)
-		return
+		return reportResponse{}, err
 	}
 	s.Watcher.Seen(dev)
-	led, err := s.Presence.Observe(r.Context(), presence.Observation{
-		UserID:   dev.UserID,
-		DeviceID: dev.ID,
-		UID:      uid,
-		At:       time.Now(),
-	})
+	led, err := s.Presence.Observe(ctx, presence.Observation{UserID: dev.UserID, DeviceID: dev.ID, UID: uid, At: time.Now()})
 	if err != nil {
-		s.internal(w, err)
-		return
+		return reportResponse{}, err
 	}
 	interval := reportInterval
 	if uid == "" {
 		interval = idleInterval
 	}
-	resp := reportResponse{LED: led, IntervalMS: interval.Milliseconds()}
-	if dev.WiFiChangePending {
-		if resp.Command, err = s.handOver(r.Context(), dev); err != nil {
-			s.internal(w, err)
-			return
-		}
-	}
-	writeJSON(w, http.StatusOK, resp)
+	command, err := s.handOver(ctx, dev)
+	return reportResponse{LED: led, IntervalMS: interval.Milliseconds(), Command: command}, err
 }
 
 func (s *Server) handOver(ctx context.Context, dev devices.Device) (string, error) {
