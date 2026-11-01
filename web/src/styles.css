@@ -195,7 +195,7 @@ section > .divider:first-child { margin-top: 0; }
 
 /* Controls */
 
-button {
+button, a.button {
   min-height: 2.5rem;
   padding: 0.5rem 1.05rem;
   border: 0;
@@ -208,10 +208,12 @@ button {
   cursor: pointer;
   transition: background-color 0.15s ease-out, color 0.15s ease-out;
 }
-button:hover:not(:disabled) { background: color-mix(in oklab, var(--mustard) 85%, var(--ink)); }
+a.button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+button:hover:not(:disabled), a.button:hover { background: color-mix(in oklab, var(--mustard) 85%, var(--ink)); }
 button:disabled { background: var(--sunk); color: var(--ink-2); cursor: default; }
-button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--rule-strong); }
-button.secondary:hover:not(:disabled) { background: var(--sunk); }
+button.secondary, a.button.secondary { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--rule-strong); }
+button.secondary:hover:not(:disabled), a.button.secondary:hover { background: var(--sunk); }
+.row:has(> a.button) { justify-content: flex-start; flex-wrap: wrap; gap: 0.75rem; }
 button.secondary:disabled { background: transparent; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--rule); }
 button.link {
   min-height: 0;
@@ -469,7 +471,7 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 }
 
 @media (pointer: coarse) {
-  button, input:not([type="checkbox"]), select { min-height: 44px; }
+  button, a.button, input:not([type="checkbox"]), select { min-height: 44px; }
   .tabs button { min-height: 44px; }
   button.link { min-height: 44px; padding: 0 0.3rem; margin: 0 -0.3rem; }
   p button.link { position: relative; min-height: 0; padding: 0; margin: 0; }
