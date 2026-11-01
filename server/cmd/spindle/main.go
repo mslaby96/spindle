@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
+	"github.com/mslaby96/spindle/server/internal/backup"
 	"github.com/mslaby96/spindle/server/internal/catalog"
 	"github.com/mslaby96/spindle/server/internal/config"
 	"github.com/mslaby96/spindle/server/internal/covers"
@@ -56,12 +57,16 @@ func main() {
 		err = serve(cfg, log)
 	case "healthcheck":
 		err = healthcheck(cfg)
+	case "backup":
+		err = backupNow(cfg)
+	case "restore":
+		err = restore(cfg, os.Args[2:])
 	case "reset-password":
 		err = resetPassword(cfg, os.Args[2:])
 	case "recolor-covers":
 		err = recolorCovers(cfg)
 	default:
-		err = fmt.Errorf("unknown command %q (expected serve, healthcheck, reset-password or recolor-covers)", cmd)
+		err = fmt.Errorf("unknown command %q (expected serve, healthcheck, backup, restore, reset-password or recolor-covers)", cmd)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -115,6 +120,16 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 	go resolver.Run(ctx)
 	go engine.RunSweeper(ctx, 10*time.Second)
+	if cfg.Backup.Every > 0 {
+		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: time.Now}
+		go backups.Run(ctx, cfg.Backup.Every, func(path string, err error) {
+			if err != nil {
+				log.Error("backup failed", "dir", cfg.Backup.Dir, "err", err)
+				return
+			}
+			log.Info("backup written", "path", path)
+		})
+	}
 	ha := &homeassistant.Publisher{
 		Cfg:    cfg.MQTT,
 		DB:     d,
@@ -211,6 +226,33 @@ func recolorCovers(cfg *config.Config) error {
 	n, err := svc.RecolorCovers(ctx)
 	fmt.Fprintf(os.Stderr, "Recoloured %d covers.\n", n)
 	return err
+}
+
+// backupNow writes a backup next to the scheduled ones. It is safe while the server runs.
+func backupNow(cfg *config.Config) error {
+	ctx := context.Background()
+	d, err := db.Open(ctx, filepath.Join(cfg.DataDir, "spindle.db"))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	s := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: time.Now}
+	path, err := s.Create(ctx)
+	if err == nil {
+		fmt.Println("Backup written to", path)
+	}
+	return err
+}
+
+func restore(cfg *config.Config, args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: spindle restore <backup.tar.gz> (stop the server first)")
+	}
+	if err := backup.Restore(args[0], cfg.DataDir); err != nil {
+		return err
+	}
+	fmt.Println("Restored. The data that was there before is in a before-restore folder in", cfg.DataDir)
+	return nil
 }
 
 func resetPassword(cfg *config.Config, args []string) error {

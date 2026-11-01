@@ -8,8 +8,12 @@ services:
     ports:
       - "${SPINDLE_PORT:-8080}:8080"
     env_file: .env
+    environment:
+      SPINDLE_BACKUP_DIR: /backups
     volumes:
       - spindle-data:/data
+      # where backups land on this machine; set SPINDLE_BACKUP_PATH in .env to pick another folder or disk
+      - ${SPINDLE_BACKUP_PATH:-./backups}:/backups
 
 volumes:
   spindle-data:

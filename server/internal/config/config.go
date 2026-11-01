@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,12 @@ type MQTT struct {
 
 func (m MQTT) Enabled() bool { return m.URL != "" }
 
+type Backup struct {
+	Dir   string
+	Every time.Duration // zero turns the automatic backups off
+	Keep  int
+}
+
 type Config struct {
 	ListenAddr    string
 	DataDir       string
@@ -36,14 +43,16 @@ type Config struct {
 	DiscogsToken  string
 	LastFMKey     string
 	MQTT          MQTT
+	Backup        Backup
 	Sessions      Sessions
 }
 
 func Load(getenv func(string) string) (*Config, error) {
 	l := loader{getenv: getenv}
+	dataDir := l.str("SPINDLE_DATA_DIR", "./data")
 	c := &Config{
 		ListenAddr:    l.str("SPINDLE_LISTEN", ":8080"),
-		DataDir:       l.str("SPINDLE_DATA_DIR", "./data"),
+		DataDir:       dataDir,
 		Location:      l.location("SPINDLE_TZ"),
 		SecureCookies: l.boolean("SPINDLE_SECURE_COOKIES", false),
 		DiscogsToken:  l.secret("SPINDLE_DISCOGS_TOKEN"),
@@ -53,6 +62,11 @@ func Load(getenv func(string) string) (*Config, error) {
 			Username: l.str("SPINDLE_MQTT_USERNAME", ""),
 			Password: l.secret("SPINDLE_MQTT_PASSWORD"),
 			Prefix:   l.str("SPINDLE_MQTT_DISCOVERY_PREFIX", "homeassistant"),
+		},
+		Backup: Backup{
+			Dir:   l.str("SPINDLE_BACKUP_DIR", filepath.Join(dataDir, "backups")),
+			Every: l.optionalDuration("SPINDLE_BACKUP_EVERY", 24*time.Hour),
+			Keep:  l.count("SPINDLE_BACKUP_KEEP", 7),
 		},
 		Sessions: Sessions{
 			AbsenceTolerance: l.duration("SPINDLE_ABSENCE_TOLERANCE", 90*time.Second),
@@ -77,8 +91,12 @@ func (c *Config) Summary() string {
 		}
 		return "set"
 	}
-	return fmt.Sprintf("listen=%s data=%s tz=%s discogs_token=%s lastfm_key=%s mqtt=%t",
-		c.ListenAddr, c.DataDir, c.Location, set(c.DiscogsToken), set(c.LastFMKey), c.MQTT.Enabled())
+	backups := "off"
+	if c.Backup.Every > 0 {
+		backups = fmt.Sprintf("%s every %s, keep %d", c.Backup.Dir, c.Backup.Every, c.Backup.Keep)
+	}
+	return fmt.Sprintf("listen=%s data=%s tz=%s discogs_token=%s lastfm_key=%s mqtt=%t backups=%q",
+		c.ListenAddr, c.DataDir, c.Location, set(c.DiscogsToken), set(c.LastFMKey), c.MQTT.Enabled(), backups)
 }
 
 type loader struct {
@@ -129,6 +147,27 @@ func (l *loader) duration(key string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// optionalDuration is a duration that can also be turned off with "off".
+func (l *loader) optionalDuration(key string, def time.Duration) time.Duration {
+	if strings.EqualFold(strings.TrimSpace(l.getenv(key)), "off") {
+		return 0
+	}
+	return l.duration(key, def)
+}
+
+func (l *loader) count(key string, def int) int {
+	v := l.getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		l.fail(key, "expected a whole number of at least 1, got %q", v)
+		return def
+	}
+	return n
 }
 
 func (l *loader) factor(key string, def float64) float64 {

@@ -145,3 +145,32 @@ func TestLongFactorOfOneIsAccepted(t *testing.T) {
 		t.Fatalf("%v %v", c, err)
 	}
 }
+
+func TestBackupDefaults(t *testing.T) {
+	c, err := Load(env(map[string]string{"SPINDLE_DATA_DIR": "/srv/spindle"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Backup.Dir != "/srv/spindle/backups" || c.Backup.Every != 24*time.Hour || c.Backup.Keep != 7 {
+		t.Fatalf("backup %+v", c.Backup)
+	}
+}
+
+func TestBackupSettings(t *testing.T) {
+	c, err := Load(env(map[string]string{"SPINDLE_BACKUP_DIR": "/backups", "SPINDLE_BACKUP_EVERY": "6h", "SPINDLE_BACKUP_KEEP": "30"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Backup.Dir != "/backups" || c.Backup.Every != 6*time.Hour || c.Backup.Keep != 30 {
+		t.Fatalf("backup %+v", c.Backup)
+	}
+	off, err := Load(env(map[string]string{"SPINDLE_BACKUP_EVERY": "off"}))
+	if err != nil || off.Backup.Every != 0 {
+		t.Fatalf("off: %+v %v", off.Backup, err)
+	}
+	for k, v := range map[string]string{"SPINDLE_BACKUP_KEEP": "0", "SPINDLE_BACKUP_EVERY": "soon"} {
+		if _, err := Load(env(map[string]string{k: v})); err == nil || !strings.Contains(err.Error(), k) {
+			t.Errorf("%s=%s: %v", k, v, err)
+		}
+	}
+}
