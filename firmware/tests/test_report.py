@@ -29,6 +29,9 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(report.parse({"led": "idle", "interval_ms": 10**9})[1], report.MAX_INTERVAL_MS)
         self.assertEqual(report.parse({"led": "idle"})[1], report.DEFAULT_INTERVAL_MS)
 
+    def test_an_empty_stand_may_report_every_half_minute(self):
+        self.assertEqual(report.parse({"led": "idle", "interval_ms": 30000})[1], 30000)
+
     def test_garbage_response(self):
         self.assertEqual(report.parse(None), ("unknown", report.DEFAULT_INTERVAL_MS))
 

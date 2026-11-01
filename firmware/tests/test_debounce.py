@@ -50,5 +50,18 @@ class DebouncerTest(unittest.TestCase):
         self.assertIsNone(feed(d, [A, B, A, B, A, B]))
 
 
+
+class CandidateTest(unittest.TestCase):
+    def test_a_sleeve_being_put_on_is_a_candidate_until_confirmed(self):
+        d = Debouncer()
+        self.assertIsNone(d.candidate)
+        d.feed("04A1")
+        self.assertEqual(d.candidate, "04A1")
+        d.feed("04A1")
+        d.feed("04A1")
+        self.assertIsNone(d.candidate)
+        self.assertEqual(d.current, "04A1")
+
+
 if __name__ == "__main__":
     unittest.main()

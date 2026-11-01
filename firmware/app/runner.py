@@ -5,13 +5,12 @@ import machine
 import rp2
 from machine import WDT
 
-from app import report
+from app import pace, report
 from app.debounce import Debouncer
 from app.hold import Hold
 from app.led import Led
 from app.version import VERSION
 
-READ_EVERY_MS = 200
 WDT_TIMEOUT_MS = 8000
 # Holding BOOTSEL this long while the stand runs forgets its Wi-Fi and opens the setup network again.
 FORGET_HOLD_MS = 5000
@@ -44,9 +43,9 @@ def fail_forever(led):
         time.sleep_ms(50)
 
 
-def read_tag(reader):
+def read_tag(reader, antenna_stays_on):
     try:
-        return reader.read()
+        return reader.read(antenna_stays_on)
     except Exception as e:
         print("reader error:", e)
         return None
@@ -90,8 +89,11 @@ def run():
         now = time.ticks_ms()
 
         if time.ticks_diff(now, next_read) >= 0:
-            uid = debounce.feed(read_tag(reader))
-            next_read = time.ticks_add(now, READ_EVERY_MS)
+            # the candidate counts as present too, so a sleeve being put on is confirmed at full speed
+            now_pace = pace.pace(debounce.current is not None or debounce.candidate is not None)
+            uid = debounce.feed(read_tag(reader, now_pace.antenna_stays_on))
+            wifi.save_power(now_pace.radio_saves_power)
+            next_read = time.ticks_add(now, now_pace.read_every_ms)
             if uid != attempted:
                 next_report = now
             # reading BOOTSEL briefly pauses flash access, so it is checked with the reader rather than every pass

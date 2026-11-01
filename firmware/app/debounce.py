@@ -7,6 +7,11 @@ class Debouncer:
         self._hits = 0
         self._misses = 0
 
+    @property
+    def candidate(self):
+        """A sleeve that has been read but not often enough yet to count as on the stand."""
+        return self._candidate
+
     def feed(self, uid):
         if uid is None:
             self._misses += 1

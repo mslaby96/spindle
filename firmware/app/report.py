@@ -1,7 +1,7 @@
 LED_STATES = ("idle", "known", "unknown", "catalog_ready", "catalog_saved")
 DEFAULT_INTERVAL_MS = 1500
 MIN_INTERVAL_MS = 500
-MAX_INTERVAL_MS = 10000
+MAX_INTERVAL_MS = 60000
 MAX_RETRY_MS = 30000
 REQUIRED = ("ssid", "password", "server", "token")
 PIN_NAMES = ("sck", "mosi", "miso", "cs", "rst", "spi_id")

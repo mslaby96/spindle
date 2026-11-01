@@ -20,6 +20,13 @@ class WiFi:
         self._attempt_started = self._next_attempt
         self._backoff = MIN_BACKOFF_MS
         self._down_since = self._next_attempt
+        self._saving = None
+
+    def save_power(self, on):
+        """Lets the radio doze between beacons while nothing is happening; replies come a little later then."""
+        if on != self._saving:
+            self._saving = on
+            self._wlan.config(pm=self._wlan.PM_POWERSAVE if on else self._wlan.PM_PERFORMANCE)
 
     def down_ms(self):
         if self._down_since is None:

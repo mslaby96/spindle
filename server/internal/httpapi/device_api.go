@@ -12,7 +12,13 @@ import (
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
-const reportInterval = 1500 * time.Millisecond
+const (
+	// reportInterval keeps a sleeve on the stand fresh well inside the five seconds after which it counts as taken off.
+	reportInterval = 1500 * time.Millisecond
+	// idleInterval is for an empty stand: putting a sleeve on is reported at once anyway, so this is only a heartbeat
+	// and lets the stand keep its radio quiet.
+	idleInterval = 30 * time.Second
+)
 
 type deviceCtxKey struct{}
 
@@ -75,7 +81,11 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, reportResponse{LED: led, IntervalMS: reportInterval.Milliseconds()})
+	interval := reportInterval
+	if uid == "" {
+		interval = idleInterval
+	}
+	writeJSON(w, http.StatusOK, reportResponse{LED: led, IntervalMS: interval.Milliseconds()})
 }
 
 func normalizeUID(s string) (string, bool) {

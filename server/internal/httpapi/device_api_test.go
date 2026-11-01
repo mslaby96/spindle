@@ -206,3 +206,15 @@ func TestEndingAListenEarlyFromTheApp(t *testing.T) {
 		t.Fatalf("nothing left to end: %d", resp.StatusCode)
 	}
 }
+
+func TestAnEmptyStandReportsLessOften(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	token := e.deviceToken(t, c)
+	if _, out := e.report(t, token, nil); out.IntervalMS != 30000 {
+		t.Fatalf("empty stand asked to report every %d ms", out.IntervalMS)
+	}
+	if _, out := e.report(t, token, "04A1B2C3"); out.IntervalMS != 1500 {
+		t.Fatalf("stand with a sleeve asked to report every %d ms", out.IntervalMS)
+	}
+}

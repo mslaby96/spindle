@@ -34,6 +34,9 @@ class FakeWLAN:
     def disconnect(self):
         self.state = "idle"
 
+    def config(self, **kw):
+        self.configs = getattr(self, "configs", []) + [kw]
+
     def connect(self, _ssid, _password):
         self.connects += 1
         self.state = "connecting"
@@ -42,6 +45,8 @@ class FakeWLAN:
 network = types.ModuleType("network")
 network.STA_IF = 0
 network.STAT_CONNECTING = 1
+FakeWLAN.PM_POWERSAVE = 0x111022
+FakeWLAN.PM_PERFORMANCE = 0xA11142
 network.WLAN = FakeWLAN
 sys.modules.setdefault("network", network)
 sys.modules.setdefault("requests", types.ModuleType("requests"))
@@ -85,6 +90,12 @@ class WiFiTest(unittest.TestCase):
         self.wifi.tick()
         self.clock.now += 700
         self.assertEqual(self.wifi.down_ms(), 700)
+
+    def test_switches_power_saving_only_when_it_changes(self):
+        self.wifi.save_power(True)
+        self.wifi.save_power(True)
+        self.wifi.save_power(False)
+        self.assertEqual(self.wifi._wlan.configs, [{"pm": FakeWLAN.PM_POWERSAVE}, {"pm": FakeWLAN.PM_PERFORMANCE}])
 
 
 if __name__ == "__main__":
