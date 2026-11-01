@@ -11,6 +11,9 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/server/internal/webui/dist ./internal/webui/dist
+COPY firmware/main.py firmware/ota.py ./internal/firmware/bundle/
+COPY firmware/app ./internal/firmware/bundle/app
+COPY firmware/lib ./internal/firmware/bundle/lib
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/spindle ./cmd/spindle
 RUN mkdir -p /out/data
 

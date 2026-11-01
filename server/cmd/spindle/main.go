@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/firmware"
 	"github.com/mslaby96/spindle/server/internal/homeassistant"
 	"github.com/mslaby96/spindle/server/internal/httpapi"
 	"github.com/mslaby96/spindle/server/internal/inbox"
@@ -120,10 +122,16 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	}
 	go resolver.Run(ctx)
 	go engine.RunSweeper(ctx, 10*time.Second)
-	deviceStore := devices.NewStore(d)
-	watcher := &devices.Watcher{Store: deviceStore, Publish: func(dev devices.Device) {
+	bundle, err := firmware.Embedded()
+	if err != nil {
+		return fmt.Errorf("bundled firmware: %w", err)
+	}
+	announce := func(dev devices.Device) {
 		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
-	}}
+	}
+	deviceStore := devices.NewStore(d)
+	deviceStore.Firmware, deviceStore.Notify = bundle.Version, announce
+	watcher := &devices.Watcher{Store: deviceStore, Publish: announce}
 	go watcher.Run(ctx, 5*time.Second)
 	if cfg.Backup.Every > 0 {
 		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
@@ -168,6 +176,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Auth:      authSvc,
 			Devices:   deviceStore,
 			Watcher:   watcher,
+			Firmware:  bundle,
 			Catalog:   catalogSvc,
 			Mode:      mode,
 			Durations: resolver,
@@ -188,7 +197,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	srv.RegisterOnShutdown(endRequests)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Info("spindle started", "config", cfg.Summary())
+	log.Info("spindle started", "config", cfg.Summary(), "stand_firmware", cmp.Or(bundle.Version, "none"))
 
 	select {
 	case err := <-errc:

@@ -3,4 +3,7 @@ data
 deploy/.env
 web/node_modules
 docs
-firmware
+firmware/config.json
+firmware/tests
+firmware/tools
+**/__pycache__

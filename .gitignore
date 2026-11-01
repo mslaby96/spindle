@@ -5,6 +5,8 @@
 /web/dist/
 /server/internal/webui/dist/*
 !/server/internal/webui/dist/.gitkeep
+/server/internal/firmware/bundle/*
+!/server/internal/firmware/bundle/.gitkeep
 .DS_Store
 __pycache__/
 *.tsbuildinfo

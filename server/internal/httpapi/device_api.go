@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/devices"
-	"github.com/mslaby96/spindle/server/internal/events"
 	"github.com/mslaby96/spindle/server/internal/presence"
 )
 
@@ -50,15 +49,22 @@ type reportRequest struct {
 	RSSI         *int    `json:"rssi"`
 	ReaderResets *int    `json:"reader_resets"`
 	UptimeSec    *int64  `json:"uptime_sec"`
+	// UpdateFailed names a firmware the stand couldn't download or had to roll back.
+	UpdateFailed string `json:"update_failed"`
 }
 
-// commandChangeWiFi tells the stand to forget its Wi-Fi and open its setup network, keeping its pairing.
-const commandChangeWiFi = "change_wifi"
+const (
+	// commandChangeWiFi tells the stand to forget its Wi-Fi and open its setup network, keeping its pairing.
+	commandChangeWiFi = "change_wifi"
+	// commandUpdate tells the stand to download the firmware at /api/device/v1/firmware/ and restart into it.
+	commandUpdate = "update"
+)
 
 type reportResponse struct {
 	LED        presence.LED `json:"led"`
 	IntervalMS int64        `json:"interval_ms"`
 	Command    string       `json:"command,omitempty"`
+	Version    string       `json:"version,omitempty"`
 }
 
 func (s *Server) report(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +94,9 @@ func reportedUID(raw *string) (string, bool) {
 }
 
 func (s *Server) observe(ctx context.Context, dev devices.Device, req reportRequest, uid string) (reportResponse, error) {
+	if err := s.Devices.Settle(ctx, dev.ID, req.FW, req.UpdateFailed); err != nil {
+		return reportResponse{}, err
+	}
 	dev, err := s.Devices.Touch(ctx, dev.ID, devices.Report{
 		FW: req.FW, RSSI: req.RSSI, ReaderResets: req.ReaderResets, UptimeSec: req.UptimeSec,
 	})
@@ -103,18 +112,28 @@ func (s *Server) observe(ctx context.Context, dev devices.Device, req reportRequ
 	if uid == "" {
 		interval = idleInterval
 	}
-	command, err := s.handOver(ctx, dev)
-	return reportResponse{LED: led, IntervalMS: interval.Milliseconds(), Command: command}, err
+	resp := reportResponse{LED: led, IntervalMS: interval.Milliseconds()}
+	resp.Command, resp.Version, err = s.handOver(ctx, dev.ID, uid == "")
+	return resp, err
 }
 
-func (s *Server) handOver(ctx context.Context, dev devices.Device) (string, error) {
-	taken, err := s.Devices.TakeWiFiChange(ctx, dev.ID)
-	if err != nil || !taken {
-		return "", err
+// handOver gives the stand what was asked of it in the app, one thing per report. An update waits for an empty stand.
+func (s *Server) handOver(ctx context.Context, id int64, empty bool) (command, version string, err error) {
+	if taken, err := s.Devices.TakeWiFiChange(ctx, id); err != nil || taken {
+		return commandIf(taken, commandChangeWiFi), "", err
 	}
-	dev.WiFiChangePending = false
-	s.Bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
-	return commandChangeWiFi, nil
+	if !empty {
+		return "", "", nil
+	}
+	version, taken, err := s.Devices.TakeUpdate(ctx, id)
+	return commandIf(taken, commandUpdate), version, err
+}
+
+func commandIf(taken bool, command string) string {
+	if !taken {
+		return ""
+	}
+	return command
 }
 
 func normalizeUID(s string) (string, bool) {

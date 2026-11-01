@@ -18,7 +18,7 @@ const (
 	// OfflineAfter is three missed heartbeats of an empty stand.
 	OfflineAfter = 90 * time.Second
 	columns      = `id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at, rssi, reader_resets, uptime_sec,
-		wifi_change_requested_at IS NOT NULL`
+		wifi_change_requested_at IS NOT NULL, coalesce(update_target, ''), coalesce(update_state, '')`
 )
 
 var (
@@ -41,6 +41,9 @@ type Device struct {
 	UptimeSec    *int64 `json:"uptime_sec,omitempty"`
 	// WiFiChangePending is set until the stand next reports and is told to forget its Wi-Fi.
 	WiFiChangePending bool `json:"wifi_change_pending"`
+	// UpdateAvailable is the firmware this server has when the stand runs another one.
+	UpdateAvailable string  `json:"update_available,omitempty"`
+	Update          *Update `json:"update,omitempty"`
 }
 
 // Report is what a stand says about itself each time it reports.
@@ -54,6 +57,10 @@ type Report struct {
 type Store struct {
 	db  *db.DB
 	Now func() time.Time
+	// Firmware is the version stands can update to, empty when this server has none to give.
+	Firmware string
+	// Notify, when set, gets a stand whenever its update or Wi-Fi change moves along.
+	Notify func(Device)
 }
 
 func NewStore(d *db.DB) *Store {
@@ -143,6 +150,9 @@ func (s *Store) TakeWiFiChange(ctx context.Context, id int64) (bool, error) {
 		return false, err
 	}
 	n, err := res.RowsAffected()
+	if n > 0 {
+		s.notify(ctx, id)
+	}
 	return n > 0, err
 }
 
@@ -183,8 +193,9 @@ func (s *Store) scan(r scanner) (Device, error) {
 	var d Device
 	var lastSeen, rssi, resets, uptime sql.NullInt64
 	var created int64
+	var target, state string
 	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created, &rssi, &resets, &uptime,
-		&d.WiFiChangePending); err != nil {
+		&d.WiFiChangePending, &target, &state); err != nil {
 		return Device{}, err
 	}
 	d.CreatedAt = time.Unix(created, 0).UTC()
@@ -194,6 +205,12 @@ func (s *Store) scan(r scanner) (Device, error) {
 		d.Online = s.Now().Sub(t) < OfflineAfter
 	}
 	d.RSSI, d.ReaderResets, d.UptimeSec = intPtr(rssi), intPtr(resets), int64Ptr(uptime)
+	if s.Firmware != "" && d.FWVersion != "" && d.FWVersion != s.Firmware {
+		d.UpdateAvailable = s.Firmware
+	}
+	if state != "" {
+		d.Update = &Update{Version: target, State: state}
+	}
 	return d, nil
 }
 

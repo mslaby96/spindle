@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
@@ -23,6 +24,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/firmware"
 	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
@@ -30,6 +32,8 @@ import (
 	"github.com/mslaby96/spindle/server/internal/sessions"
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
+
+const testFirmware = "0.6.0"
 
 type testEnv struct {
 	srv  *Server
@@ -58,7 +62,18 @@ func newEnv(t *testing.T) *testEnv {
 	mode := &catalog.Mode{Service: catalogSvc, Bus: bus, Idle: cfg.Sessions.CatalogIdle}
 	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
 	router := &presence.Router{Mode: mode, Catalog: mode, Sessions: engine, Tolerance: cfg.Sessions.AbsenceTolerance}
+	bundle, err := firmware.Load(fstest.MapFS{
+		"main.py":        {Data: []byte("import ota\n")},
+		"app/version.py": {Data: []byte(`VERSION = "` + testFirmware + `"` + "\n")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	deviceStore := devices.NewStore(d)
+	deviceStore.Firmware = bundle.Version
+	deviceStore.Notify = func(dev devices.Device) {
+		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
+	}
 	watcher := &devices.Watcher{Store: deviceStore, Publish: func(dev devices.Device) {
 		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
 	}}
@@ -68,6 +83,7 @@ func newEnv(t *testing.T) *testEnv {
 		Auth:      a,
 		Devices:   deviceStore,
 		Watcher:   watcher,
+		Firmware:  bundle,
 		Catalog:   catalogSvc,
 		Mode:      mode,
 		Discogs:   dc,

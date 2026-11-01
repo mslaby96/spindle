@@ -13,6 +13,7 @@ import (
 	"github.com/mslaby96/spindle/server/internal/db"
 	"github.com/mslaby96/spindle/server/internal/devices"
 	"github.com/mslaby96/spindle/server/internal/events"
+	"github.com/mslaby96/spindle/server/internal/firmware"
 	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/metadata/discogs"
 	"github.com/mslaby96/spindle/server/internal/metadata/duration"
@@ -28,6 +29,7 @@ type Deps struct {
 	Auth      *auth.Service
 	Devices   *devices.Store
 	Watcher   *devices.Watcher
+	Firmware  *firmware.Bundle
 	Catalog   *catalog.Service
 	Mode      *catalog.Mode
 	Discogs   *discogs.Client
@@ -64,6 +66,8 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/devices/pairing", s.user(s.startPairing))
 	s.mux.Handle("POST /api/devices/{id}/wifi-change", s.user(s.requestWiFiChange))
 	s.mux.Handle("DELETE /api/devices/{id}/wifi-change", s.user(s.cancelWiFiChange))
+	s.mux.Handle("POST /api/devices/{id}/update", s.user(s.requestUpdate))
+	s.mux.Handle("DELETE /api/devices/{id}/update", s.user(s.cancelUpdate))
 	s.mux.Handle("GET /api/events", s.user(s.events))
 	s.mux.Handle("GET /api/now-playing", s.user(s.nowPlaying))
 	s.mux.Handle("POST /api/now-playing/{id}/end", s.user(s.endListen))
@@ -98,6 +102,7 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/tags/{uid}/assign", s.user(s.assignTag))
 
 	s.mux.Handle("POST /api/device/v1/report", s.device(s.report))
+	s.mux.Handle("GET /api/device/v1/firmware/{path...}", s.device(s.firmwareFile))
 	s.mux.HandleFunc("POST /api/device/v1/pair", s.pair)
 
 	s.mux.Handle("/", webui.Handler())

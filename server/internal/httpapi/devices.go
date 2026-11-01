@@ -71,3 +71,11 @@ func (s *Server) requestWiFiChange(w http.ResponseWriter, r *http.Request) {
 func (s *Server) cancelWiFiChange(w http.ResponseWriter, r *http.Request) {
 	s.act(w, r, s.Devices.CancelWiFiChange)
 }
+
+func (s *Server) requestUpdate(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Devices.RequestUpdate)
+}
+
+func (s *Server) cancelUpdate(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Devices.CancelUpdate)
+}
