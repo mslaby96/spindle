@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -197,6 +198,92 @@ func TestRunMakesBackupsUntilStopped(t *testing.T) {
 			t.Fatal("no backup made on start")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	<-done
+}
+
+func TestEveryCoverGoesIntoTheBackup(t *testing.T) {
+	dir, d := dataDir(t)
+	os.WriteFile(filepath.Join(dir, "covers", "2.jpeg"), []byte("cover two"), 0o640)
+	s := &Store{DB: d, DataDir: dir, Dir: t.TempDir(), Keep: 7, Now: time.Now}
+	path, _ := s.Create(context.Background())
+	restored := t.TempDir()
+	if err := Restore(path, restored); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"1.jpeg": "cover one", "2.jpeg": "cover two"} {
+		if b, _ := os.ReadFile(filepath.Join(restored, "covers", name)); string(b) != want {
+			t.Errorf("%s: %q", name, b)
+		}
+	}
+}
+
+func TestPruningLeavesOtherArchivesAlone(t *testing.T) {
+	_, d := dataDir(t)
+	backups := t.TempDir()
+	os.WriteFile(filepath.Join(backups, "photos.tar.gz"), []byte("mine"), 0o640)
+	os.WriteFile(filepath.Join(backups, "spindle-backup-notes.txt"), []byte("mine"), 0o640)
+	for _, ts := range []string{"2026-10-30 03:00:00", "2026-10-31 03:00:00"} {
+		s := &Store{DB: d, DataDir: t.TempDir(), Dir: backups, Keep: 1, Now: at(ts)}
+		s.Create(context.Background())
+	}
+	for _, name := range []string{"photos.tar.gz", "spindle-backup-notes.txt", "spindle-backup-20261031-030000.tar.gz"} {
+		if _, err := os.Stat(filepath.Join(backups, name)); err != nil {
+			t.Errorf("%s was removed", name)
+		}
+	}
+}
+
+func TestAStrangelyNamedFileDoesNotMakeABackupDue(t *testing.T) {
+	_, d := dataDir(t)
+	dir := t.TempDir()
+	s := &Store{DB: d, DataDir: t.TempDir(), Dir: dir, Keep: 7, Now: at("2026-11-01 03:00:00")}
+	s.Create(context.Background())
+	os.WriteFile(filepath.Join(dir, "spindle-backup-garbage.tar.gz"), []byte("x"), 0o640)
+	s.Now = at("2026-11-01 20:00:00")
+	if wait := s.untilNext(24 * time.Hour); wait != 7*time.Hour {
+		t.Fatalf("wait %v", wait)
+	}
+}
+
+func TestRestoreKeepsADatabaseWithoutCoversAside(t *testing.T) {
+	dir, d := dataDir(t)
+	s := &Store{DB: d, DataDir: dir, Dir: t.TempDir(), Keep: 7, Now: time.Now}
+	path, _ := s.Create(context.Background())
+	d.Close()
+	os.RemoveAll(filepath.Join(dir, "covers"))
+	if err := Restore(path, dir); err != nil {
+		t.Fatal(err)
+	}
+	if aside, _ := filepath.Glob(filepath.Join(dir, "before-restore-*", "spindle.db")); len(aside) != 1 {
+		t.Fatal("the database that was there is gone")
+	}
+}
+
+func TestRunKeepsMakingBackups(t *testing.T) {
+	_, d := dataDir(t)
+	dir := t.TempDir()
+	clock := time.Date(2026, 11, 1, 3, 0, 0, 0, time.UTC)
+	var mu sync.Mutex
+	s := &Store{DB: d, DataDir: t.TempDir(), Dir: dir, Keep: 7, Now: func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		clock = clock.Add(24 * time.Hour)
+		return clock
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { s.Run(ctx, time.Hour, func(string, error) {}); close(done) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if found, _ := filepath.Glob(filepath.Join(dir, prefix+"*"+suffix)); len(found) >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("stopped after the first backup")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
 	<-done

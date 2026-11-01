@@ -64,7 +64,10 @@ func TestExportHoldsTheWholeCollectionAndHistory(t *testing.T) {
 		len(kob.Pressings) != 1 || kob.Pressings[0].CatNo != "CL 1355" || len(kob.Sleeves) != 1 || kob.Sleeves[0] != "04A1" {
 		t.Fatalf("album %+v", kob)
 	}
-	if e.Albums[1].RemovedAt == nil {
+	if !kob.AddedAt.Equal(time.Unix(1772000000, 0)) {
+		t.Fatalf("added %v", kob.AddedAt)
+	}
+	if r := e.Albums[1].RemovedAt; r == nil || !r.Equal(time.Unix(1772500000, 0)) {
 		t.Fatalf("sold record not marked %+v", e.Albums[1])
 	}
 	l := e.Listens[0]
