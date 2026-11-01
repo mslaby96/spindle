@@ -52,6 +52,9 @@ export type Device = {
   uptime_sec?: number;
   // Set until the stand next reports and is told to forget its Wi-Fi.
   wifi_change_pending: boolean;
+  // The firmware this server has, when the stand runs another one.
+  update_available?: string;
+  update?: { version: string; state: "requested" | "installing" | "failed" };
 };
 
 export const meKey = ["me"] as const;
