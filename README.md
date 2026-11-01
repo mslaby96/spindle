@@ -122,10 +122,17 @@ mpremote mkdir :lib
 mpremote cp -r app :
 mpremote cp lib/mfrc522.py :lib/
 mpremote cp main.py :
+mpremote cp ota.py :
 mpremote reset
 ```
 
 If your MicroPython build doesn't include `requests`, run `mpremote mip install requests` once.
+
+### Updating the stand
+
+You only need USB once. The Docker image carries the stand's firmware, so after you update the server, the Stands page shows when a stand runs a different version and offers **Update**. The stand picks it up on its next report while nothing is on it, downloads the new files next to the old ones, checks each one and restarts into them.
+
+If the new version keeps crashing, or can't reach the server for ten minutes, the stand goes back to the version it had and the app says the update didn't take. `config.json` and any other files you keep on the Pico are never touched. MicroPython itself isn't updated this way.
 
 ### Connecting the stand
 
@@ -159,6 +166,7 @@ While you're tinkering over USB, set `"watchdog": false` in `config.json`. The w
 | short blip every 2 s | no connection to the server |
 | triple flash | broken config or rejected token, check the USB console |
 | on, short break every 2 s | waiting to be set up, join its Wi-Fi network |
+| quick flicker | downloading a firmware update |
 
 ### Quick test
 
@@ -173,6 +181,8 @@ Point `SPINDLE_MQTT_URL` at the broker Home Assistant uses (with MQTT discovery 
 
 - `sensor.spindle_now_playing`: `Artist – Album` or `idle`, with `artist`, `album`, `year`, `genres`, `styles`, `color_hex` and `color_rgb` attributes
 - `image.spindle_cover`: the cover of what's playing
+
+Each stand also shows up as its own device, linked to Spindle, with whether it is connected, its Wi-Fi signal, reader resets and uptime, and a firmware update entity whose **Install** button does the same as **Update** in the app.
 
 For example, to set a light to the cover's colour:
 
