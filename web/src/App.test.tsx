@@ -68,7 +68,7 @@ describe("now playing", () => {
     mockApi({
       "GET /api/setup": () => [200, { needed: false }],
       "GET /api/me": () => [200, me],
-      "GET /api/devices": () => [200, [{ id: 3, name: "Living room", created_at: "2026-01-01T00:00:00Z" }]],
+      "GET /api/devices": () => [200, [{ id: 3, name: "Living room", created_at: "2026-01-01T00:00:00Z", online: true }]],
       "GET /api/now-playing": () => [200, []],
     });
     renderApp();

@@ -63,3 +63,18 @@ export function formatElapsed(ms: number) {
   const s = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
+
+export function signalStrength(rssi: number) {
+  if (rssi >= -67) return "strong";
+  if (rssi >= -80) return "ok";
+  return "weak";
+}
+
+export function formatUptime(seconds: number) {
+  if (seconds < 48 * 3600) {
+    const minutes = Math.floor(seconds / 60);
+    const h = Math.floor(minutes / 60);
+    return h ? `${h} h ${minutes % 60} min` : `${minutes} min`;
+  }
+  return `${Math.floor(seconds / 86_400)} days`;
+}

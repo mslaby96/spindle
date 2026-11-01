@@ -19,12 +19,23 @@ export function NowPlayingPage() {
   const { data: devices } = useDevices();
 
   if (!playing || playing.length === 0) {
+    const silent = devices && devices.length > 0 && devices.every((d) => !d.online);
     return (
       <section>
-        <div className="empty">
-          <h1>Nothing on the stand</h1>
-          <p className="muted">Put a sleeve on your stand and it will show up here.</p>
-        </div>
+        {silent ? (
+          <div className="empty">
+            <h1>{devices.length === 1 ? "Your stand isn't answering" : "Your stands aren't answering"}</h1>
+            <p className="muted">
+              Check that it's plugged in and that your Wi-Fi is up. It shows up again as soon as it reports.
+            </p>
+            <Link to="/devices">See your stands</Link>
+          </div>
+        ) : (
+          <div className="empty">
+            <h1>Nothing on the stand</h1>
+            <p className="muted">Put a sleeve on your stand and it will show up here.</p>
+          </div>
+        )}
         <LastOnTheStand />
       </section>
     );
