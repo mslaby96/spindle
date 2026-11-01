@@ -118,9 +118,14 @@ function EndsIn({ at, deviceId }: { at: string; deviceId: number }) {
   return (
     <div className="ending" aria-live="polite">
       <p>
-        {left > 0
-          ? `Sleeve off the stand. This listen ends in ${formatCountdown(left)} unless you put it back.`
-          : "Sleeve off the stand. Wrapping up this listen…"}
+        <span className="sticker">Sleeve off</span>
+        {left > 0 ? (
+          <span>
+            This listen ends in <strong className="countdown">{formatCountdown(left)}</strong> unless you put it back.
+          </span>
+        ) : (
+          <span>Wrapping up this listen…</span>
+        )}
       </p>
       <button className="secondary" onClick={() => end.mutate()} disabled={end.isPending}>
         End listen now

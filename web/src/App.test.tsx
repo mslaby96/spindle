@@ -98,7 +98,10 @@ describe("now playing", () => {
         ends_at: new Date(Date.now() + 80_000).toISOString(),
       }),
     );
-    expect(await screen.findByText(/This listen ends in 1:(19|20) unless you put it back/)).toBeInTheDocument();
+    expect(
+      await screen.findByText((_, el) => el?.tagName === "SPAN" && /^This listen ends in 1:(19|20) unless you put it back\.$/.test(el.textContent ?? "")),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sleeve off")).toBeInTheDocument();
 
     act(() => stream().emit("now_playing", { device_id: 3, active: false }));
     expect(await screen.findByRole("heading", { name: "Nothing on the stand" })).toBeInTheDocument();

@@ -304,7 +304,9 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .progress { display: block; height: 4px; margin-top: 0.9rem; background: var(--sunk); border-radius: 2px; overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--tab, var(--mustard)); }
 .now.away .cover { opacity: 0.45; }
-.ending { margin-top: 1rem; }
+.ending { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.ending p { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0; }
+.countdown { font-size: 1.375rem; font-weight: 800; font-stretch: 72%; line-height: 1; font-variant-numeric: tabular-nums; }
 .album-head .facts { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
 
 /* Shelves of sleeves */
