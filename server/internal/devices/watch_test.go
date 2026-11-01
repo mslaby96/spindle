@@ -2,6 +2,7 @@ package devices
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -56,5 +57,35 @@ func TestWatcherForgetsRemovedStands(t *testing.T) {
 	w.Check(ctx)
 	if len(got) != 0 || len(w.online) != 0 {
 		t.Fatalf("removed stand: published %+v, remembered %v", got, w.online)
+	}
+}
+
+func TestWatcherKeepsCheckingUntilStopped(t *testing.T) {
+	s, userA, _ := newStore(t)
+	start := time.Now()
+	var later atomic.Int64
+	s.Now = func() time.Time { return start.Add(time.Duration(later.Load())) }
+	dev, _, _ := s.Create(context.Background(), userA, "Stand")
+	s.Touch(context.Background(), dev.ID, Report{})
+	published := make(chan Device, 1)
+	w := &Watcher{Store: s, Publish: func(d Device) { published <- d }}
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() { w.Run(ctx, 10*time.Millisecond); close(stopped) }()
+	time.Sleep(30 * time.Millisecond)
+	later.Store(int64(OfflineAfter + time.Second))
+	select {
+	case d := <-published:
+		if d.Online {
+			t.Fatalf("published %+v", d)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the stand going quiet was never noticed")
+	}
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not stop")
 	}
 }

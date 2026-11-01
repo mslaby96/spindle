@@ -62,6 +62,12 @@ func (p *Publisher) Run(ctx context.Context) error {
 		return err
 	}
 
+	p.serve(ctx, cm, resync)
+	return nil
+}
+
+// serve passes what happens in Spindle on to Home Assistant until ctx ends, then says goodbye.
+func (p *Publisher) serve(ctx context.Context, cm *autopaho.ConnectionManager, resync signal) {
 	evs, cancel := p.Bus.SubscribeAll()
 	defer cancel()
 	refresh := time.NewTicker(cmp.Or(p.StandsEvery, time.Minute))
@@ -70,7 +76,7 @@ func (p *Publisher) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			p.goOffline(cm)
-			return nil
+			return
 		case <-resync:
 			p.resync(ctx, cm)
 		case <-refresh.C:
