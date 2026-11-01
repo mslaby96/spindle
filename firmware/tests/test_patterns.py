@@ -2,7 +2,7 @@ import unittest
 
 from app import patterns
 
-STATES = ("idle", "known", "unknown", "catalog_ready", "catalog_saved", "offline", "error", "setup")
+STATES = ("idle", "known", "unknown", "catalog_ready", "catalog_saved", "offline", "error", "setup", "update")
 
 
 class PatternTest(unittest.TestCase):

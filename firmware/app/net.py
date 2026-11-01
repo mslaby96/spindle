@@ -72,3 +72,11 @@ def post_json(url, token, payload):
         return 200, resp.json()
     finally:
         resp.close()
+
+
+def get(url, token):
+    resp = requests.get(url, headers={"Authorization": "Bearer " + token}, timeout=HTTP_TIMEOUT_S)
+    try:
+        return resp.status_code, resp.content if resp.status_code == 200 else None
+    finally:
+        resp.close()

@@ -5,16 +5,21 @@ MAX_INTERVAL_MS = 60000
 MAX_RETRY_MS = 30000
 REQUIRED = ("ssid", "password", "server", "token")
 PIN_NAMES = ("sck", "mosi", "miso", "cs", "rst", "spi_id")
-COMMANDS = ("change_wifi",)
+COMMANDS = ("change_wifi", "update")
 
 
 def uid_hex(raw):
     return "".join("{:02X}".format(b) for b in raw)
 
 
-def build(uid, fw, seq, rssi=None, reader_resets=None, uptime_s=None):
+def build(uid, fw, seq, rssi=None, reader_resets=None, uptime_s=None, update_failed=None):
     payload = {"uid": uid.upper() if uid else None, "fw": fw, "seq": seq}
-    for key, value in (("rssi", rssi), ("reader_resets", reader_resets), ("uptime_sec", uptime_s)):
+    for key, value in (
+        ("rssi", rssi),
+        ("reader_resets", reader_resets),
+        ("uptime_sec", uptime_s),
+        ("update_failed", update_failed),
+    ):
         if value is not None:
             payload[key] = value
     return payload

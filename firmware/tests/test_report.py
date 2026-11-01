@@ -16,6 +16,10 @@ class BuildTest(unittest.TestCase):
             {"uid": None, "fw": "0.4.0", "seq": 3, "rssi": -61, "reader_resets": 1, "uptime_sec": 7200},
         )
 
+    def test_a_failed_update_is_reported(self):
+        self.assertEqual(report.build(None, "0.5.0", 1, update_failed="0.6.0")["update_failed"], "0.6.0")
+        self.assertNotIn("update_failed", report.build(None, "0.5.0", 1))
+
     def test_unknown_signal_is_left_out(self):
         self.assertNotIn("rssi", report.build(None, "0.4.0", 3, rssi=None, reader_resets=0, uptime_s=5))
 
@@ -103,6 +107,9 @@ class SetupNeededTest(unittest.TestCase):
 class CommandTest(unittest.TestCase):
     def test_change_wifi(self):
         self.assertEqual(report.command({"led": "idle", "command": "change_wifi"}), "change_wifi")
+
+    def test_update(self):
+        self.assertEqual(report.command({"led": "idle", "command": "update", "version": "0.6.0"}), "update")
 
     def test_anything_else_is_no_command(self):
         for body in ({"led": "idle"}, {"command": "format_disk"}, None, "oops"):

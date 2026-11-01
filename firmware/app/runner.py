@@ -5,7 +5,8 @@ import machine
 import rp2
 from machine import WDT
 
-from app import health, pace, report
+import ota
+from app import health, pace, report, update
 from app.debounce import Debouncer
 from app.hold import Hold
 from app.led import Led
@@ -18,6 +19,8 @@ FORGET_HOLD_MS = 5000
 SETUP_AFTER_OFFLINE_MS = 5 * 60 * 1000
 # How often an empty stand checks that the reader hasn't got stuck.
 READER_CHECK_MS = 30000
+# A new firmware that can't reach the server this long after starting is rolled back.
+TRIAL_MS = 10 * 60 * 1000
 
 
 def read_config():
@@ -61,6 +64,31 @@ def heal(reader):
         print("reader check failed:", e)
 
 
+def obey(command, body, cfg, flash, wdt, led):
+    """Carries out what the server asked for. Returns the version that failed to download, if that was it."""
+    if command == "change_wifi":
+        from app.setup import save_config
+
+        print("the app asked to change the Wi-Fi")
+        save_config(report.keep_pairing(cfg))
+        machine.reset()
+    if command == "update":
+        from app.net import get
+
+        led.show("update")
+        base = cfg["server"] + "/api/device/v1/firmware/"
+        try:
+            version = update.download(lambda path: get(base + path, cfg["token"]), flash, wdt.feed)
+        except Exception as e:
+            print("update failed:", e)
+            version = body.get("version") or "unknown"
+            ota.mark_failed(flash, version)
+            return version
+        print("restarting into", version)
+        machine.reset()
+    return None
+
+
 def run():
     led = Led()
     raw = read_config()
@@ -87,6 +115,10 @@ def run():
     uptime = report.Uptime(time.ticks_ms(), time.ticks_diff)
     debounce = Debouncer()
     url = cfg["server"] + "/api/device/v1/report"
+    flash = ota.Flash()
+    on_trial = ota.trying(flash)
+    update_failed = ota.failed(flash)
+    started = time.ticks_ms()
 
     seq = 0
     failures = 0
@@ -99,6 +131,10 @@ def run():
     while True:
         wdt.feed()
         now = time.ticks_ms()
+        if on_trial and time.ticks_diff(now, started) > TRIAL_MS:
+            print("the new firmware never reached the server, going back")
+            ota.rollback(flash)
+            machine.reset()
 
         if time.ticks_diff(now, next_read) >= 0:
             # the candidate counts as present too, so a sleeve being put on is confirmed at full speed
@@ -131,7 +167,13 @@ def run():
             attempted = debounce.current
             try:
                 payload = report.build(
-                    debounce.current, VERSION, seq, wifi.rssi(), reader.resets, uptime.seconds(time.ticks_ms())
+                    debounce.current,
+                    VERSION,
+                    seq,
+                    wifi.rssi(),
+                    reader.resets,
+                    uptime.seconds(time.ticks_ms()),
+                    update_failed,
                 )
                 status, body = post_json(url, cfg["token"], payload)
             except Exception as e:
@@ -142,12 +184,12 @@ def run():
                 failures = 0
                 state, interval = report.parse(body)
                 led.show(state)
-                if report.command(body) == "change_wifi":
-                    from app.setup import save_config
-
-                    print("the app asked to change the Wi-Fi")
-                    save_config(report.keep_pairing(cfg))
-                    machine.reset()
+                if on_trial:
+                    ota.confirm(flash)
+                    on_trial = False
+                command = report.command(body)
+                if command:
+                    update_failed = obey(command, body, cfg, flash, wdt, led) or update_failed
             elif status == 401:
                 failures += 1
                 print("server rejected the device token")
