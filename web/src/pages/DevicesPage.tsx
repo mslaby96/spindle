@@ -123,7 +123,9 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
     wasPending.current = d.wifi_change_pending;
   }, [d.wifi_change_pending]);
 
-  const error = request.error ?? cancel.error;
+  const firmware = useFirmwareUpdate(d);
+  const updatable = d.update_available && (!d.update || d.update.state === "failed");
+  const error = request.error ?? cancel.error ?? firmware.request.error ?? firmware.cancel.error;
   return (
     <li className="card stand">
       <div className="row">
@@ -136,6 +138,11 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
           <Diagnostics device={d} />
         </div>
         <div className="stand-actions">
+          {updatable && (
+            <button className="secondary" onClick={() => firmware.request.mutate()} disabled={firmware.request.isPending}>
+              {d.update?.state === "failed" ? "Try again" : "Update"}
+            </button>
+          )}
           {!d.wifi_change_pending && !confirming && (
             <button className="secondary" onClick={() => setConfirming(true)}>
               Change Wi-Fi
@@ -193,14 +200,71 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
           </button>
         </div>
       )}
+      <UpdateStatus device={d} onCancel={() => firmware.cancel.mutate()} busy={firmware.cancel.isPending} />
+      {firmware.done && (
+        <p className="success" role="status">
+          Updated: {d.name} is now on {firmware.done}.
+        </p>
+      )}
       {error && <p className="error">{error.message}</p>}
     </li>
   );
 }
 
+function useFirmwareUpdate(d: Device) {
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: devicesKey });
+  const request = useMutation({
+    mutationFn: () => api(`/api/devices/${d.id}/update`, { method: "POST" }),
+    onSuccess: refresh,
+  });
+  const cancel = useMutation({
+    mutationFn: () => api(`/api/devices/${d.id}/update`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
+  const [done, setDone] = useState<string | null>(null);
+  const was = useRef(d.update?.state);
+  // An install that ends without a failure note means the stand came back on the new version.
+  useEffect(() => {
+    if (was.current === "installing" && !d.update && d.fw_version) setDone(d.fw_version);
+    was.current = d.update?.state;
+  }, [d.update, d.fw_version]);
+  return { request, cancel, done };
+}
+
+function UpdateStatus({ device: d, onCancel, busy }: { device: Device; onCancel: () => void; busy: boolean }) {
+  if (!d.update) return null;
+  const { version, state } = d.update;
+  if (state === "installing") {
+    return (
+      <p className="pending" role="status">
+        <span className="sticker calm">Updating</span>
+        <span>
+          Installing {version}. {d.name} restarts and is back in about a minute.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="pending">
+      <span className={state === "failed" ? "sticker" : "sticker calm"}>{state === "failed" ? "Update failed" : "Update"}</span>
+      <span>
+        {state === "failed"
+          ? `${version} didn't take, ${d.name} is back on ${d.fw_version}.`
+          : `${d.name} gets ${version} with its next report. It waits until no record is on the stand.`}
+      </span>
+      <button className="link" onClick={onCancel} disabled={busy}>
+        {state === "failed" ? "Dismiss" : "Cancel"}
+      </button>
+    </p>
+  );
+}
+
 function StandState({ device: d }: { device: Device }) {
   const state = d.online ? undefined : d.last_seen_at ? `Offline since ${formatDateTime(d.last_seen_at)}` : "Never connected";
-  const line = [state, d.fw_version && `firmware ${d.fw_version}`].filter(Boolean).join(" · ");
+  const line = [state, d.fw_version && `firmware ${d.fw_version}`, d.update_available && `${d.update_available} available`]
+    .filter(Boolean)
+    .join(" · ");
   return line ? <p className="muted">{line}</p> : null;
 }
 
