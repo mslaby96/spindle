@@ -152,12 +152,25 @@ def done_page():
     return _page("All set", "<p>The stand is connected. You can close this page and rejoin your usual Wi-Fi.</p>")
 
 
+# Phones fetch one of these to see whether a network reaches the internet. Answering as the real servers would keeps
+# them from opening a captive portal sheet, which on an iPhone closes, and leaves the network, as soon as you switch to
+# another app to copy a password. The setup page is opened in the browser instead.
+_ONLINE = {
+    "/hotspot-detect.html": (200, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"),
+    "/library/test/success.html": (200, "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"),
+    "/generate_204": (204, ""),
+    "/gen_204": (204, ""),
+    "/connecttest.txt": (200, "Microsoft Connect Test"),
+    "/ncsi.txt": (200, "Microsoft NCSI"),
+}
+
+
 def redirect_elsewhere(req, own_ip):
-    """Phones probe a known address to spot a captive portal; sending those requests here makes the setup page pop up."""
+    """Any other name the phone looks up leads here, so http://spindle.setup opens the setup page."""
     return req.host.split(":")[0] not in ("", own_ip)
 
 
-_REASONS = {200: "OK", 302: "Found", 303: "See Other", 404: "Not Found"}
+_REASONS = {200: "OK", 204: "No Content", 302: "Found", 303: "See Other", 404: "Not Found"}
 
 
 def response(status, body="", location=None):
@@ -196,6 +209,9 @@ def route(req, own_ip, view):
     what was typed last. Returns the response and, for a valid form, what to connect with."""
     if req is None or not req.method:
         return response(404, "Not found"), None
+    if req.method == "GET" and req.path in _ONLINE and redirect_elsewhere(req, own_ip):
+        status, body = _ONLINE[req.path]
+        return response(status, body), None
     if redirect_elsewhere(req, own_ip):
         return response(302, location="http://" + own_ip + "/"), None
     if req.method == "POST" and req.path == "/setup":

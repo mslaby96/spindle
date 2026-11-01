@@ -151,9 +151,21 @@ class RouteTest(unittest.TestCase):
     def post(self, body):
         return request(b"POST /setup HTTP/1.1\r\nHost: 192.168.4.1\r\nContent-Length: %d\r\n\r\n" % len(body) + body)
 
-    def test_captive_checks_are_sent_to_the_page(self):
-        resp, setup = portal.route(request(b"GET /generate_204 HTTP/1.1\r\nHost: connectivitycheck.gstatic.com\r\n\r\n"),
-                                   self.IP, self.view())
+    def probe(self, host, path):
+        return portal.route(request(b"GET %s HTTP/1.1\r\nHost: %s\r\n\r\n" % (path, host)), self.IP, self.view())
+
+    def test_tells_phones_the_network_is_online_so_they_stay_on_it(self):
+        apple, _ = self.probe(b"captive.apple.com", b"/hotspot-detect.html")
+        self.assertTrue(apple.startswith(b"HTTP/1.1 200"))
+        self.assertIn(b"<TITLE>Success</TITLE>", apple)
+        self.assertNotIn(b"Set up your stand", apple)
+        android, _ = self.probe(b"connectivitycheck.gstatic.com", b"/generate_204")
+        self.assertTrue(android.startswith(b"HTTP/1.1 204"))
+        windows, _ = self.probe(b"www.msftconnecttest.com", b"/connecttest.txt")
+        self.assertTrue(windows.endswith(b"Microsoft Connect Test"))
+
+    def test_any_other_name_leads_to_the_setup_page(self):
+        resp, setup = self.probe(b"spindle.setup", b"/")
         self.assertTrue(resp.startswith(b"HTTP/1.1 302"))
         self.assertIn(b"Location: http://192.168.4.1/", resp)
         self.assertIsNone(setup)

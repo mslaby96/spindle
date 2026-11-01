@@ -253,6 +253,7 @@ describe("pairing instructions", () => {
     pairingApi();
     const dialog = await startPairing();
     expect(within(dialog).getByText(/Spindle-/)).toBeInTheDocument();
+    expect(within(dialog).getByText("http://spindle.setup")).toBeInTheDocument();
     expect(within(dialog).getByText("http://192.168.1.10:8080")).toBeInTheDocument();
     expect(within(dialog).getByText("K7F-29Q")).toBeInTheDocument();
     expect(within(dialog).queryByText(/localhost/)).not.toBeInTheDocument();

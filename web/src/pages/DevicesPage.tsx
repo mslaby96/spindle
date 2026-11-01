@@ -128,8 +128,8 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
         </li>
         <li>
           On your phone, open the Wi-Fi settings and join the network named <strong>Spindle-</strong> followed by four
-          characters. It has no password. A setup page opens by itself; if it doesn't, open <code>http://192.168.4.1</code>{" "}
-          in the browser.
+          characters. It has no password. Then open <code>http://spindle.setup</code> in Safari or any browser; you can switch
+          to other apps, for example to copy your Wi-Fi password, and come back.
         </li>
         <li>
           On that page pick your home Wi-Fi and type its password.
@@ -161,6 +161,7 @@ function PairingCard({ pairing, onRenew, onCancel, busy }: { pairing: Pairing; o
         <ul>
           <li>No Spindle network: the stand already has Wi-Fi settings. Hold the BOOTSEL button on the Pico for five seconds to clear them.</li>
           <li>Your phone drops the Spindle network while connecting: join it again, the page shows how it went.</li>
+          <li>spindle.setup doesn't open: type <code>http://192.168.4.1</code> instead, and turn off mobile data for a moment if the phone keeps using it.</li>
           <li>The page says the server can't be reached: check that the stand's Wi-Fi is the same network this server is on.</li>
         </ul>
       </details>

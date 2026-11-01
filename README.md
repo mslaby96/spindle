@@ -109,7 +109,7 @@ If your MicroPython build doesn't include `requests`, run `mpremote mip install 
 
 1. In the web app go to **Stands**, type a name and press **Add stand**. You get a pairing code that works for ten minutes.
 2. Plug the stand in. With no settings yet, it opens its own Wi-Fi network called `Spindle-` and four characters, and the LED stays on with a short break every two seconds.
-3. Join that network on your phone. The setup page opens by itself; if it doesn't, go to `http://192.168.4.1`.
+3. Join that network on your phone, then open `http://spindle.setup` (or `http://192.168.4.1`) in the browser. The stand tells the phone the network is online, so no captive portal sheet pops up and you can switch apps, say to copy your Wi-Fi password, without losing the page.
 4. Pick your Wi-Fi, type its password, the server address (the one you open Spindle at, e.g. `http://192.168.1.10:8080`, or your cloud address) and the pairing code.
 5. The stand joins your Wi-Fi, swaps the code for its own token and restarts. The app shows it as connected.
 
