@@ -38,10 +38,13 @@ func TestWatcherTellsWhenAStandGoesQuietAndComesBack(t *testing.T) {
 	}
 	back, _ := s.Touch(ctx, dev.ID, Report{FW: "0.4.0"})
 	w.Seen(back)
-	w.Seen(back)
-	w.Check(ctx)
 	if len(got) != 2 || !got[1].Online {
 		t.Fatalf("after the stand reported again: %+v", got)
+	}
+	w.Seen(back)
+	w.Check(ctx)
+	if len(got) != 2 {
+		t.Fatalf("announced twice: %+v", got)
 	}
 }
 
@@ -87,5 +90,15 @@ func TestWatcherKeepsCheckingUntilStopped(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("watcher did not stop")
+	}
+}
+
+func TestAReportBeforeTheFirstCheckIsOnlyRemembered(t *testing.T) {
+	var got []Device
+	w := &Watcher{Publish: func(d Device) { got = append(got, d) }}
+	w.Seen(Device{ID: 1, Online: true})
+	w.Seen(Device{ID: 2, Online: true})
+	if len(got) != 0 || len(w.online) != 2 {
+		t.Fatalf("published %+v, remembered %v", got, w.online)
 	}
 }
