@@ -60,13 +60,19 @@ func Load(fsys fs.FS) (*Bundle, error) {
 		return b, err
 	}
 	slices.SortFunc(b.Files, func(x, y File) int { return strings.Compare(x.Path, y.Path) })
-	version, ok := b.File("app/version.py")
-	m := versionLine.FindSubmatch(version)
-	if !ok || m == nil {
-		return nil, errors.New("firmware has no app/version.py with a VERSION")
+	if b.Version, err = b.version(); err != nil {
+		return nil, err
 	}
-	b.Version = string(m[1])
 	return b, nil
+}
+
+func (b *Bundle) version() (string, error) {
+	data, _ := b.File("app/version.py")
+	m := versionLine.FindSubmatch(data)
+	if m == nil {
+		return "", errors.New("firmware has no app/version.py with a VERSION")
+	}
+	return string(m[1]), nil
 }
 
 func standFile(p string) bool {
