@@ -108,16 +108,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	// the account's own count is cleared, but the address only gets this attempt back: a success on one account must
-	// not buy more guesses at another
-	s.accounts.Reset(account)
-	s.limiter.Done(s.client(r).key)
-	// the session this browser had before is replaced, not left valid next to the new one
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		if err := s.Auth.DeleteSession(r.Context(), c.Value); err != nil {
-			s.internal(w, err)
-			return
-		}
+	if !s.loggedIn(w, r, account) {
+		return
 	}
 	if !s.startSession(w, r, id, req.Remember) {
 		return
@@ -130,6 +122,23 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 func (s *Server) intended(w http.ResponseWriter, r *http.Request) bool {
 	if !hasIntent(r) {
 		writeError(w, http.StatusForbidden, "missing "+intentHeader+" header")
+		return false
+	}
+	return true
+}
+
+// loggedIn settles the limiters and drops the session this browser had before, so it isn't left valid next to the new
+// one. The account's own count is cleared, but the address only gets this attempt back: a success on one account must
+// not buy more guesses at another.
+func (s *Server) loggedIn(w http.ResponseWriter, r *http.Request, account string) bool {
+	s.accounts.Reset(account)
+	s.limiter.Done(s.client(r).key)
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return true
+	}
+	if err := s.Auth.DeleteSession(r.Context(), c.Value); err != nil {
+		s.internal(w, err)
 		return false
 	}
 	return true

@@ -266,17 +266,25 @@ func extract(archive, dir string) error {
 		if err != nil {
 			return fmt.Errorf("not a Spindle backup: %w", err)
 		}
-		if !allowed(h) {
-			return fmt.Errorf("not a Spindle backup: unexpected entry %q", h.Name)
-		}
-		n, err := writeEntry(io.LimitReader(tr, left+1), filepath.Join(dir, filepath.FromSlash(h.Name)))
-		if err != nil {
+		if left, err = unpackEntry(tr, h, dir, left); err != nil {
 			return err
 		}
-		if left -= n; left < 0 {
-			return errTooLarge
-		}
 	}
+}
+
+// unpackEntry writes one entry and returns how much may still be unpacked.
+func unpackEntry(r io.Reader, h *tar.Header, dir string, left int64) (int64, error) {
+	if !allowed(h) {
+		return 0, fmt.Errorf("not a Spindle backup: unexpected entry %q", h.Name)
+	}
+	n, err := writeEntry(io.LimitReader(r, left+1), filepath.Join(dir, filepath.FromSlash(h.Name)))
+	if err != nil {
+		return 0, err
+	}
+	if left -= n; left < 0 {
+		return 0, errTooLarge
+	}
+	return left, nil
 }
 
 func writeEntry(r io.Reader, target string) (int64, error) {

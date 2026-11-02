@@ -26,14 +26,23 @@ type Store struct {
 	Dir string
 }
 
-// Save validates and stores the image, returning its file name and dominant colour as #rrggbb.
-func (s *Store) Save(albumID int64, data []byte) (string, string, error) {
+// check reads only the image header, so nothing too big gets decoded.
+func check(data []byte) (string, error) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return "", "", fmt.Errorf("cover: %w", err)
+		return "", fmt.Errorf("cover: %w", err)
 	}
 	if cfg.Width > maxSide || cfg.Height > maxSide || cfg.Width*cfg.Height > maxPixels {
-		return "", "", ErrTooLarge
+		return "", ErrTooLarge
+	}
+	return format, nil
+}
+
+// Save validates and stores the image, returning its file name and dominant colour as #rrggbb.
+func (s *Store) Save(albumID int64, data []byte) (string, string, error) {
+	format, err := check(data)
+	if err != nil {
+		return "", "", err
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
