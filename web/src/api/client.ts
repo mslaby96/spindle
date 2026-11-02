@@ -85,6 +85,8 @@ export type ImportSummary = {
   already_in_library: number;
   // Titles of albums removed from the collection in Spindle, which the import leaves out.
   skipped_removed: string[];
+  // Pressings removed in Spindle that Discogs still lists; they stay out.
+  skipped_removed_pressings: number;
 };
 
 // Done and total count new albums, which is what takes time.
@@ -106,6 +108,8 @@ export type Release = {
   label?: string;
   catno?: string;
   format?: string;
+  // Set once the pressing was taken out of the collection.
+  removed_at?: string;
 };
 
 export type Tag = { id: number; uid: string; album?: Album; release?: Release; created_at: number };

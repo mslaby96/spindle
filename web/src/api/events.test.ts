@@ -43,7 +43,7 @@ describe("discogs import events", () => {
       state: "done" as const,
       done: 4,
       total: 4,
-      summary: { found: 5, new_albums: 4, new_pressings: 5, already_in_library: 0, skipped_removed: [] },
+      summary: { found: 5, new_albums: 4, new_pressings: 5, already_in_library: 0, skipped_removed: [], skipped_removed_pressings: 0 },
     };
     applyImportProgress(qc, done);
     expect(qc.getQueryData(discogsImportKey)).toEqual(done);
