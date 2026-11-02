@@ -739,15 +739,13 @@ func TestSweeperEndsAbandonedListen(t *testing.T) {
 		<-stopped
 	}()
 
+	// ending passes through unclassified on its way to counted, so wait for where it ends up
 	deadline := time.Now().Add(5 * time.Second)
-	for v.only(t).State == StateActive {
+	for v.only(t).State != StateCounted {
 		if time.Now().After(deadline) {
-			t.Fatal("sweeper never ended the listen")
+			t.Fatalf("sweeper never counted the listen: %+v", v.only(t))
 		}
 		time.Sleep(10 * time.Millisecond)
-	}
-	if s := v.only(t); s.State != StateCounted {
-		t.Fatalf("session %+v", s)
 	}
 }
 
