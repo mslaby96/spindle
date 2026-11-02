@@ -215,3 +215,14 @@ python3 -m unittest discover -s firmware/tests -t firmware
 `npm run dev` in `web/` serves the app with hot reload and proxies `/api` to a server on port 8080 (`cd server && go run ./cmd/spindle`). `npm run build` writes into `server/internal/webui/dist`, which gets embedded in the binary.
 
 Album data comes from [Discogs](https://www.discogs.com/). Album lengths also come from [MusicBrainz](https://musicbrainz.org/) and, optionally, [Last.fm](https://www.last.fm/).
+
+## License
+
+Copyright 2026 Maciej Słaby.
+
+The software (server, web app and stand firmware) is licensed under the [GNU Affero General Public License v3.0](LICENSE): you can use, change and share it, and if you run a changed version for others, for example as a hosted service, you have to share its source with them too.
+
+The hardware in [`hardware/`](hardware/) (the printed stand and its parts) is licensed under the [CERN Open Hardware Licence v2 – Strongly Reciprocal](hardware/LICENSE).
+
+The RC522 driver in `firmware/lib/mfrc522.py` is by Stefan Wendler under the [MIT License](firmware/LICENSE-mfrc522).
+

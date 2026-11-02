@@ -1,3 +1,7 @@
+// Copyright 2026 Maciej Słaby
+// SPDX-License-Identifier: CERN-OHL-S-2.0
+// Source location: https://github.com/mslaby96/spindle
+//
 // Spindle "now playing" stand: a small ledge that holds a record sleeve leaning back,
 // with an RC522 reader inside the backrest and a Pico W in the base.
 // All dimensions in millimetres. Render a part with: openscad -D 'part="body"' -o body.stl stand.scad
