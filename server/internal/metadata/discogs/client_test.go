@@ -400,3 +400,25 @@ func TestCollectionStopsAtTheFirstFailure(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestCollectionReadsNoMoreThanTheCap(t *testing.T) {
+	old := collectionPages
+	collectionPages = 1
+	defer func() { collectionPages = old }()
+	var seen []string
+	c := newTestClient(t, serveCollection(t, &seen))
+	items, err := c.Collection(context.Background(), "maciej_spins")
+	if err != nil || len(seen) != 1 || len(items) != 2 {
+		t.Fatalf("%d requests, %d items, %v", len(seen), len(items), err)
+	}
+}
+
+func TestACollectionRecordWithoutALabel(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"pagination":{"pages":1},"releases":[{"basic_information":{"id":7,"title":"White Label","labels":[]}}]}`))
+	})
+	items, err := c.Collection(context.Background(), "maciej_spins")
+	if err != nil || len(items) != 1 || items[0].Label != "" || items[0].CatNo != "" {
+		t.Fatalf("%+v %v", items, err)
+	}
+}

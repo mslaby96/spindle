@@ -106,7 +106,6 @@ func plan(items []discogs.CollectionItem, lib library) importPlan {
 	for _, it := range items {
 		if seen[it.ReleaseID] || lib.releases[it.ReleaseID] {
 			p.have++
-			seen[it.ReleaseID] = true
 			continue
 		}
 		seen[it.ReleaseID] = true
@@ -310,25 +309,7 @@ func (s *Service) insertPressing(ctx context.Context, userID, albumID int64, it 
 // library reads what an import needs to know about the user's albums.
 func (s *Service) library(ctx context.Context, userID int64) (library, error) {
 	lib := library{masters: map[int64]libAlbum{}, standalone: map[int64]libAlbum{}, releases: map[int64]bool{}}
-	rows, err := s.DB.R.QueryContext(ctx,
-		`SELECT id, discogs_master_id, discogs_release_id, title, removed_at IS NOT NULL FROM albums WHERE user_id = ?`, userID)
-	if err != nil {
-		return library{}, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var a libAlbum
-		var master, release sql.NullInt64
-		if err := rows.Scan(&a.id, &master, &release, &a.title, &a.removed); err != nil {
-			return library{}, err
-		}
-		if master.Valid {
-			lib.masters[master.Int64] = a
-		} else if release.Valid {
-			lib.standalone[release.Int64] = a
-		}
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.libraryAlbums(ctx, userID, lib); err != nil {
 		return library{}, err
 	}
 	ids, err := s.DB.R.QueryContext(ctx, `SELECT discogs_release_id FROM releases WHERE user_id = ?`, userID)
@@ -344,6 +325,28 @@ func (s *Service) library(ctx context.Context, userID int64) (library, error) {
 		lib.releases[id] = true
 	}
 	return lib, ids.Err()
+}
+
+func (s *Service) libraryAlbums(ctx context.Context, userID int64, lib library) error {
+	rows, err := s.DB.R.QueryContext(ctx,
+		`SELECT id, discogs_master_id, discogs_release_id, title, removed_at IS NOT NULL FROM albums WHERE user_id = ?`, userID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a libAlbum
+		var master, release sql.NullInt64
+		if err := rows.Scan(&a.id, &master, &release, &a.title, &a.removed); err != nil {
+			return err
+		}
+		if master.Valid {
+			lib.masters[master.Int64] = a
+		} else if release.Valid {
+			lib.standalone[release.Int64] = a
+		}
+	}
+	return rows.Err()
 }
 
 // UntaggedAlbums are the albums in the collection that no sleeve points at yet, so the app can offer them first when

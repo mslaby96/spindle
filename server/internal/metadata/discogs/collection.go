@@ -7,7 +7,7 @@ import (
 )
 
 // collectionPages caps how far a collection is read: 100 pages of 100 is far more than any collection a person has.
-const collectionPages = 100
+var collectionPages = 100
 
 // CollectionItem is one record in a user's Discogs collection, as much as the collection listing tells about it.
 type CollectionItem struct {
