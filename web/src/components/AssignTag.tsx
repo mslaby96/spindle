@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, ApiError, type SearchResult, type Tag } from "../api/client";
-import { applyAssignedTag } from "../api/events";
+import { api, ApiError, type Album, type SearchResult, type Tag } from "../api/client";
+import { applyAssignedTag, untaggedKey } from "../api/events";
+import { Cover } from "./Cover";
 import { AlbumSearch } from "./AlbumSearch";
 import { ReleasePicker } from "./ReleasePicker";
 
@@ -25,6 +26,7 @@ export function AssignTag({ uid, current, onDone, autoFocus }: Props) {
     onMutate: (body) => setPicked(body),
     onSuccess: (tag) => {
       applyAssignedTag(queryClient, tag);
+      queryClient.invalidateQueries({ queryKey: untaggedKey });
       onDone?.(tag);
     },
   });
@@ -72,10 +74,56 @@ export function AssignTag({ uid, current, onDone, autoFocus }: Props) {
           />
         </>
       ) : (
-        <AlbumSearch onPick={pick} autoFocus={autoFocus} />
+        <CollectionPick
+          onPick={(a) => assign.mutate(a.discogs_master_id ? { master_id: a.discogs_master_id } : { release_id: a.discogs_release_id })}
+          busy={assign.isPending}
+        >
+          <AlbumSearch onPick={pick} autoFocus={autoFocus} />
+        </CollectionPick>
       )}
       {assign.isPending && <p className="muted">Saving…</p>}
       {assign.error && !pending && <p className="error">{assign.error.message}</p>}
     </div>
+  );
+}
+
+const firstFew = 8;
+
+// Records already catalogued without a sleeve come first, so a sleeve for one of them needs no Discogs search.
+function CollectionPick({ onPick, busy, children }: { onPick: (a: Album) => void; busy: boolean; children: ReactNode }) {
+  const untagged = useQuery({ queryKey: untaggedKey, queryFn: () => api<Album[]>("/api/library/untagged") });
+  const [filter, setFilter] = useState("");
+  const [all, setAll] = useState(false);
+  const albums = untagged.data ?? [];
+  if (albums.length === 0) return <>{children}</>;
+  const needle = filter.trim().toLowerCase();
+  const matching = albums.filter((a) => !needle || `${a.artist} ${a.title}`.toLowerCase().includes(needle));
+  const shown = needle || all ? matching : matching.slice(0, firstFew);
+  return (
+    <>
+      <p className="assign-label">From your collection</p>
+      <input placeholder="Artist or album" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter your collection" />
+      <ul className="results collection" aria-label="From your collection">
+        {shown.map((a) => (
+          <li key={a.id}>
+            <button className="result" onClick={() => onPick(a)} disabled={busy}>
+              <Cover albumId={a.id} hasCover={a.has_cover} color={a.cover_color} className="thumb" />
+              <span>
+                <strong>{a.title}</strong>
+                <span className="muted">{a.artist}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {shown.length < matching.length && (
+        <button className="link" onClick={() => setAll(true)}>
+          Show all {matching.length}
+        </button>
+      )}
+      {shown.length === 0 && <p className="muted">None of your records match.</p>}
+      <p className="assign-label">Or search Discogs</p>
+      {children}
+    </>
   );
 }

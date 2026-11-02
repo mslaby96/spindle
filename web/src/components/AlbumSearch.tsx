@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, type SearchResult } from "../api/client";
 import { useDebounced } from "../hooks/useDebounced";
+import { DiscogsLink } from "./DiscogsLink";
 
 // Only cataloguing, where the next step is always typing, takes focus; elsewhere it would pop the phone keyboard.
 export function AlbumSearch({ onPick, autoFocus = false }: { onPick: (r: SearchResult) => void; autoFocus?: boolean }) {
@@ -29,7 +30,7 @@ export function AlbumSearch({ onPick, autoFocus = false }: { onPick: (r: SearchR
       {results.data?.length === 0 && q.length >= 2 && !results.isFetching && <p className="muted">No matches.</p>}
       <ul className="results">
         {results.data?.map((r) => (
-          <li key={`${r.kind}-${r.id}`}>
+          <li key={`${r.kind}-${r.id}`} className="result-row">
             <button className="result" onClick={() => onPick(r)}>
               {r.thumb ? <img src={r.thumb} alt="" /> : <span className="thumb" />}
               <span>
@@ -41,6 +42,7 @@ export function AlbumSearch({ onPick, autoFocus = false }: { onPick: (r: SearchR
                 </span>
               </span>
             </button>
+            <DiscogsLink kind={r.kind} id={r.id} />
           </li>
         ))}
       </ul>

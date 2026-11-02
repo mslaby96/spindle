@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, type Version } from "../api/client";
 import { useDebounced } from "../hooks/useDebounced";
+import { DiscogsLink } from "./DiscogsLink";
 
 type Props = {
   masterId: number;
@@ -50,7 +51,7 @@ export function ReleasePicker({ masterId, onPick, onSkip, busy }: Props) {
       {versions.error && <p className="error">{versions.error.message}</p>}
       <ul className="results">
         {versions.data?.map((v) => (
-          <li key={v.id}>
+          <li key={v.id} className="result-row">
             <button className="result" onClick={() => onPick(v.id)} disabled={busy}>
               {v.thumb ? <img src={v.thumb} alt="" /> : <span className="thumb" />}
               <span>
@@ -58,6 +59,7 @@ export function ReleasePicker({ masterId, onPick, onSkip, busy }: Props) {
                 <span className="muted">{[v.label, v.catno, v.format].filter(Boolean).join(" · ")}</span>
               </span>
             </button>
+            <DiscogsLink kind="release" id={v.id} />
           </li>
         ))}
       </ul>

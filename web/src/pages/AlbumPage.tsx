@@ -7,6 +7,7 @@ import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
 import { Divider } from "../components/Divider";
+import { DiscogsLink } from "../components/DiscogsLink";
 import { QueryState } from "../components/QueryState";
 import { Rating, RatingStars } from "../components/RatingStars";
 import { formatDate, formatDateTime, formatLength, formatPressing } from "../format";
@@ -41,6 +42,11 @@ export function AlbumPage() {
             {stats.rating !== undefined && <> · <Rating value={stats.rating} /></>}
           </p>
           <AlbumLength albumId={album.id} seconds={album.duration_sec} status={album.duration_status} onSaved={refresh} />
+          {album.discogs_master_id ? (
+            <DiscogsLink kind="master" id={album.discogs_master_id} />
+          ) : (
+            album.discogs_release_id && <DiscogsLink kind="release" id={album.discogs_release_id} />
+          )}
         </div>
       </div>
 

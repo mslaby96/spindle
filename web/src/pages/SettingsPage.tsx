@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 
 import { api } from "../api/client";
+import { DiscogsImport } from "../components/DiscogsImport";
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -59,6 +60,10 @@ export function SettingsPage() {
         <button>Change password</button>
       </form>
       <div className="card narrow">
+        <h2>Import from Discogs</h2>
+        <DiscogsImport />
+      </div>
+      <div className="card narrow">
         <h2>Your data</h2>
         <p className="muted">
           Download your collection and listening history to keep or take elsewhere. Backups of the whole server are
@@ -76,6 +81,10 @@ export function SettingsPage() {
       <button className="secondary" onClick={logout}>
         Sign out
       </button>
+      <p className="muted small about">
+        This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a
+        trademark of Zink Media, LLC.
+      </p>
     </section>
   );
 }
