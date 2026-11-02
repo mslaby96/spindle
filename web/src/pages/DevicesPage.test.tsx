@@ -13,6 +13,7 @@ const stand = (extra = {}) => ({
   fw_version: "0.2.0",
   online: true,
   wifi_change_pending: false,
+  setup_wifi_password: "d97zws8agpqh",
   ...extra,
 });
 
@@ -219,5 +220,49 @@ describe("updating a stand's firmware", () => {
     const r = within(await row("Living room"));
     await userEvent.click(r.getByRole("button", { name: "Update" }));
     expect(await r.findByText("already up to date")).toBeInTheDocument();
+  });
+});
+
+describe("the stand's setup network password", () => {
+  it("is part of the Change Wi-Fi explanation", async () => {
+    setup([stand()]);
+    const r = within(await row("Living room"));
+    await userEvent.click(r.getByRole("button", { name: "Change Wi-Fi" }));
+    expect(r.getByText(/with the password/)).toBeInTheDocument();
+    expect(r.getByText("d97zws8agpqh")).toBeInTheDocument();
+  });
+
+  it("is in the note on what to do once the stand has picked up the change", async () => {
+    setup([stand({ wifi_change_pending: true })]);
+    const r = within(await row("Living room"));
+    await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0));
+    act(() => FakeEventSource.instances.at(-1)!.emit("device_status", stand({ wifi_change_pending: false })));
+    const note = await r.findByRole("status");
+    expect(within(note).getByText("d97zws8agpqh")).toBeInTheDocument();
+  });
+
+  it("is shown for an offline stand, which may have opened its setup network by itself", async () => {
+    setup([stand({ online: false, last_seen_at: "2026-10-29T15:18:00Z" })]);
+    const r = within(await row("Living room"));
+    expect(r.getByText(/Setup network password/)).toBeInTheDocument();
+    expect(r.getByText("d97zws8agpqh")).toBeInTheDocument();
+  });
+
+  it("stays out of the way for an online stand until asked for", async () => {
+    setup([stand()]);
+    const r = within(await row("Living room"));
+    expect(r.queryByText("d97zws8agpqh")).not.toBeInTheDocument();
+    await userEvent.click(r.getByRole("button", { name: "Setup network password" }));
+    expect(r.getByText("d97zws8agpqh")).toBeInTheDocument();
+  });
+
+  it("can be copied where the browser allows it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    setup([stand({ online: false, last_seen_at: "2026-10-29T15:18:00Z" })]);
+    const r = within(await row("Living room"));
+    await userEvent.click(r.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith("d97zws8agpqh");
+    expect(await r.findByText("Copied")).toBeInTheDocument();
   });
 });

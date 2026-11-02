@@ -139,6 +139,7 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
           </p>
           <StandState device={d} />
           <Diagnostics device={d} />
+          <SetupNetwork device={d} />
         </div>
         <div className="stand-actions">
           {updatable && (
@@ -159,9 +160,9 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
       {confirming && (
         <div className="confirm">
           <p>
-            {d.name} will forget its Wi-Fi and open its own network, named Spindle- and four characters. Join it from your
-            phone and open <code>http://spindle.setup</code> to pick the new network. It stays the same stand, history
-            included.
+            {d.name} will forget its Wi-Fi and open its own network, named Spindle- and four characters, with the password{" "}
+            <SetupPassword value={d.setup_wifi_password} />. Join it from your phone and open <code>http://spindle.setup</code>{" "}
+            to pick the new network. It stays the same stand, history included.
           </p>
           <div className="choices">
             <button onClick={() => request.mutate()} disabled={request.isPending}>
@@ -195,8 +196,9 @@ function StandRow({ device: d, onRemove }: { device: Device; onRemove: () => voi
       {handedOver && (
         <div className="notice" role="status">
           <p>
-            {d.name} is opening its setup network. On your phone join the Wi-Fi named Spindle- and four characters, then
-            open <code>http://spindle.setup</code> and pick the new network.
+            {d.name} is opening its setup network. On your phone join the Wi-Fi named Spindle- and four characters with the
+            password <SetupPassword value={d.setup_wifi_password} />, then open <code>http://spindle.setup</code> and pick
+            the new network.
           </p>
           <button className="secondary" onClick={() => setHandedOver(false)}>
             Done
@@ -260,6 +262,47 @@ function UpdateStatus({ device: d, onCancel, busy }: { device: Device; onCancel:
         {state === "failed" ? "Dismiss" : "Cancel"}
       </button>
     </p>
+  );
+}
+
+// A paired stand opens a protected setup network when it loses its Wi-Fi; an offline one may be doing so right now.
+function SetupNetwork({ device: d }: { device: Device }) {
+  const [shown, setShown] = useState(false);
+  if (!shown && (d.online || !d.last_seen_at)) {
+    return (
+      <button className="link small" onClick={() => setShown(true)}>
+        Setup network password
+      </button>
+    );
+  }
+  return (
+    <p className="muted small setup-line">
+      Setup network password <SetupPassword value={d.setup_wifi_password} />
+    </p>
+  );
+}
+
+function SetupPassword({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+  return (
+    <span className="setup-password">
+      <code>{value}</code>
+      {clipboard && (
+        <button
+          type="button"
+          className="link"
+          onClick={() =>
+            clipboard.writeText(value).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            })
+          }
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      )}
+    </span>
   );
 }
 
