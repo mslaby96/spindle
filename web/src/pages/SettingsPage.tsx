@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 
 import { api } from "../api/client";
+import { DiscogsImport } from "../components/DiscogsImport";
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -58,6 +59,10 @@ export function SettingsPage() {
         {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
         <button>Change password</button>
       </form>
+      <div className="card narrow">
+        <h2>Import from Discogs</h2>
+        <DiscogsImport />
+      </div>
       <div className="card narrow">
         <h2>Your data</h2>
         <p className="muted">
