@@ -31,11 +31,11 @@ class FakeFlash:
         return json.loads(self.files[ota.STATE]) if ota.STATE in self.files else None
 
 
-OLD = {"main.py": b"old main", "app/runner.py": b"old runner", "config.json": b"{}", "oled.py": b"mine"}
+OLD = {"app/version.py": b"old version", "app/runner.py": b"old runner", "config.json": b"{}", "oled.py": b"mine"}
 
 
 def staged(version="0.6.0", files=None):
-    files = files or {"main.py": b"new main", "app/runner.py": b"new runner"}
+    files = files or {"app/version.py": b"new version", "app/runner.py": b"new runner"}
     flash = FakeFlash(OLD)
     for path, data in files.items():
         flash.write(ota.NEXT + "/" + path, data)
@@ -52,9 +52,9 @@ class InstallTest(unittest.TestCase):
     def test_puts_the_new_files_in_place_and_keeps_the_old_ones(self):
         flash = staged()
         ota.boot(flash)
-        self.assertEqual(flash.read("main.py"), b"new main")
+        self.assertEqual(flash.read("app/version.py"), b"new version")
         self.assertEqual(flash.read("app/runner.py"), b"new runner")
-        self.assertEqual(flash.read(ota.PREV + "/main.py"), b"old main")
+        self.assertEqual(flash.read(ota.PREV + "/app/version.py"), b"old version")
         self.assertEqual(flash.read("config.json"), b"{}")
         self.assertEqual(flash.read("oled.py"), b"mine")
         self.assertFalse(any(p.startswith(ota.NEXT + "/") for p in flash.files))
@@ -68,18 +68,18 @@ class InstallTest(unittest.TestCase):
 
     def test_carries_on_after_losing_power_halfway(self):
         flash = staged()
-        # main.py was already moved aside but not replaced; runner.py was not touched yet
-        flash.rename("main.py", ota.PREV + "/main.py")
+        # version.py was already moved aside but not replaced; runner.py was not touched yet
+        flash.rename("app/version.py", ota.PREV + "/app/version.py")
         ota.boot(flash)
-        self.assertEqual(flash.read("main.py"), b"new main")
-        self.assertEqual(flash.read(ota.PREV + "/main.py"), b"old main")
+        self.assertEqual(flash.read("app/version.py"), b"new version")
+        self.assertEqual(flash.read(ota.PREV + "/app/version.py"), b"old version")
         self.assertEqual(flash.read(ota.PREV + "/app/runner.py"), b"old runner")
 
     def test_replaces_backups_left_from_an_earlier_update(self):
         flash = staged()
-        flash.write(ota.PREV + "/main.py", b"ancient")
+        flash.write(ota.PREV + "/app/version.py", b"ancient")
         ota.boot(flash)
-        self.assertEqual(flash.read(ota.PREV + "/main.py"), b"old main")
+        self.assertEqual(flash.read(ota.PREV + "/app/version.py"), b"old version")
 
 
 class RollbackTest(unittest.TestCase):
@@ -87,20 +87,20 @@ class RollbackTest(unittest.TestCase):
         flash = staged()
         for _ in range(ota.MAX_TRIES):
             ota.boot(flash)
-            self.assertEqual(flash.read("main.py"), b"new main")
+            self.assertEqual(flash.read("app/version.py"), b"new version")
         ota.boot(flash)
-        self.assertEqual(flash.read("main.py"), b"old main")
+        self.assertEqual(flash.read("app/version.py"), b"old version")
         self.assertEqual(flash.read("app/runner.py"), b"old runner")
         self.assertEqual(ota.failed(flash), "0.6.0")
         self.assertFalse(ota.trying(flash))
         ota.boot(flash)
-        self.assertEqual(flash.read("main.py"), b"old main")
+        self.assertEqual(flash.read("app/version.py"), b"old version")
 
     def test_rolling_back_on_request(self):
-        flash = staged(files={"main.py": b"new main", "app/update.py": b"new"})
+        flash = staged(files={"app/version.py": b"new version", "app/update.py": b"new"})
         ota.boot(flash)
         ota.rollback(flash)
-        self.assertEqual(flash.read("main.py"), b"old main")
+        self.assertEqual(flash.read("app/version.py"), b"old version")
         self.assertEqual(ota.failed(flash), "0.6.0")
 
     def test_a_confirmed_version_stays(self):
@@ -112,7 +112,7 @@ class RollbackTest(unittest.TestCase):
         self.assertFalse(any(p.startswith(ota.PREV + "/") for p in flash.files))
         for _ in range(ota.MAX_TRIES + 1):
             ota.boot(flash)
-        self.assertEqual(flash.read("main.py"), b"new main")
+        self.assertEqual(flash.read("app/version.py"), b"new version")
 
     def test_confirming_without_an_update_does_nothing(self):
         flash = FakeFlash(OLD)
@@ -137,8 +137,9 @@ class RollbackTest(unittest.TestCase):
 
 class SafePathTest(unittest.TestCase):
     def test_only_firmware_files(self):
-        for good in ("main.py", "ota.py", "app/runner.py", "lib/mfrc522.py"):
+        for good in ("app/runner.py", "lib/mfrc522.py"):
             self.assertTrue(ota.safe_path(good), good)
-        for bad in ("config.json", "/main.py", "../x.py", "app/../config.json", "oled.py", "app/x.txt", "app/a/b.py",
+        # main.py and ota.py hold the rollback itself, so a bad update must not be able to replace them
+        for bad in ("main.py", "ota.py", "config.json", "/main.py", "../x.py", "app/../config.json", "oled.py", "app/x.txt", "app/a/b.py",
                     ota.NEXT + "/main.py", ""):
             self.assertFalse(ota.safe_path(bad), bad)

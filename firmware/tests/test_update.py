@@ -12,7 +12,7 @@ def entry(path, data):
     return {"path": path, "size": len(data), "sha256": binascii.hexlify(hashlib.sha256(data).digest()).decode()}
 
 
-FILES = {"main.py": b"new main", "app/runner.py": b"new runner"}
+FILES = {"app/version.py": b"new version", "app/runner.py": b"new runner"}
 MANIFEST = {"version": "0.6.0", "files": [entry(p, d) for p, d in FILES.items()]}
 
 
@@ -29,7 +29,7 @@ def server(manifest=MANIFEST, files=FILES, broken=None):
 
 class DownloadTest(unittest.TestCase):
     def setUp(self):
-        self.flash = FakeFlash({"main.py": b"old main"})
+        self.flash = FakeFlash({"app/version.py": b"old version"})
         self.fed = 0
 
     def feed(self):
@@ -37,14 +37,14 @@ class DownloadTest(unittest.TestCase):
 
     def test_stages_every_file_and_marks_it_ready(self):
         self.assertEqual(update.download(server(), self.flash, self.feed), "0.6.0")
-        self.assertEqual(self.flash.read(ota.NEXT + "/main.py"), b"new main")
+        self.assertEqual(self.flash.read(ota.NEXT + "/app/version.py"), b"new version")
         self.assertEqual(self.flash.read(ota.NEXT + "/app/runner.py"), b"new runner")
         self.assertEqual(json.loads(self.flash.read(ota.NEXT + "/" + ota.MANIFEST)),
-                         {"version": "0.6.0", "files": ["main.py", "app/runner.py"]})
-        self.assertEqual(self.flash.read("main.py"), b"old main")
+                         {"version": "0.6.0", "files": ["app/version.py", "app/runner.py"]})
+        self.assertEqual(self.flash.read("app/version.py"), b"old version")
         self.assertGreaterEqual(self.fed, 2)
         ota.boot(self.flash)
-        self.assertEqual(self.flash.read("main.py"), b"new main")
+        self.assertEqual(self.flash.read("app/version.py"), b"new version")
 
     def test_a_damaged_file_stops_it_before_anything_is_ready(self):
         files = dict(FILES, **{"app/runner.py": b"new runnex"})
@@ -53,7 +53,7 @@ class DownloadTest(unittest.TestCase):
         self.assertFalse(self.flash.exists(ota.NEXT + "/" + ota.MANIFEST))
 
     def test_a_short_file_is_damaged_too(self):
-        files = dict(FILES, **{"main.py": b"new"})
+        files = dict(FILES, **{"app/version.py": b"new"})
         with self.assertRaises(update.UpdateError):
             update.download(server(files=files), self.flash, self.feed)
 
@@ -62,6 +62,11 @@ class DownloadTest(unittest.TestCase):
             update.download(server(broken="app/runner.py"), self.flash, self.feed)
         self.assertFalse(self.flash.exists(ota.NEXT + "/" + ota.MANIFEST))
 
+    def test_refuses_to_replace_the_rollback_itself(self):
+        manifest = {"version": "0.6.0", "files": [entry("ota.py", b"x")]}
+        with self.assertRaises(update.UpdateError):
+            update.download(server(manifest, {"ota.py": b"x"}), self.flash, self.feed)
+
     def test_refuses_files_outside_the_firmware(self):
         manifest = {"version": "0.6.0", "files": [entry("config.json", b"{}")]}
         with self.assertRaises(update.UpdateError):
@@ -69,7 +74,7 @@ class DownloadTest(unittest.TestCase):
         self.assertFalse(self.flash.exists(ota.NEXT + "/config.json"))
 
     def test_refuses_a_manifest_it_cannot_read(self):
-        for manifest in ({}, {"version": "0.6.0"}, {"version": "0.6.0", "files": [{"path": "main.py"}]},
+        for manifest in ({}, {"version": "0.6.0"}, {"version": "0.6.0", "files": [{"path": "app/runner.py"}]},
                          {"version": "", "files": []}, ["x"]):
             with self.assertRaises(update.UpdateError, msg=manifest):
                 update.download(server(manifest), self.flash, self.feed)

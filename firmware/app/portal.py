@@ -1,7 +1,19 @@
 # Everything the setup portal decides, kept free of sockets and Wi-Fi so it can be tested on a computer.
+import hashlib
 import struct
 
 NETWORK_KEYS = ("ssid", "password", "server", "token")
+
+
+_PASSWORD_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"
+
+
+def setup_password(token):
+    """The password of a paired stand's setup network. The server works out the same one from the hash it keeps of the
+    token and shows it in the app, so only the stand's owner can join."""
+    token_hash = "".join("{:02x}".format(b) for b in hashlib.sha256(token.encode()).digest())
+    digest = hashlib.sha256(b"spindle-setup-wifi:" + token_hash.encode()).digest()
+    return "".join(_PASSWORD_CHARS[b % len(_PASSWORD_CHARS)] for b in digest[:12])
 
 
 def ap_name(board_id):
@@ -77,17 +89,17 @@ def parse_form(body):
     return form
 
 
-def check_setup(form, paired=False):
-    """Returns what to connect with, or None and a message saying what to fix. A paired stand keeps its token, so it
-    needs no pairing code."""
+def check_setup(form, paired_server=None):
+    """Returns what to connect with, or None and a message saying what to fix. A paired stand keeps its token and the
+    server it was given, so it needs no pairing code, and the token can't be sent anywhere else."""
     ssid = (form.get("other") or "").strip() or (form.get("ssid") or "").strip()
     if not ssid:
         return None, "Pick your Wi-Fi network or type its name."
-    server = (form.get("server") or "").strip().rstrip("/")
+    server = paired_server or (form.get("server") or "").strip().rstrip("/")
     if not (server.startswith("http://") or server.startswith("https://")) or len(server) < 10:
         return None, "The server address must start with http:// or https://."
     network = {"ssid": ssid, "password": form.get("password") or "", "server": server}
-    if paired:
+    if paired_server:
         return network, None
     code = (form.get("code") or "").replace("-", "").replace(" ", "").upper()
     if len(code) != 6:
@@ -119,7 +131,7 @@ def _page(title, body, refresh=None):
     )
 
 
-def setup_page(networks, values=None, error=None, paired=False):
+def setup_page(networks, values=None, error=None, paired_server=None):
     values = values or {}
     best = {}
     for ssid, rssi in networks:
@@ -134,19 +146,28 @@ def setup_page(networks, values=None, error=None, paired=False):
         '<form method="post" action="/setup">'
         '<label for="ssid">Wi-Fi network</label><select id="ssid" name="ssid">' + "".join(options) + "</select>"
         '<label for="other">Or type its name</label><input id="other" name="other" autocomplete="off">'
-        '<label for="password">Wi-Fi password</label><input id="password" name="password" type="password">'
+        '<label for="password">Wi-Fi password</label><input id="password" name="password" type="password">' +
+        (_paired_fields(paired_server) if paired_server else _new_fields(values)) +
+        "<button>Connect</button></form>"
+    )
+    return _page("Connect your stand" if paired_server else "Set up your stand", body)
+
+
+def _paired_fields(server):
+    return '<p class="muted">The stand stays paired with ' + escape(server) + ".</p>"
+
+
+def _new_fields(values):
+    # the pairing code is never shown again: anyone on this open network could read it off the page
+    return (
         '<label for="server">Spindle server</label>'
         '<input id="server" name="server" inputmode="url" placeholder="http://192.168.1.10:8080" value="' +
         escape(values.get("server", "")) + '">'
-        '<p class="muted">The address you open Spindle at, as seen from your home network.</p>' +
-        ("" if paired else
-         '<label for="code">Pairing code</label>'
-         '<input id="code" name="code" autocapitalize="characters" autocomplete="off" placeholder="K7F-29Q" value="' +
-         escape(values.get("code", "")) + '">'
-         '<p class="muted">In the Spindle app go to Stands and press Add stand.</p>') +
-        "<button>Connect</button></form>"
+        '<p class="muted">The address you open Spindle at, as seen from your home network.</p>'
+        '<label for="code">Pairing code</label>'
+        '<input id="code" name="code" autocapitalize="characters" autocomplete="off" placeholder="K7F-29Q">'
+        '<p class="muted">In the Spindle app go to Stands and press Add stand.</p>'
     )
-    return _page("Connect your stand" if paired else "Set up your stand", body)
 
 
 def working_page():
@@ -243,12 +264,12 @@ def route(req, own_ip, view):
         if view["state"] != "form":
             return response(303, location="/"), None
         form = parse_form(req.body)
-        setup, error = check_setup(form, view.get("paired", False))
+        setup, error = check_setup(form, view.get("paired_server"))
         if error:
-            return response(200, setup_page(view["networks"], form, error, view.get("paired", False))), None
+            return response(200, setup_page(view["networks"], form, error, view.get("paired_server"))), None
         return response(303, location="/"), setup
     if view["state"] == "working":
         return response(200, working_page()), None
     if view["state"] == "done":
         return response(200, done_page()), None
-    return response(200, setup_page(view["networks"], view["values"], view["error"], view.get("paired", False))), None
+    return response(200, setup_page(view["networks"], view["values"], view["error"], view.get("paired_server"))), None

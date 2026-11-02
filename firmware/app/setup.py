@@ -13,6 +13,8 @@ from app.version import VERSION
 JOIN_TIMEOUT_MS = 20000
 # Long enough for the phone to load the "all set" page before the stand restarts and its network disappears.
 DONE_LINGER_MS = 15000
+# WPA2 with AES; newer MicroPython names it, older builds only take the CYW43 number
+_WPA2 = getattr(network.WLAN, "SEC_WPA2", 0x00400004)
 
 
 def save_config(cfg):
@@ -34,7 +36,7 @@ class SetupPortal:
             "networks": [],
             "values": {"server": self._cfg.get("server", "")},
             "error": None,
-            "paired": report.paired(self._cfg),
+            "paired_server": self._cfg["server"] if report.paired(self._cfg) else None,
         }
         self._pending = None
         self._done_at = None
@@ -65,10 +67,15 @@ class SetupPortal:
         self._led.show("setup")
         self._sta.active(True)
         self._view["networks"] = self._scan()
-        self._ap.config(ssid=portal.ap_name(machine.unique_id()), security=0)
+        name = portal.ap_name(machine.unique_id())
+        if self._view["paired_server"]:
+            # the password is shown next to the stand in the app, so only its owner can join and change its Wi-Fi
+            self._ap.config(ssid=name, key=portal.setup_password(self._cfg["token"]), security=_WPA2)
+        else:
+            self._ap.config(ssid=name, security=0)
         self._ap.active(True)
         self._ip = self._ap.ifconfig()[0]
-        print("setup network", portal.ap_name(machine.unique_id()), "at", self._ip)
+        print("setup network", name, "at", self._ip)
         self._http = socket.socket()
         self._http.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._http.bind(("0.0.0.0", 80))
@@ -124,7 +131,7 @@ class SetupPortal:
             conn.close()
 
     def _join(self, setup):
-        error = self._connect(setup) or (self._check(setup) if self._view["paired"] else self._pair(setup))
+        error = self._connect(setup) or (self._check(setup) if self._view["paired_server"] else self._pair(setup))
         if error:
             self._view.update(state="form", error=error)
 
@@ -167,7 +174,7 @@ class SetupPortal:
         self._wdt.feed()
         if status == 401:
             self._cfg = {k: v for k, v in self._cfg.items() if k != "token"}
-            self._view["paired"] = False
+            self._view["paired_server"] = None
             return "This stand was removed from Spindle. Get a pairing code in the app to add it again."
         if status != 200:
             return "The Spindle server answered with an error ({}).".format(status)

@@ -1,5 +1,5 @@
 # Putting a firmware the server sent in place at boot, and going back to the previous one when it doesn't come up.
-# Kept outside app/ and free of other imports, so a broken app can still be rolled back.
+# Kept outside app/, free of other imports and never updated over the network, so a broken app can be rolled back.
 import json
 import os
 
@@ -9,17 +9,18 @@ MANIFEST = "manifest.json"
 STATE = "ota.json"
 # Boots a new version may take without reaching the server; every crash ends in a watchdog reset, i.e. a boot.
 MAX_TRIES = 3
-_DIRS = ("", "app/", "lib/")
+_DIRS = ("app/", "lib/")
 
 
 def safe_path(path):
-    """Only the stand's own code may be written: Python files at the top or in app/ and lib/, nothing else."""
+    """Only the stand's own code in app/ and lib/ may be written. main.py and this file are left alone, so a bad update
+    can never take away the way back."""
     if not path.endswith(".py") or path.startswith("/") or ".." in path:
         return False
     head, _, name = path.rpartition("/")
-    if path.count("/") > 1 or not name[:-3]:
+    if path.count("/") != 1 or not name[:-3]:
         return False
-    return (head + "/" if head else "") in _DIRS and (head != "" or name in ("main.py", "ota.py"))
+    return head + "/" in _DIRS
 
 
 def boot(flash):

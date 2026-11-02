@@ -69,13 +69,11 @@ class CheckSetupTest(unittest.TestCase):
             self.assertIsNone(setup)
             self.assertIn(field, error.lower())
 
-    def test_a_paired_stand_needs_no_code(self):
-        setup, error = portal.check_setup(self.valid(code=""), paired=True)
+    def test_a_paired_stand_needs_no_code_and_keeps_its_server(self):
+        form = self.valid(code="", server="http://attacker.example")
+        setup, error = portal.check_setup(form, paired_server="http://192.168.1.10:8080")
         self.assertIsNone(error)
         self.assertEqual(setup, {"ssid": "Home", "password": "secret", "server": "http://192.168.1.10:8080"})
-
-    def test_a_paired_stand_still_needs_a_server(self):
-        self.assertIsNone(portal.check_setup(self.valid(server="spindle"), paired=True)[0])
 
     def test_https_server_is_fine(self):
         self.assertEqual(portal.check_setup(self.valid(server="https://spindle.example.com"))[0]["server"],
@@ -96,16 +94,20 @@ class PageTest(unittest.TestCase):
         self.assertIn("bad &amp; wrong", page)
 
     def test_keeps_what_was_typed(self):
-        page = portal.setup_page([("Home", -40)], {"ssid": "Home", "server": "http://10.0.0.2:8080", "code": "K7F29Q"})
+        page = portal.setup_page([("Home", -40)], {"ssid": "Home", "server": "http://10.0.0.2:8080"})
         self.assertIn('<option value="Home" selected>', page)
         self.assertIn('value="http://10.0.0.2:8080"', page)
-        self.assertIn('value="K7F29Q"', page)
 
     def test_a_paired_stand_asks_only_for_the_network(self):
-        page = portal.setup_page([("Home", -40)], {"server": "http://10.0.0.2:8080"}, paired=True)
+        page = portal.setup_page([("Home", -40)], {"server": "http://10.0.0.2:8080"}, paired_server="http://10.0.0.2:8080")
         self.assertNotIn('name="code"', page)
+        self.assertNotIn('name="server"', page)
         self.assertIn("http://10.0.0.2:8080", page)
         self.assertIn('name="code"', portal.setup_page([("Home", -40)]))
+
+    def test_never_shows_a_pairing_code_again(self):
+        page = portal.setup_page([("Home", -40)], {"code": "K7F29Q"}, "Couldn't join Home.")
+        self.assertNotIn("K7F29Q", page)
 
     def test_never_echoes_the_password(self):
         self.assertNotIn("hunter2", portal.setup_page([], {"password": "hunter2"}))
@@ -218,9 +220,10 @@ class RouteTest(unittest.TestCase):
 
     def test_a_paired_stand_takes_the_form_without_a_code(self):
         body = b"ssid=Home&other=&password=pw&server=http%3A%2F%2F192.168.1.10%3A8080"
-        resp, setup = portal.route(self.post(body), self.IP, self.view(paired=True))
+        paired = self.view(paired_server="http://192.168.1.10:8080")
+        resp, setup = portal.route(self.post(body), self.IP, paired)
         self.assertEqual(setup["ssid"], "Home")
-        page, _ = portal.route(request(b"GET / HTTP/1.1\r\nHost: 192.168.4.1\r\n\r\n"), self.IP, self.view(paired=True))
+        page, _ = portal.route(request(b"GET / HTTP/1.1\r\nHost: 192.168.4.1\r\n\r\n"), self.IP, paired)
         self.assertNotIn(b'name="code"', page)
 
     def test_second_submit_while_connecting_is_ignored(self):
@@ -232,3 +235,12 @@ class RouteTest(unittest.TestCase):
         resp, setup = portal.route(request(b"\x16\x03\x01\r\n\r\n"), self.IP, self.view())
         self.assertTrue(resp.startswith(b"HTTP/1.1 404"))
         self.assertIsNone(setup)
+
+
+class SetupPasswordTest(unittest.TestCase):
+    def test_matches_what_the_server_shows(self):
+        # the same example is in the server's tests, so both sides keep deriving the same password
+        self.assertEqual(portal.setup_password("spd_example"), "d97zws8agpqh")
+
+    def test_differs_per_stand(self):
+        self.assertNotEqual(portal.setup_password("spd_a"), portal.setup_password("spd_b"))
