@@ -300,6 +300,12 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .now .artist { margin: 0; font-size: 1.25rem; font-weight: 550; }
 .now .meta { margin-top: 0.4rem; }
 .now-head { display: flex; align-items: flex-end; gap: 1rem; }
+.now-side { display: flex; flex-direction: column; min-width: 0; }
+.now-side .last { margin-top: auto; padding-top: 2rem; }
+.now-side .last .shelf { margin-bottom: 0; }
+.now-side .last .divider { margin-top: 0; }
+.now:has(.now-side .last) { align-items: stretch; }
+.now:has(.now-side .last) h1 { margin-top: 2.1rem; }
 .clock { display: flex; flex-direction: column; align-items: flex-end; flex: none; margin: 0 0 0.3rem; }
 .clock strong { font-size: 2.75rem; font-weight: 800; font-stretch: 72%; line-height: 1; font-variant-numeric: tabular-nums; }
 .clock span { color: var(--ink-2); font-size: 0.875rem; }
@@ -462,6 +468,8 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 
   .now { grid-template-columns: minmax(0, 1fr); }
   .now h1 { margin-top: 0.75rem; font-size: 2.25rem; }
+  .now:has(.now-side .last) h1 { margin-top: 0.75rem; }
+  .now-side .last { padding-top: 1.75rem; }
   .now .artist { font-size: 1.0625rem; }
   .now .meta { font-size: 0.875rem; margin-top: 0.15rem; }
   .clock strong { font-size: 2.25rem; }

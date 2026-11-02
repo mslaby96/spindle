@@ -42,6 +42,8 @@ export function NowPlayingPage() {
   }
 
   const showStand = (devices?.length ?? 0) > 1;
+  // With one record playing, the last records sit beside it on wide screens instead of below.
+  const beside = playing.length === 1 && playing[0].album !== undefined;
   return (
     <section>
       {playing.map((p) =>
@@ -57,7 +59,7 @@ export function NowPlayingPage() {
                 <Cover albumId={p.album.id} hasCover={p.album.has_cover} color={p.album.cover_color} />
               </Link>
             </div>
-            <div>
+            <div className="now-side">
               <div className="now-head">
                 <div className="grow">
                   <h1>{p.album.title}</h1>
@@ -68,6 +70,7 @@ export function NowPlayingPage() {
               </div>
               {p.started_at && p.album.duration_sec ? <Progress since={p.started_at} lengthSec={p.album.duration_sec} /> : null}
               {p.ends_at && <EndsIn at={p.ends_at} deviceId={p.device_id} />}
+              {beside && <LastOnTheStand />}
             </div>
           </article>
         ) : (
@@ -82,7 +85,7 @@ export function NowPlayingPage() {
           </article>
         ),
       )}
-      <LastOnTheStand />
+      {!beside && <LastOnTheStand />}
     </section>
   );
 }
@@ -153,7 +156,7 @@ function LastOnTheStand() {
   });
   if (!data || data.length === 0) return null;
   return (
-    <>
+    <div className="last">
       <Divider color="var(--teal)">Last on the stand</Divider>
       <ul className="shelf">
         {data.map((e) => (
@@ -166,6 +169,6 @@ function LastOnTheStand() {
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }
