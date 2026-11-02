@@ -132,7 +132,7 @@ If your MicroPython build doesn't include `requests`, run `mpremote mip install 
 
 You only need USB once. The Docker image carries the stand's firmware, so after you update the server, the Stands page shows when a stand runs a different version and offers **Update**. The stand picks it up on its next report while nothing is on it, downloads the new files next to the old ones, checks each one and restarts into them.
 
-If the new version keeps crashing, or can't reach the server for ten minutes, the stand goes back to the version it had and the app says the update didn't take. `config.json` and any other files you keep on the Pico are never touched. MicroPython itself isn't updated this way.
+If the new version keeps crashing, or can't reach the server for ten minutes, the stand goes back to the version it had and the app says the update didn't take. Updates only replace files in `app/` and `lib/`: `main.py` and `ota.py`, which do the rolling back, `config.json` and any other files you keep on the Pico are never touched. MicroPython itself isn't updated this way.
 
 ### Connecting the stand
 
@@ -142,7 +142,7 @@ If the new version keeps crashing, or can't reach the server for ten minutes, th
 4. Pick your Wi-Fi, type its password, the server address (the one you open Spindle at, e.g. `http://192.168.1.10:8080`, or your cloud address) and the pairing code.
 5. The stand joins your Wi-Fi, swaps the code for its own token and restarts. The app shows it as connected.
 
-To move a stand to another Wi-Fi, press **Change Wi-Fi** next to it on the Stands page. Within half a minute it forgets its network and opens its setup network again; this time the page asks only for the Wi-Fi and the server address, as the stand stays paired and keeps its history. The stand also opens its setup network on its own when it can't reach your Wi-Fi for five minutes, and keeps trying the old network meanwhile, so a router that is already gone is covered too.
+To move a stand to another Wi-Fi, press **Change Wi-Fi** next to it on the Stands page. Within half a minute it forgets its network and opens its setup network again. A paired stand protects that network with a password, shown next to the stand in the app, and its page asks only for the Wi-Fi: the stand stays paired with the same server and keeps its history. The stand also opens its setup network on its own when it can't reach your Wi-Fi for five minutes, and keeps trying the old network meanwhile, so a router that is already gone is covered too.
 
 Holding the BOOTSEL button on the Pico for five seconds while the stand is running forgets everything, pairing included, and starts over from step 2.
 
