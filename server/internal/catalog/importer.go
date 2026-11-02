@@ -18,6 +18,9 @@ const (
 	ImportFailed  = "failed"
 )
 
+// EventImport carries an ImportProgress whenever an import moves along.
+const EventImport = "discogs_import"
+
 var ErrImportRunning = errors.New("an import is already running")
 
 // CollectionSource is where a user's records are listed: Discogs, through the token's account.
@@ -288,12 +291,19 @@ func (s *Service) importAlbum(ctx context.Context, userID int64, a newAlbum) (in
 	return id, nil
 }
 
+// insertPressing adds a pressing from the collection and marks its album as part of the collection, so it stays in
+// the library even with no sleeve or listen pointing at it.
 func (s *Service) insertPressing(ctx context.Context, userID, albumID int64, it discogs.CollectionItem) error {
 	_, err := s.DB.W.ExecContext(ctx,
 		`INSERT INTO releases (user_id, album_id, discogs_release_id, title, year, label, catno, format, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, albumID, it.ReleaseID, it.Title, nullYear(it.Year), nullString(it.Label), nullString(it.CatNo),
 		nullString(it.Format), s.now())
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.W.ExecContext(ctx, `UPDATE albums SET imported_at = coalesce(imported_at, ?) WHERE id = ? AND user_id = ?`,
+		s.now(), albumID, userID)
 	return err
 }
 
@@ -334,4 +344,25 @@ func (s *Service) library(ctx context.Context, userID int64) (library, error) {
 		lib.releases[id] = true
 	}
 	return lib, ids.Err()
+}
+
+// UntaggedAlbums are the albums in the collection that no sleeve points at yet, so the app can offer them first when
+// a new sleeve is put on the stand.
+func (s *Service) UntaggedAlbums(ctx context.Context, userID int64) ([]Album, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT `+albumColumns+` FROM albums a
+		WHERE user_id = ? AND removed_at IS NULL AND NOT EXISTS (SELECT 1 FROM tags t WHERE t.album_id = a.id)
+		ORDER BY lower(artist), lower(title), id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Album{}
+	for rows.Next() {
+		a, err := scanAlbum(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }

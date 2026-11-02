@@ -29,6 +29,7 @@ type Deps struct {
 	Auth      *auth.Service
 	Devices   *devices.Store
 	Watcher   *devices.Watcher
+	Importer  *catalog.Importer
 	Firmware  *firmware.Bundle
 	Catalog   *catalog.Service
 	Mode      *catalog.Mode
@@ -88,6 +89,10 @@ func New(d Deps) *Server {
 	s.mux.Handle("GET /api/export.json", s.user(s.exportJSON))
 	s.mux.Handle("GET /api/export.csv", s.user(s.exportCSV))
 	s.mux.Handle("GET /api/library/forgotten", s.user(s.forgotten))
+	s.mux.Handle("GET /api/library/untagged", s.user(fetch(s, s.Catalog.UntaggedAlbums)))
+	s.mux.Handle("GET /api/import/discogs", s.user(s.importStatus))
+	s.mux.Handle("POST /api/import/discogs/preview", s.user(s.importPreview))
+	s.mux.Handle("POST /api/import/discogs", s.user(s.startImport))
 	s.mux.Handle("GET /api/diary", s.user(s.diary))
 	s.mux.Handle("GET /api/stats/top", s.user(s.topStats))
 	s.mux.Handle("GET /api/stats/timeline", s.user(s.timeline))

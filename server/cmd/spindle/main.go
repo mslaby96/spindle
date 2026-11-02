@@ -140,8 +140,23 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			log.Warn("purge expired sessions", "err", err)
 		}
 	})
+	backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
+	importer := &catalog.Importer{
+		Service: catalogSvc,
+		Source:  discogsClient,
+		Enqueue: func(userID, albumID int64) { resolver.EnqueueLater(ctx, userID, albumID) },
+		Backup: func(ctx context.Context) error {
+			path, err := backups.Create(ctx)
+			if err == nil {
+				log.Info("backup before importing from Discogs", "path", path)
+			}
+			return err
+		},
+		Publish: func(userID int64, p catalog.ImportProgress) {
+			bus.Publish(events.Event{Type: catalog.EventImport, UserID: userID, Data: p})
+		},
+	}
 	if cfg.Backup.Every > 0 {
-		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
 		go backups.Run(ctx, cfg.Backup.Every, func(path string, err error) {
 			if err != nil {
 				log.Error("backup failed", "dir", cfg.Backup.Dir, "err", err)
@@ -184,6 +199,7 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 			Auth:      authSvc,
 			Devices:   deviceStore,
 			Watcher:   watcher,
+			Importer:  importer,
 			Firmware:  bundle,
 			Catalog:   catalogSvc,
 			Mode:      mode,

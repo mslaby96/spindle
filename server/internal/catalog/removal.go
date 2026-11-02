@@ -81,8 +81,10 @@ func (s *Service) DeleteAlbum(ctx context.Context, userID, albumID int64) error 
 // dropIfUnused deletes an album nothing points at any more, like the wrong album a sleeve was first given.
 func (s *Service) dropIfUnused(ctx context.Context, userID, albumID int64) error {
 	var used bool
+	// an album imported from the collection is the user's record whether or not a sleeve points at it
 	err := s.DB.R.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM tags WHERE album_id = ?)
-		OR EXISTS (SELECT 1 FROM sessions WHERE album_id = ?)`, albumID, albumID).Scan(&used)
+		OR EXISTS (SELECT 1 FROM sessions WHERE album_id = ?)
+		OR EXISTS (SELECT 1 FROM albums WHERE id = ? AND imported_at IS NOT NULL)`, albumID, albumID, albumID).Scan(&used)
 	if err != nil || used {
 		return err
 	}

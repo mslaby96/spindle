@@ -37,6 +37,7 @@ var knownErrors = []struct {
 	{devices.ErrNoFirmware, http.StatusConflict, ""},
 	{devices.ErrUpToDate, http.StatusConflict, ""},
 	{catalog.ErrNothingToAssign, http.StatusBadRequest, ""},
+	{catalog.ErrImportRunning, http.StatusConflict, ""},
 	{catalog.ErrUnknownListensChoice, http.StatusBadRequest, ""},
 	{sessions.ErrNotFound, http.StatusNotFound, ""},
 	{sessions.ErrNotPending, http.StatusConflict, ""},

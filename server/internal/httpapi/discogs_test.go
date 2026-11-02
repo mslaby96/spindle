@@ -36,6 +36,10 @@ func fakeDiscogs(t *testing.T) *httptest.Server {
 			w.Write(read("versions.json"))
 		case "/cover.png":
 			w.Write(cover.Bytes())
+		case "/oauth/identity":
+			w.Write(read("identity.json"))
+		case "/users/maciej_spins/collection/folders/0/releases":
+			w.Write(read("collection-" + r.URL.Query().Get("page") + ".json"))
 		default:
 			http.NotFound(w, r)
 		}

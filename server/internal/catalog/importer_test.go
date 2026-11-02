@@ -285,3 +285,47 @@ func TestAFailedBackupStopsTheImport(t *testing.T) {
 		t.Fatalf("%+v, %d albums", last, n)
 	}
 }
+
+func TestAnImportedAlbumStaysWhenItsSleeveGetsAnotherAlbum(t *testing.T) {
+	im, s, _ := newImporter(t, myCollection)
+	ctx := context.Background()
+	im.run(ctx, 1, func(int, int) {})
+	dsotm, _ := s.albumBy(ctx, 1, "discogs_master_id", 10362)
+	if _, err := s.Assign(ctx, 1, "04A1B2C3", Assignment{MasterID: 10362}); err != nil {
+		t.Fatal(err)
+	}
+	// the sleeve was the wrong one: it moves to another album
+	if _, err := s.Assign(ctx, 1, "04A1B2C3", Assignment{MasterID: 10414}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Album(ctx, 1, dsotm.ID); err != nil {
+		t.Fatalf("the imported album is gone from the library: %v", err)
+	}
+}
+
+func TestAlbumsWithoutASleeveAreTheOnesStillToTag(t *testing.T) {
+	im, s, _ := newImporter(t, myCollection)
+	ctx := context.Background()
+	im.run(ctx, 1, func(int, int) {})
+	s.SaveMaster(ctx, 1, 10414)
+	gone, _ := s.SaveMaster(ctx, 1, 10414)
+	s.Assign(ctx, 1, "04A1B2C3", Assignment{MasterID: 10362})
+	list, err := s.UntaggedAlbums(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := []string{}
+	for _, a := range list {
+		titles = append(titles, a.Title)
+	}
+	if strings.Join(titles, ",") != "Wish You Were Here,Solo Violin" {
+		t.Fatalf("%v", titles)
+	}
+	s.RemoveFromCollection(ctx, 1, gone.ID)
+	if list, _ := s.UntaggedAlbums(ctx, 1); len(list) != 1 || list[0].Title != "Solo Violin" {
+		t.Fatalf("a removed album still waits for a sleeve: %+v", list)
+	}
+	if other, _ := s.UntaggedAlbums(ctx, 2); len(other) != 0 {
+		t.Fatalf("another user's albums: %+v", other)
+	}
+}

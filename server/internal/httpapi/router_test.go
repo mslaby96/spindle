@@ -77,6 +77,12 @@ func newEnv(t *testing.T) *testEnv {
 	watcher := &devices.Watcher{Store: deviceStore, Publish: func(dev devices.Device) {
 		bus.Publish(events.Event{Type: devices.EventStatus, UserID: dev.UserID, Data: dev})
 	}}
+	importer := &catalog.Importer{
+		Service: catalogSvc, Source: dc, Enqueue: resolver.Enqueue,
+		Publish: func(userID int64, p catalog.ImportProgress) {
+			bus.Publish(events.Event{Type: catalog.EventImport, UserID: userID, Data: p})
+		},
+	}
 	s := New(Deps{
 		Config:    cfg,
 		DB:        d,
@@ -84,6 +90,7 @@ func newEnv(t *testing.T) *testEnv {
 		Devices:   deviceStore,
 		Watcher:   watcher,
 		Firmware:  bundle,
+		Importer:  importer,
 		Catalog:   catalogSvc,
 		Mode:      mode,
 		Discogs:   dc,

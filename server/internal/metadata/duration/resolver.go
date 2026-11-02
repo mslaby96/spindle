@@ -73,6 +73,18 @@ func (r *Resolver) Enqueue(userID, albumID int64) {
 	}
 }
 
+// EnqueueLater schedules an album and, when the queue is full, waits in the background for room instead of leaving it
+// to the next sweep, so a large import gets its covers and lengths without a half-hour wait.
+func (r *Resolver) EnqueueLater(ctx context.Context, userID, albumID int64) {
+	r.init()
+	go func() {
+		select {
+		case r.queue <- job{userID, albumID}:
+		case <-ctx.Done():
+		}
+	}()
+}
+
 func (r *Resolver) Run(ctx context.Context) {
 	r.init()
 	r.sweep(ctx)

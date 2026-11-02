@@ -79,6 +79,8 @@ docker compose start spindle
 
 Restore checks the backup before touching anything and moves the data that was there into a `before-restore-*` folder instead of deleting it.
 
+Already keeping your records on Discogs? **Settings → Import from Discogs** brings in the collection of the account your `SPINDLE_DISCOGS_TOKEN` belongs to. It only adds: run it again whenever you've bought something, and albums you removed from your collection in Spindle stay removed. A backup is made first.
+
 Your own data is also a download away: **Settings → Your data** gives you everything as JSON, or your diary as a CSV for a spreadsheet.
 
 ## Building the stand
@@ -224,6 +226,8 @@ CI runs the same tests, with `go test -race`, plus `go vet`, `gofmt`, `govulnche
 `npm run dev` in `web/` serves the app with hot reload and proxies `/api` to a server on port 8080 (`cd server && go run ./cmd/spindle`). `npm run build` writes into `server/internal/webui/dist`, which gets embedded in the binary.
 
 Album data comes from [Discogs](https://www.discogs.com/). Album lengths also come from [MusicBrainz](https://musicbrainz.org/) and, optionally, [Last.fm](https://www.last.fm/).
+
+This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC.
 
 ## License
 

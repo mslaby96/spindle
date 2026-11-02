@@ -381,3 +381,49 @@ func TestRunWithoutCoverResolver(t *testing.T) {
 		t.Fatalf("%s %v", status, secs)
 	}
 }
+
+func TestEnqueueLaterWaitsForRoomInsteadOfDropping(t *testing.T) {
+	e := newEnv(t)
+	e.r.init()
+	for i := 0; i < cap(e.r.queue); i++ {
+		e.r.Enqueue(1, int64(1000+i))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.r.EnqueueLater(ctx, 1, 42)
+	first := <-e.r.queue
+	if first.albumID != 1000 {
+		t.Fatalf("queue order %+v", first)
+	}
+	for i := 1; i < cap(e.r.queue); i++ {
+		<-e.r.queue
+	}
+	select {
+	case j := <-e.r.queue:
+		if j.albumID != 42 {
+			t.Fatalf("got %+v", j)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the album waiting for room was dropped")
+	}
+}
+
+func TestEnqueueLaterGivesUpWhenStopped(t *testing.T) {
+	e := newEnv(t)
+	e.r.init()
+	for i := 0; i < cap(e.r.queue); i++ {
+		e.r.Enqueue(1, int64(i))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	e.r.EnqueueLater(ctx, 1, 42)
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < cap(e.r.queue); i++ {
+		<-e.r.queue
+	}
+	select {
+	case j := <-e.r.queue:
+		t.Fatalf("queued after stopping: %+v", j)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
