@@ -383,6 +383,8 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .import progress::-webkit-progress-bar { background: var(--sunk); }
 .import progress::-webkit-progress-value { background: var(--mustard); }
 .import progress::-moz-progress-bar { background: var(--mustard); }
+.assign-label { margin: 0.4rem 0 0; font-size: 0.75rem; font-weight: 800; font-stretch: 115%; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.results.collection { max-height: 16rem; }
 .review { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
 .toast {
   position: fixed;
