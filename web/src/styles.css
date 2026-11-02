@@ -387,10 +387,16 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .assign-label { margin: 0.4rem 0 0; font-size: 0.75rem; font-weight: 800; font-stretch: 115%; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .results.collection { max-height: 16rem; }
 .result-row { display: flex; flex-direction: column; }
-.result-row .discogs { align-self: flex-start; margin: -0.45rem 0 0.4rem 4rem; }
-.discogs { font-size: 0.75rem; color: var(--ink-2); }
-.discogs:hover { color: var(--link); }
-.album-head .discogs { display: inline-block; margin-top: 0.4rem; }
+.result-row .discogs { align-self: flex-start; margin: -0.5rem 0 0.35rem 4rem; }
+.discogs {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--ink-2);
+  text-decoration-color: color-mix(in oklab, var(--ink-2) 35%, transparent);
+  text-decoration-thickness: 1px;
+}
+.discogs:hover, .discogs:focus-visible { color: var(--ink); text-decoration-color: currentColor; }
+.album-head .discogs { display: inline-block; margin-top: 0.3rem; }
 .pressings .pressing { padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
 .pressings .pressing p { margin: 0; }
 .pressing .confirm { margin-top: 0.6rem; padding-top: 0; border-top: 0; }
