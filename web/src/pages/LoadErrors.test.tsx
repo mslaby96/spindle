@@ -28,7 +28,8 @@ describe("a page whose data fails to load", () => {
       "GET /api/inbox": () => [200, []],
       "GET /api/devices": () => [200, []],
       "GET /api/now-playing": () => [200, []],
-      "GET /api/stats/timeline?weeks=26": () => [200, []],
+      "GET /api/stats/timeline?weeks=5": () => [200, []],
+    "GET /api/stats/timeline?weeks=13": () => [200, []],
       [route]: () => (fail ? broken() : [200, []]),
     });
     renderApp(path);

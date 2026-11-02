@@ -27,6 +27,9 @@ const periods = [
   ["all", "All time"],
 ] as const;
 
+// How many weeks the chart covers for each period, so it shows the same stretch as the lists.
+const weeksFor: Record<string, number> = { "30d": 5, "90d": 13, year: 52, all: 104 };
+
 function formatValue(measure: Measure, v: number) {
   return measure === "plays" ? `${v}×` : formatLength(v);
 }
@@ -38,7 +41,8 @@ export function StatsPage() {
     queryKey: ["stats", "top", period, measure],
     queryFn: () => api<Top>(`/api/stats/top?period=${period}&measure=${measure}`),
   });
-  const weeks = useQuery({ queryKey: ["stats", "timeline"], queryFn: () => api<Week[]>("/api/stats/timeline?weeks=26") });
+  const span = weeksFor[period];
+  const weeks = useQuery({ queryKey: ["stats", "timeline", span], queryFn: () => api<Week[]>(`/api/stats/timeline?weeks=${span}`) });
   const s = top.data?.summary;
 
   return (

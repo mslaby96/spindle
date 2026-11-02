@@ -37,7 +37,7 @@ describe("album length", () => {
     });
     renderApp("/albums/4");
     await userEvent.click(await screen.findByRole("button", { name: "edit" }));
-    await userEvent.click(screen.getByRole("button", { name: "Look it up again" }));
+    await userEvent.click(screen.getByRole("button", { name: "Look it up instead" }));
     expect(await screen.findByText(/Album length 46 min/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "edit" }));

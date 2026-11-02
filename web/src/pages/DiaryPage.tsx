@@ -7,7 +7,7 @@ import { dye } from "../colors";
 import { Divider } from "../components/Divider";
 import { QueryState } from "../components/QueryState";
 import { Rating } from "../components/RatingStars";
-import { formatLength, formatMonth, formatWeekday } from "../format";
+import { formatLength, formatMonth, formatTime, formatWeekday } from "../format";
 
 const pageSize = 50;
 
@@ -25,6 +25,7 @@ export function DiaryPage() {
   const entries = diary.data?.pages.flat() ?? [];
 
   let month = "";
+  let day = "";
   return (
     <section>
       <h1>Diary</h1>
@@ -35,19 +36,25 @@ export function DiaryPage() {
           const m = formatMonth(e.started_at);
           const header = m !== month ? (month = m) : null;
           const d = new Date(e.started_at);
+          const sameDay = d.toDateString() === day;
+          day = d.toDateString();
           return (
             <li key={e.session_id}>
               {header && <Divider color={dye(header)}>{header}</Divider>}
               <Link to={`/albums/${e.album_id}`} className="entry">
                 <span className="day">
-                  <strong>{d.getDate()}</strong>
-                  <span className="muted">{formatWeekday(e.started_at)}</span>
+                  {!sameDay && (
+                    <>
+                      <strong>{d.getDate()}</strong>
+                      <span className="muted">{formatWeekday(e.started_at)}</span>
+                    </>
+                  )}
                 </span>
                 <Cover albumId={e.album_id} hasCover={e.has_cover} color={e.cover_color} className="thumb-lg" />
                 <span className="grow">
                   <strong>{e.title}</strong> <span className="muted">· {e.artist}</span>
                   <span className="muted block">
-                    {formatLength(e.listened_sec)}
+                    {formatTime(e.started_at)} · {formatLength(e.listened_sec)}
                     {e.plays > 1 && ` · ${e.plays}×`}
                     {e.rating !== undefined && <> · <Rating value={e.rating} /></>}
                   </span>

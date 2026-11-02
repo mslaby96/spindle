@@ -171,7 +171,7 @@ section > .divider:first-child { margin-top: 0; }
   text-align: center;
   rotate: -4deg;
 }
-.badge { min-width: 1.35rem; margin-left: 0.35rem; padding: 0 0.35rem; font-size: 0.72rem; line-height: 1.35rem; }
+.badge { min-width: 1.35rem; margin-left: 0.35rem; padding: 0 0.35rem; font-size: 0.75rem; line-height: 1.35rem; }
 .sticker {
   padding: 0.2rem 0.55rem;
   font-size: 0.6875rem;
@@ -293,10 +293,10 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
   background: var(--sunk);
   flex: none;
 }
-.cover { width: 100%; aspect-ratio: 1; border-radius: 0 0.3rem 0.3rem 0.3rem; }
-.thumb-sm { width: 2.5rem; height: 2.5rem; border-radius: 0.2rem; }
+.cover { width: 100%; aspect-ratio: 1; border-radius: 0 0.25rem 0.25rem 0.25rem; }
+.thumb-sm { width: 2.5rem; height: 2.5rem; border-radius: 0.25rem; }
 .thumb-lg { width: 4rem; height: 4rem; border-radius: 0.25rem; }
-.result img, .result .thumb { width: 2.75rem; height: 2.75rem; border-radius: 0.2rem; }
+.result img, .result .thumb { width: 2.75rem; height: 2.75rem; border-radius: 0.25rem; }
 
 /* Now playing and album head */
 
@@ -424,7 +424,7 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
   width: 100%;
   min-height: 3.5rem;
   padding: 0.4rem 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.25rem;
   background: transparent;
   color: var(--ink);
   font-weight: 400;
@@ -445,7 +445,7 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .chart .divider { flex: 1; margin-bottom: 0.75rem; }
 .chart table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .chart th, .chart td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--grid); text-align: left; }
-.chart-tip { display: flex; flex-direction: column; padding: 0.4rem 0.6rem; border-radius: 0.3rem; background: var(--raised); box-shadow: 0 4px 14px rgb(0 0 0 / 0.18); font-size: 0.85rem; }
+.chart-tip { display: flex; flex-direction: column; padding: 0.4rem 0.6rem; border-radius: 0.25rem; background: var(--raised); box-shadow: 0 4px 14px rgb(0 0 0 / 0.18); font-size: 0.875rem; }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0 2rem; }
 .columns .divider { margin-top: 2.25rem; }
 .ranked { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }

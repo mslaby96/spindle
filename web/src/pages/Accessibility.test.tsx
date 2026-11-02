@@ -16,7 +16,8 @@ function base(extra: Record<string, () => [number, unknown?]> = {}) {
     "GET /api/inbox": () => [200, []],
     "GET /api/devices": () => [200, []],
     "GET /api/now-playing": () => [200, []],
-    "GET /api/stats/timeline?weeks=26": () => [200, []],
+    "GET /api/stats/timeline?weeks=5": () => [200, []],
+    "GET /api/stats/timeline?weeks=13": () => [200, []],
     ...extra,
   });
 }

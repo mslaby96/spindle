@@ -205,7 +205,7 @@ function AlbumLength({ albumId, seconds, status, onSaved }: { albumId: number; s
       <span className="muted">min</span>
       <button disabled={save.isPending}>Save</button>
       <button type="button" className="link" onClick={() => save.mutate(null)}>
-        Look it up again
+        Look it up instead
       </button>
       {save.error && <span className="error">{save.error.message}</span>}
     </form>

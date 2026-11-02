@@ -28,7 +28,7 @@ function setup(empty = false) {
     "GET /api/stats/top?period=30d&measure=plays": () => [200, empty ? { ...top(0), albums: [], genres: [], styles: [] } : top(6)],
     "GET /api/stats/top?period=30d&measure=time": () => [200, top(9000)],
     "GET /api/stats/top?period=year&measure=plays": () => [200, top(40)],
-    "GET /api/stats/timeline?weeks=26": () => [200, weeks],
+    "GET /api/stats/timeline?weeks=5": () => [200, weeks],
   });
 }
 
@@ -53,6 +53,7 @@ describe("stats", () => {
     await userEvent.click(screen.getByRole("button", { name: "Year" }));
     await userEvent.click(screen.getByRole("button", { name: "Listens" }));
     await waitFor(() => expect(calls.some((c) => c.key === "GET /api/stats/top?period=year&measure=plays")).toBe(true));
+    expect(calls.some((c) => c.key === "GET /api/stats/timeline?weeks=52")).toBe(true);
   });
 
   it("offers the weekly chart as a table", async () => {
