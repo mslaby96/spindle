@@ -128,3 +128,14 @@ func TestBlankUsernameIsABadRequest(t *testing.T) {
 		t.Fatalf("%d", resp.StatusCode)
 	}
 }
+
+func TestContentSecurityPolicyKeepsThePageToItsOwnCode(t *testing.T) {
+	e := newEnv(t)
+	csp := do(t, e.client(t), "GET", e.http.URL+"/", nil).Header.Get("Content-Security-Policy")
+	for _, want := range []string{"default-src 'self'", "script-src 'self'", "object-src 'none'", "base-uri 'none'",
+		"frame-ancestors 'none'", "img-src 'self' data: https://i.discogs.com https://st.discogs.com"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("CSP %q lacks %q", csp, want)
+		}
+	}
+}

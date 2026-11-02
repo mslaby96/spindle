@@ -115,10 +115,16 @@ func New(d Deps) *Server {
 	return s
 }
 
+// contentSecurityPolicy lets the page run only its own scripts and styles; images may also come from Discogs, which
+// search results show straight from its servers.
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; " +
+	"img-src 'self' data: https://i.discogs.com https://st.discogs.com; connect-src 'self'; font-src 'self'; " +
+	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("X-Frame-Options", "DENY")
-	h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+	h.Set("Content-Security-Policy", contentSecurityPolicy)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "same-origin")
 	if s.client(r).https {
