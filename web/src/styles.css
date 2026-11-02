@@ -374,6 +374,7 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .thumb-xl { width: 6rem; height: 6rem; border-radius: 0.25rem; }
 .confirm { display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
 .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.review { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
 .toast {
   position: fixed;
   left: 1rem;

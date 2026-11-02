@@ -159,3 +159,74 @@ describe("wrong album on a sleeve", () => {
     expect(calls.filter((c) => c.key === "POST /api/tags/04A1B2C3/assign")).toHaveLength(1);
   });
 });
+
+describe("rating any listen", () => {
+  const listen = (over: Record<string, unknown> = {}) => ({
+    session_id: 11,
+    album_id: 4,
+    title: "Kind of Blue",
+    artist: "Miles Davis",
+    has_cover: false,
+    started_at: "2026-03-14T20:00:00Z",
+    plays: 1,
+    listened_sec: 2760,
+    duration_confirmed: true,
+    ...over,
+  });
+
+  function setup(history: unknown[], review: (body: unknown) => [number, unknown?] = () => [204]) {
+    return mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/albums/4": () => [200, detail({ duration_status: "resolved" }, { history })],
+      "PUT /api/sessions/11/review": review,
+    });
+  }
+
+  it("rates a listen that left the inbox without a rating", async () => {
+    const calls = setup([listen()]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
+    await userEvent.click(screen.getByRole("radio", { name: "4 stars" }));
+    await userEvent.type(screen.getByLabelText("Note"), "side B again");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === "PUT /api/sessions/11/review")?.body).toEqual({ rating: 8, note: "side B again" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument());
+  });
+
+  it("starts from what the listen has and keeps the rating when only the note changes", async () => {
+    const calls = setup([listen({ rating: 9, note: "rainy evening" })]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Change rating or note" }));
+    expect(screen.getByRole("radio", { name: "4.5 stars" })).toBeChecked();
+    const note = screen.getByLabelText("Note");
+    expect(note).toHaveValue("rainy evening");
+    await userEvent.clear(note);
+    await userEvent.type(note, "rainy night");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === "PUT /api/sessions/11/review")?.body).toEqual({ rating: 9, note: "rainy night" }),
+    );
+  });
+
+  it("can be put away without saving", async () => {
+    const calls = setup([listen()]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(calls.some((c) => c.key === "PUT /api/sessions/11/review")).toBe(false);
+  });
+
+  it("shows why the rating couldn't be saved", async () => {
+    setup([listen()], () => [500, { error: "database is locked" }]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
+    await userEvent.click(screen.getByRole("radio", { name: "3 stars" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("database is locked")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup")).toBeInTheDocument();
+  });
+});

@@ -8,7 +8,7 @@ import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
 import { Divider } from "../components/Divider";
 import { QueryState } from "../components/QueryState";
-import { Rating } from "../components/RatingStars";
+import { Rating, RatingStars } from "../components/RatingStars";
 import { formatDate, formatDateTime, formatLength, formatPressing } from "../format";
 
 export function AlbumPage() {
@@ -219,6 +219,7 @@ function toLocalInput(iso: string) {
 
 function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [start, setStart] = useState(toLocalInput(entry.started_at));
   const [minutes, setMinutes] = useState(String(Math.round(entry.listened_sec / 60)));
   const edit = useMutation({
@@ -275,8 +276,13 @@ function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => 
             {entry.note && <p className="muted">{entry.note}</p>}
           </div>
           <div className="actions">
+            {!reviewing && (
+              <button className="link" onClick={() => setReviewing(true)}>
+                {entry.rating !== undefined || entry.note ? "Change rating or note" : "Rate"}
+              </button>
+            )}
             <button className="link" onClick={() => setEditing(true)}>
-              Edit
+              Edit time
             </button>
             <button className="link" onClick={() => confirm("Delete this listen?") && remove.mutate()}>
               Delete
@@ -284,7 +290,47 @@ function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => 
           </div>
         </div>
       )}
+      {reviewing && (
+        <ListenReview
+          entry={entry}
+          onDone={(saved) => {
+            setReviewing(false);
+            if (saved) onChanged();
+          }}
+        />
+      )}
       {(edit.error ?? remove.error) && <p className="error">{(edit.error ?? remove.error)!.message}</p>}
     </li>
+  );
+}
+
+// The inbox asks right after a listen; this is for any listen later, including ones skipped there.
+function ListenReview({ entry, onDone }: { entry: DiaryEntry; onDone: (saved: boolean) => void }) {
+  const [rating, setRating] = useState<number | undefined>(entry.rating);
+  const [note, setNote] = useState(entry.note ?? "");
+  const save = useMutation({
+    mutationFn: () => api(`/api/sessions/${entry.session_id}/review`, { method: "PUT", body: { rating, note } }),
+    onSuccess: () => onDone(true),
+  });
+  return (
+    <div className="review">
+      <RatingStars value={rating} onChange={setRating} />
+      <textarea
+        placeholder="A note about this listen (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        aria-label="Note"
+      />
+      <div className="choices">
+        <button onClick={() => save.mutate()} disabled={save.isPending}>
+          Save
+        </button>
+        <button className="secondary" onClick={() => onDone(false)}>
+          Cancel
+        </button>
+      </div>
+      {save.error && <p className="error">{save.error.message}</p>}
+    </div>
   );
 }
