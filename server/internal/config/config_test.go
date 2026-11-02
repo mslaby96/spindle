@@ -174,3 +174,34 @@ func TestBackupSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestTrustedProxies(t *testing.T) {
+	c, err := Load(env(map[string]string{"SPINDLE_TRUSTED_PROXIES": "172.16.0.0/12, 127.0.0.1 ,::1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.TrustedProxies) != 3 || c.TrustedProxies[1].String() != "127.0.0.1/32" || c.TrustedProxies[2].String() != "::1/128" {
+		t.Fatalf("%v", c.TrustedProxies)
+	}
+	if !strings.Contains(c.Summary(), "trusted_proxies=3") {
+		t.Errorf("summary: %s", c.Summary())
+	}
+	if _, err := Load(env(map[string]string{"SPINDLE_TRUSTED_PROXIES": "10.0.0.0/8,nope"})); err == nil ||
+		!strings.Contains(err.Error(), "SPINDLE_TRUSTED_PROXIES") {
+		t.Fatalf("bad entry: %v", err)
+	}
+	if bare, _ := Load(env(nil)); len(bare.TrustedProxies) != 0 {
+		t.Fatalf("default %v", bare.TrustedProxies)
+	}
+}
+
+func TestSummarySaysWhetherCookiesAreSecure(t *testing.T) {
+	bare, _ := Load(env(nil))
+	if !strings.Contains(bare.Summary(), "secure_cookies=auto") {
+		t.Errorf("%s", bare.Summary())
+	}
+	on, _ := Load(env(map[string]string{"SPINDLE_SECURE_COOKIES": "true"}))
+	if !strings.Contains(on.Summary(), "secure_cookies=always") {
+		t.Errorf("%s", on.Summary())
+	}
+}

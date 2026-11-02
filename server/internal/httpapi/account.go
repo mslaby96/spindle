@@ -3,9 +3,9 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/auth"
@@ -43,7 +43,7 @@ func (s *Server) user(h http.HandlerFunc) http.Handler {
 		}
 		sess, err := s.Auth.Lookup(r.Context(), c.Value)
 		if errors.Is(err, auth.ErrNoSession) {
-			s.clearCookie(w)
+			s.clearCookie(w, r)
 			writeError(w, http.StatusUnauthorized, "not logged in")
 			return
 		}
@@ -52,7 +52,7 @@ func (s *Server) user(h http.HandlerFunc) http.Handler {
 			return
 		}
 		if sess.Persistent {
-			s.setCookie(w, c.Value, sess)
+			s.setCookie(w, r, c.Value, sess)
 		}
 		ctx := context.WithValue(r.Context(), userKey, sess.UserID)
 		ctx = context.WithValue(ctx, tokenKey, c.Value)
@@ -75,7 +75,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if !decode(w, r, &req) || !s.allow(w, r) {
+	if !decode(w, r, &req) || !s.allow(w, r, s.limiter, s.client(r).key) {
 		return
 	}
 	id, err := s.Auth.CompleteSetup(r.Context(), req.Code, req.Username, req.Password)
@@ -83,7 +83,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.limiter.Reset(clientIP(r))
+	s.limiter.Done(s.client(r).key)
 	if !s.startSession(w, r, id, true) {
 		return
 	}
@@ -96,7 +96,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Remember bool   `json:"remember"`
 	}
-	if !decode(w, r, &req) || !s.allow(w, r) {
+	if !decode(w, r, &req) {
+		return
+	}
+	account := "user:" + strings.ToLower(strings.TrimSpace(req.Username))
+	if !s.allow(w, r, s.limiter, s.client(r).key) || !s.allow(w, r, s.accounts, account) {
 		return
 	}
 	id, err := s.Auth.Authenticate(r.Context(), req.Username, req.Password)
@@ -104,7 +108,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.limiter.Reset(clientIP(r))
+	// the account's own count is cleared, but the address only gets this attempt back: a success on one account must
+	// not buy more guesses at another
+	s.accounts.Reset(account)
+	s.limiter.Done(s.client(r).key)
 	if !s.startSession(w, r, id, req.Remember) {
 		return
 	}
@@ -122,7 +129,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.clearCookie(w)
+	s.clearCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -159,17 +166,17 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int
 		s.internal(w, err)
 		return false
 	}
-	s.setCookie(w, token, sess)
+	s.setCookie(w, r, token, sess)
 	return true
 }
 
-func (s *Server) setCookie(w http.ResponseWriter, token string, sess auth.Session) {
+func (s *Server) setCookie(w http.ResponseWriter, r *http.Request, token string, sess auth.Session) {
 	c := &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   s.Config.SecureCookies,
+		Secure:   s.secure(r),
 		SameSite: http.SameSiteLaxMode,
 	}
 	if sess.Persistent {
@@ -179,15 +186,25 @@ func (s *Server) setCookie(w http.ResponseWriter, token string, sess auth.Sessio
 	http.SetCookie(w, c)
 }
 
-func (s *Server) clearCookie(w http.ResponseWriter) {
+func (s *Server) clearCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: s.Config.SecureCookies, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: s.secure(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func (s *Server) allow(w http.ResponseWriter, r *http.Request) bool {
-	ok, wait := s.limiter.Begin(clientIP(r))
+// secure says whether the session cookie gets the Secure flag: always when configured, otherwise whenever the browser
+// came over HTTPS, so a server behind TLS is safe without anyone remembering a setting.
+func (s *Server) secure(r *http.Request) bool {
+	return s.Config.SecureCookies || s.client(r).https
+}
+
+func (s *Server) client(r *http.Request) client {
+	return clientOf(r, s.Config.TrustedProxies)
+}
+
+func (s *Server) allow(w http.ResponseWriter, r *http.Request, l *auth.Limiter, key string) bool {
+	ok, wait := l.Begin(key)
 	if !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		writeError(w, http.StatusTooManyRequests, "too many attempts, try again later")
@@ -198,12 +215,4 @@ func (s *Server) allow(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) internal(w http.ResponseWriter, err error) {
 	s.Log.Error("request failed", "err", err)
 	writeError(w, http.StatusInternalServerError, "internal error")
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

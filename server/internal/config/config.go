@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -36,27 +37,31 @@ type Backup struct {
 }
 
 type Config struct {
-	ListenAddr    string
-	DataDir       string
-	Location      *time.Location
+	ListenAddr string
+	DataDir    string
+	Location   *time.Location
+	// SecureCookies forces the Secure flag even on plain HTTP; without it the flag follows the request.
 	SecureCookies bool
-	DiscogsToken  string
-	LastFMKey     string
-	MQTT          MQTT
-	Backup        Backup
-	Sessions      Sessions
+	// TrustedProxies may say who the client is, in X-Forwarded-For, and that it used HTTPS.
+	TrustedProxies []netip.Prefix
+	DiscogsToken   string
+	LastFMKey      string
+	MQTT           MQTT
+	Backup         Backup
+	Sessions       Sessions
 }
 
 func Load(getenv func(string) string) (*Config, error) {
 	l := loader{getenv: getenv}
 	dataDir := l.str("SPINDLE_DATA_DIR", "./data")
 	c := &Config{
-		ListenAddr:    l.str("SPINDLE_LISTEN", ":8080"),
-		DataDir:       dataDir,
-		Location:      l.location("SPINDLE_TZ"),
-		SecureCookies: l.boolean("SPINDLE_SECURE_COOKIES", false),
-		DiscogsToken:  l.secret("SPINDLE_DISCOGS_TOKEN"),
-		LastFMKey:     l.secret("SPINDLE_LASTFM_KEY"),
+		ListenAddr:     l.str("SPINDLE_LISTEN", ":8080"),
+		DataDir:        dataDir,
+		Location:       l.location("SPINDLE_TZ"),
+		SecureCookies:  l.boolean("SPINDLE_SECURE_COOKIES", false),
+		TrustedProxies: l.prefixes("SPINDLE_TRUSTED_PROXIES"),
+		DiscogsToken:   l.secret("SPINDLE_DISCOGS_TOKEN"),
+		LastFMKey:      l.secret("SPINDLE_LASTFM_KEY"),
 		MQTT: MQTT{
 			URL:      l.str("SPINDLE_MQTT_URL", ""),
 			Username: l.str("SPINDLE_MQTT_USERNAME", ""),
@@ -95,8 +100,13 @@ func (c *Config) Summary() string {
 	if c.Backup.Every > 0 {
 		backups = fmt.Sprintf("%s every %s, keep %d", c.Backup.Dir, c.Backup.Every, c.Backup.Keep)
 	}
-	return fmt.Sprintf("listen=%s data=%s tz=%s discogs_token=%s lastfm_key=%s mqtt=%t backups=%q",
-		c.ListenAddr, c.DataDir, c.Location, set(c.DiscogsToken), set(c.LastFMKey), c.MQTT.Enabled(), backups)
+	secure := "auto"
+	if c.SecureCookies {
+		secure = "always"
+	}
+	return fmt.Sprintf("listen=%s data=%s tz=%s discogs_token=%s lastfm_key=%s mqtt=%t backups=%q secure_cookies=%s trusted_proxies=%d",
+		c.ListenAddr, c.DataDir, c.Location, set(c.DiscogsToken), set(c.LastFMKey), c.MQTT.Enabled(), backups, secure,
+		len(c.TrustedProxies))
 }
 
 type loader struct {
@@ -122,6 +132,28 @@ func (l *loader) secret(key string) string {
 		return ""
 	}
 	return v
+}
+
+// prefixes reads a comma-separated list of addresses and networks, e.g. "172.16.0.0/12, 127.0.0.1".
+func (l *loader) prefixes(key string) []netip.Prefix {
+	var out []netip.Prefix
+	for _, item := range strings.Split(l.getenv(key), ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(item)
+		if err != nil {
+			addr, aerr := netip.ParseAddr(item)
+			if aerr != nil {
+				l.fail(key, "expected addresses or networks, got %q", item)
+				continue
+			}
+			p = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		out = append(out, p.Masked())
+	}
+	return out
 }
 
 func (l *loader) boolean(key string, def bool) bool {

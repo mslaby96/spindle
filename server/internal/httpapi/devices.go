@@ -47,7 +47,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 		FW   string `json:"fw"`
 	}
-	if !decode(w, r, &req) || !s.allow(w, r) {
+	if !decode(w, r, &req) || !s.allow(w, r, s.pairings, s.client(r).key) {
 		return
 	}
 	dev, token, err := s.Devices.Pair(r.Context(), req.Code)
@@ -55,7 +55,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.limiter.Reset(clientIP(r))
+	s.pairings.Done(s.client(r).key)
 	if dev, err = s.Devices.Touch(r.Context(), dev.ID, devices.Report{FW: req.FW}); err != nil {
 		s.internal(w, err)
 		return

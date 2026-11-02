@@ -45,12 +45,18 @@ type Deps struct {
 
 type Server struct {
 	Deps
-	limiter *auth.Limiter
-	mux     *http.ServeMux
+	// limiter counts setup and login attempts per client address, accounts counts logins per username from anywhere,
+	// and pairings counts pairing codes per address, so a run of wrong codes doesn't block logging in.
+	limiter  *auth.Limiter
+	accounts *auth.Limiter
+	pairings *auth.Limiter
+	mux      *http.ServeMux
 }
 
 func New(d Deps) *Server {
-	s := &Server{Deps: d, limiter: auth.NewLimiter(), mux: http.NewServeMux()}
+	accounts := auth.NewLimiter()
+	accounts.Free = 10
+	s := &Server{Deps: d, limiter: auth.NewLimiter(), accounts: accounts, pairings: auth.NewLimiter(), mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /healthz", s.health)
 
 	s.mux.HandleFunc("GET /api/setup", s.setupStatus)
@@ -115,6 +121,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Security-Policy", "frame-ancestors 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "same-origin")
+	if s.client(r).https {
+		h.Set("Strict-Transport-Security", "max-age=31536000")
+	}
 	s.mux.ServeHTTP(w, r)
 }
 

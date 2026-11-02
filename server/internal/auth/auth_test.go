@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -461,4 +462,69 @@ func TestLimiterBackoffIsCapped(t *testing.T) {
 		}
 		c.advance(maxBackoff)
 	}
+}
+
+func TestLimiterForgetsOldFailures(t *testing.T) {
+	l := NewLimiter()
+	c := &clock{t: time.Unix(0, 0)}
+	l.Now = c.now
+	for i := 0; i < freeAttempts; i++ {
+		l.Begin("1.2.3.4")
+	}
+	c.advance(forgetAfter)
+	for i := 0; i <= freeAttempts; i++ {
+		if ok, _ := l.Begin("1.2.3.4"); !ok {
+			t.Fatalf("attempt %d after a quiet spell was blocked", i+1)
+		}
+	}
+	if ok, _ := l.Begin("1.2.3.4"); ok {
+		t.Fatal("fresh failures stopped counting")
+	}
+}
+
+func TestLimiterDropsClientsItNoLongerNeeds(t *testing.T) {
+	l := NewLimiter()
+	c := &clock{t: time.Unix(0, 0)}
+	l.Now = c.now
+	for i := 0; i < 1000; i++ {
+		l.Begin(fmt.Sprint("client-", i))
+	}
+	c.advance(forgetAfter + maxBackoff)
+	l.Begin("late")
+	if n := l.size(); n != 1 {
+		t.Fatalf("%d clients kept", n)
+	}
+}
+
+func TestLimiterWithMoreFreeAttempts(t *testing.T) {
+	l := NewLimiter()
+	l.Free = 10
+	for i := 0; i <= 10; i++ {
+		if ok, _ := l.Begin("user:maciej"); !ok {
+			t.Fatalf("attempt %d blocked", i+1)
+		}
+	}
+	if ok, _ := l.Begin("user:maciej"); ok {
+		t.Fatal("no backoff after the free attempts")
+	}
+}
+
+func TestASuccessIsNotCountedButEarlierFailuresStay(t *testing.T) {
+	l := NewLimiter()
+	c := &clock{t: time.Unix(0, 0)}
+	l.Now = c.now
+	for i := 0; i < freeAttempts; i++ {
+		l.Begin("1.2.3.4")
+	}
+	for i := 0; i < 5; i++ {
+		if ok, _ := l.Begin("1.2.3.4"); !ok {
+			t.Fatalf("success %d was blocked", i+1)
+		}
+		l.Done("1.2.3.4")
+	}
+	l.Begin("1.2.3.4")
+	if ok, _ := l.Begin("1.2.3.4"); ok {
+		t.Fatal("the failures before the successes were forgotten")
+	}
+	l.Done("unknown")
 }
