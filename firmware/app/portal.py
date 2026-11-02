@@ -28,7 +28,7 @@ class Request:
         self.body = body
 
 
-def _text(b):
+def text(b):
     try:
         return bytes(b).decode("utf-8")
     except UnicodeError:
@@ -40,7 +40,7 @@ def parse_request(data):
     end = data.find(b"\r\n\r\n")
     if end < 0:
         return None
-    lines = _text(data[:end]).split("\r\n")
+    lines = text(data[:end]).split("\r\n")
     parts = lines[0].split(" ")
     method, path = (parts[0], parts[1]) if len(parts) == 3 and parts[2].startswith("HTTP/") else ("", "")
     host, length = "", 0
@@ -73,7 +73,7 @@ def _unquote(s):
         else:
             out.extend(c.encode())
         i += 1
-    return _text(out)
+    return text(out)
 
 
 def _is_hex(s):
@@ -82,7 +82,7 @@ def _is_hex(s):
 
 def parse_form(body):
     form = {}
-    for pair in _text(body).split("&"):
+    for pair in text(body).split("&"):
         if pair:
             name, _, value = pair.partition("=")
             form[_unquote(name)] = _unquote(value)

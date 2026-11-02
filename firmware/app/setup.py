@@ -11,6 +11,7 @@ from app.net import post_json
 from app.version import VERSION
 
 JOIN_TIMEOUT_MS = 20000
+REQUEST_MS = 3000
 # Long enough for the phone to load the "all set" page before the stand restarts and its network disappears.
 DONE_LINGER_MS = 15000
 # WPA2 with AES; newer MicroPython names it, older builds only take the CYW43 number
@@ -93,7 +94,8 @@ class SetupPortal:
 
     def _scan(self):
         try:
-            return [(n[0].decode(), n[3]) for n in self._sta.scan()]
+            # one network with a name that isn't valid UTF-8 shouldn't empty the whole list
+            return [(portal.text(n[0]), n[3]) for n in self._sta.scan()]
         except Exception as e:
             print("wifi scan failed:", e)
             return []
@@ -112,7 +114,9 @@ class SetupPortal:
         try:
             conn.settimeout(2)
             data, req = b"", None
-            while req is None and len(data) < 4096:
+            started = time.ticks_ms()
+            # a client trickling bytes in must not hold the loop past the watchdog
+            while req is None and len(data) < 4096 and time.ticks_diff(time.ticks_ms(), started) < REQUEST_MS:
                 chunk = conn.recv(512)
                 if not chunk:
                     break

@@ -244,3 +244,9 @@ class SetupPasswordTest(unittest.TestCase):
 
     def test_differs_per_stand(self):
         self.assertNotEqual(portal.setup_password("spd_a"), portal.setup_password("spd_b"))
+
+
+class TextTest(unittest.TestCase):
+    def test_a_name_that_is_not_utf8_still_reads(self):
+        self.assertEqual(portal.text(b"Caf\xe9 Wi-Fi"), "Caf? Wi-Fi")
+        self.assertEqual(portal.text("Kawiarnia Łódź".encode()), "Kawiarnia Łódź")
