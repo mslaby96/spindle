@@ -177,6 +177,6 @@ describe("inbox", () => {
       { uid: "04A1", album, session: session({ id: 8 }) },
     ]);
     renderApp("/inbox");
-    expect(await screen.findByRole("link", { name: "Inbox2" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Inbox, 2 waiting" })).toBeInTheDocument();
   });
 });

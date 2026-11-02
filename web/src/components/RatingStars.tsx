@@ -1,3 +1,5 @@
+import { useRef, type KeyboardEvent } from "react";
+
 type Props = {
   value?: number;
   onChange: (halfStars: number | undefined) => void;
@@ -19,8 +21,19 @@ const fillOf = (value: number, star: number) => Math.min(Math.max(value - (star 
 
 // Ratings are stored in half stars: 1 is half a star, 10 is five stars.
 export function RatingStars({ value, onChange, highlight }: Props) {
+  const group = useRef<HTMLDivElement>(null);
+  const focusable = value ?? 1;
+  function move(e: KeyboardEvent<HTMLDivElement>) {
+    const current = value ?? 0;
+    const next = { ArrowRight: current + 1, ArrowUp: current + 1, ArrowLeft: current - 1, ArrowDown: current - 1, Home: 1, End: 10 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const v = Math.min(Math.max(next, 1), 10);
+    onChange(v);
+    group.current?.querySelector<HTMLButtonElement>(`[data-value="${v}"]`)?.focus();
+  }
   return (
-    <div className="stars" role="radiogroup" aria-label="Rating">
+    <div className="stars" role="radiogroup" aria-label="Rating" ref={group} onKeyDown={move}>
       {highlight && <span className="muted hint">Rate this album</span>}
       {[1, 2, 3, 4, 5].map((star) => (
         <span key={star} className="star">
@@ -32,6 +45,8 @@ export function RatingStars({ value, onChange, highlight }: Props) {
               role="radio"
               aria-checked={value === v}
               aria-label={`${v / 2} stars`}
+              tabIndex={v === focusable ? 0 : -1}
+              data-value={v}
               onClick={() => onChange(value === v ? undefined : v)}
             />
           ))}

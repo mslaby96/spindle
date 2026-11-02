@@ -69,6 +69,16 @@ function Layout({ me }: { me: Me }) {
   const waiting = inbox.data?.length ?? 0;
   return (
     <div className="shell">
+      <a
+        className="skip"
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        Skip to content
+      </a>
       <header>
         <span className="brand">Spindle</span>
         <nav className="tabbar" aria-label="Main">
@@ -76,7 +86,15 @@ function Layout({ me }: { me: Me }) {
             Now playing
           </NavLink>
           <NavLink to="/inbox">
-            Inbox{waiting > 0 && <span className="badge">{waiting}</span>}
+            Inbox
+            {waiting > 0 && (
+              <>
+                <span className="badge" aria-hidden="true">
+                  {waiting}
+                </span>
+                <span className="sr-only">, {waiting} waiting</span>
+              </>
+            )}
           </NavLink>
           <NavLink to="/library">Library</NavLink>
           <NavLink to="/diary">Diary</NavLink>
@@ -90,7 +108,7 @@ function Layout({ me }: { me: Me }) {
           </NavLink>
         </nav>
       </header>
-      <main>
+      <main id="main" tabIndex={-1}>
         <Outlet />
       </main>
     </div>

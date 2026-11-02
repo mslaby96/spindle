@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type SearchResult } from "../api/client";
 import { useDebounced } from "../hooks/useDebounced";
 
-export function AlbumSearch({ onPick }: { onPick: (r: SearchResult) => void }) {
+// Only cataloguing, where the next step is always typing, takes focus; elsewhere it would pop the phone keyboard.
+export function AlbumSearch({ onPick, autoFocus = false }: { onPick: (r: SearchResult) => void; autoFocus?: boolean }) {
   const [query, setQuery] = useState("");
   const q = useDebounced(query.trim(), 300);
   const results = useQuery({
@@ -17,7 +18,7 @@ export function AlbumSearch({ onPick }: { onPick: (r: SearchResult) => void }) {
   return (
     <div className="search">
       <input
-        autoFocus
+        autoFocus={autoFocus}
         placeholder="Artist or album, e.g. Pink Floyd Dark Side"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

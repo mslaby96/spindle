@@ -13,7 +13,9 @@ function listensToMove(err: unknown) {
   return err instanceof ApiError && err.status === 409 ? Number(err.data?.listens) || 0 : 0;
 }
 
-export function AssignTag({ uid, current, onDone }: { uid: string; current?: string; onDone?: (tag: Tag) => void }) {
+type Props = { uid: string; current?: string; onDone?: (tag: Tag) => void; autoFocus?: boolean };
+
+export function AssignTag({ uid, current, onDone, autoFocus }: Props) {
   const queryClient = useQueryClient();
   const [master, setMaster] = useState<SearchResult | null>(null);
   const [picked, setPicked] = useState<Choice | null>(null);
@@ -70,7 +72,7 @@ export function AssignTag({ uid, current, onDone }: { uid: string; current?: str
           />
         </>
       ) : (
-        <AlbumSearch onPick={pick} />
+        <AlbumSearch onPick={pick} autoFocus={autoFocus} />
       )}
       {assign.isPending && <p className="muted">Saving…</p>}
       {assign.error && !pending && <p className="error">{assign.error.message}</p>}

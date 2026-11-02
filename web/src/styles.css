@@ -65,6 +65,10 @@ a { color: var(--link); text-underline-offset: 0.18em; }
 strong { font-weight: 700; }
 
 .muted { color: var(--ink-2); margin: 0.25rem 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: 1rem; top: -4rem; z-index: 30; padding: 0.6rem 1rem; border-radius: 0 0 0.4rem 0.4rem; background: var(--mustard); color: var(--mustard-ink); font-weight: 700; text-decoration: none; }
+.skip:focus { top: 0; }
+main:focus { outline: none; }
 .small { font-size: 0.8125rem; }
 .block { display: block; }
 .grow { flex: 1; min-width: 0; }
@@ -189,7 +193,7 @@ section > .divider:first-child { margin-top: 0; }
   font-weight: 650;
 }
 .tabs button:hover:not(:disabled) { background: var(--rule); color: var(--ink); }
-.tabs button[aria-selected="true"], .tabs button[aria-selected="true"]:hover { background: var(--mustard); color: var(--mustard-ink); font-weight: 800; }
+.tabs button[aria-selected="true"], .tabs button[aria-selected="true"]:hover, .tabs button[aria-pressed="true"], .tabs button[aria-pressed="true"]:hover { background: var(--mustard); color: var(--mustard-ink); font-weight: 800; }
 .heading { margin-bottom: 1.25rem; }
 .heading h1 { margin: 0; }
 .heading:has(.tabs) { align-items: flex-end; flex-wrap: wrap; border-bottom: 3px solid var(--mustard); }

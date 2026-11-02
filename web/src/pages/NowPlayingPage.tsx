@@ -138,9 +138,17 @@ function EndsIn({ at, deviceId }: { at: string; deviceId: number }) {
     },
   });
   const left = new Date(at).getTime() - now;
+  // Said once when the sleeve comes off; the ticking seconds stay out of the live region.
+  const [announcement] = useState(() => {
+    const minutes = Math.max(1, Math.round((new Date(at).getTime() - Date.now()) / 60_000));
+    return `Sleeve off the stand. This listen ends in about ${minutes} ${minutes === 1 ? "minute" : "minutes"} unless you put it back.`;
+  });
   return (
-    <div className="ending" aria-live="polite">
-      <p>
+    <div className="ending">
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
+      <p aria-hidden="true">
         <span className="sticker">Sleeve off</span>
         {left > 0 ? (
           <span>

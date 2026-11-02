@@ -45,18 +45,18 @@ export function StatsPage() {
     <section>
       <h1>Stats</h1>
       <div className="row toolbar filters-bar">
-        <div className="tabs" role="tablist" aria-label="Period">
+        <div className="tabs" role="group" aria-label="Period">
           {periods.map(([value, label]) => (
-            <button key={value} role="tab" aria-selected={period === value} onClick={() => setPeriod(value)}>
+            <button key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>
               {label}
             </button>
           ))}
         </div>
-        <div className="tabs" role="tablist" aria-label="Measure">
-          <button role="tab" aria-selected={measure === "plays"} onClick={() => setMeasure("plays")}>
+        <div className="tabs" role="group" aria-label="Measure">
+          <button aria-pressed={measure === "plays"} onClick={() => setMeasure("plays")}>
             Listens
           </button>
-          <button role="tab" aria-selected={measure === "time"} onClick={() => setMeasure("time")}>
+          <button aria-pressed={measure === "time"} onClick={() => setMeasure("time")}>
             Time
           </button>
         </div>

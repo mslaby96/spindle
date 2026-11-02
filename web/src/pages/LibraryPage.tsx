@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 
@@ -18,23 +18,46 @@ const sorts = [
   ["added", "Recently added"],
 ] as const;
 
+const libraryTabs = [
+  ["all", "All records"],
+  ["forgotten", "Forgotten shelf"],
+] as const;
+
 export function LibraryPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") === "forgotten" ? "forgotten" : "all";
+  const tabs = useRef<HTMLDivElement>(null);
+  const select = (id: string) => setParams(id === "all" ? {} : { tab: id });
+  function move(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const i = libraryTabs.findIndex(([id]) => id === tab);
+    const [next] = libraryTabs[(i + (e.key === "ArrowRight" ? 1 : -1) + libraryTabs.length) % libraryTabs.length];
+    select(next);
+    tabs.current?.querySelector<HTMLButtonElement>(`#library-tab-${next}`)?.focus();
+  }
   return (
     <section>
       <div className="row heading">
         <h1>Library</h1>
-        <div className="tabs" role="tablist">
-          <button role="tab" aria-selected={tab === "all"} onClick={() => setParams({})}>
-            All records
-          </button>
-          <button role="tab" aria-selected={tab === "forgotten"} onClick={() => setParams({ tab: "forgotten" })}>
-            Forgotten shelf
-          </button>
+        <div className="tabs" role="tablist" aria-label="Library" ref={tabs} onKeyDown={move}>
+          {libraryTabs.map(([id, label]) => (
+            <button
+              key={id}
+              id={`library-tab-${id}`}
+              role="tab"
+              aria-selected={tab === id}
+              aria-controls="library-panel"
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => select(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
-      {tab === "all" ? <AllRecords /> : <ForgottenShelf />}
+      <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${tab}`}>
+        {tab === "all" ? <AllRecords /> : <ForgottenShelf />}
+      </div>
     </section>
   );
 }

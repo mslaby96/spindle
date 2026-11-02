@@ -48,10 +48,10 @@ describe("stats", () => {
     const calls = setup();
     renderApp("/stats");
     await screen.findByText("Jazz");
-    await userEvent.click(screen.getByRole("tab", { name: "Time" }));
+    await userEvent.click(screen.getByRole("button", { name: "Time" }));
     expect((await screen.findAllByText("2 h 30 min")).length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole("tab", { name: "Year" }));
-    await userEvent.click(screen.getByRole("tab", { name: "Listens" }));
+    await userEvent.click(screen.getByRole("button", { name: "Year" }));
+    await userEvent.click(screen.getByRole("button", { name: "Listens" }));
     await waitFor(() => expect(calls.some((c) => c.key === "GET /api/stats/top?period=year&measure=plays")).toBe(true));
   });
 
