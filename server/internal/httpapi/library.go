@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/catalog"
+	"github.com/mslaby96/spindle/server/internal/inbox"
 	"github.com/mslaby96/spindle/server/internal/stats"
 )
 
@@ -91,11 +92,27 @@ func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		StartedAt time.Time `json:"started_at"`
 		EndedAt   time.Time `json:"ended_at"`
+		// Review, when sent, sets the rating and note in the same edit.
+		Review *struct {
+			Rating *int   `json:"rating"`
+			Note   string `json:"note"`
+		} `json:"review"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	s.noContent(w, s.Sessions.Edit(r.Context(), userID(r), id, req.StartedAt, req.EndedAt))
+	// both halves are checked before either is written, so a refused edit changes nothing
+	if req.Review != nil {
+		if err := inbox.CheckRating(req.Review.Rating); err != nil {
+			s.fail(w, err)
+			return
+		}
+	}
+	err := s.Sessions.Edit(r.Context(), userID(r), id, req.StartedAt, req.EndedAt)
+	if err == nil && req.Review != nil {
+		err = s.Inbox.Review(r.Context(), userID(r), id, req.Review.Rating, req.Review.Note)
+	}
+	s.noContent(w, err)
 }
 
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {

@@ -124,9 +124,17 @@ func (in *Inbox) AlbumRating(ctx context.Context, userID, albumID int64) (*int, 
 
 // Review stores the rating (in half stars, 1-10, or nil) and note for one listen and closes its card, unless the
 // listen still waits for its length to be confirmed.
-func (in *Inbox) Review(ctx context.Context, userID, sessionID int64, rating *int, note string) error {
+// CheckRating accepts no rating or one in half stars, 1 to 10.
+func CheckRating(rating *int) error {
 	if rating != nil && (*rating < 1 || *rating > 10) {
 		return ErrInvalidRating
+	}
+	return nil
+}
+
+func (in *Inbox) Review(ctx context.Context, userID, sessionID int64, rating *int, note string) error {
+	if err := CheckRating(rating); err != nil {
+		return err
 	}
 	note = strings.TrimSpace(note)
 	if r := []rune(note); len(r) > maxNote {

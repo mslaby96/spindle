@@ -106,3 +106,46 @@ func TestStatsEndpoints(t *testing.T) {
 		t.Fatalf("weeks %+v", weeks)
 	}
 }
+
+func TestOneEditChangesTimesRatingAndNote(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	id := e.listen(t, "counted", 40)
+	url := e.http.URL + "/api/sessions/" + strconv.FormatInt(id, 10)
+	start := time.Unix(1000, 0).UTC()
+	read := func() (listened int, rating *int, note *string) {
+		e.srv.DB.R.QueryRow(`SELECT listened_sec, rating, note FROM sessions WHERE id = ?`, id).Scan(&listened, &rating, &note)
+		return
+	}
+
+	resp := do(t, c, "PUT", url, map[string]any{"started_at": start, "ended_at": start.Add(50 * time.Minute),
+		"review": map[string]any{"rating": 8, "note": "side B twice"}})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("edit: %d", resp.StatusCode)
+	}
+	if listened, rating, note := read(); listened != 50*60 || rating == nil || *rating != 8 || note == nil || *note != "side B twice" {
+		t.Fatalf("after edit: %d %v %v", listened, rating, note)
+	}
+
+	// a bad rating saves nothing, not even the times
+	resp = do(t, c, "PUT", url, map[string]any{"started_at": start, "ended_at": start.Add(30 * time.Minute),
+		"review": map[string]any{"rating": 11, "note": "x"}})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad rating: %d", resp.StatusCode)
+	}
+	// and bad times save nothing, not even the review
+	resp = do(t, c, "PUT", url, map[string]any{"started_at": start, "ended_at": start,
+		"review": map[string]any{"rating": 2, "note": "y"}})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad times: %d", resp.StatusCode)
+	}
+	if listened, rating, note := read(); listened != 50*60 || *rating != 8 || *note != "side B twice" {
+		t.Fatalf("a refused edit changed something: %d %v %v", listened, *rating, *note)
+	}
+
+	// without a review only the times change, as before
+	do(t, c, "PUT", url, map[string]any{"started_at": start, "ended_at": start.Add(45 * time.Minute)})
+	if listened, rating, _ := read(); listened != 45*60 || *rating != 8 {
+		t.Fatalf("times only: %d %v", listened, *rating)
+	}
+}
