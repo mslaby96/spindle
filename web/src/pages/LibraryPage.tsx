@@ -6,6 +6,7 @@ import { api, type LibraryItem } from "../api/client";
 import { Cover } from "../components/Cover";
 import { dye } from "../colors";
 import { Divider } from "../components/Divider";
+import { QueryState } from "../components/QueryState";
 import { Rating } from "../components/RatingStars";
 import { formatDate, timeAgo } from "../format";
 
@@ -41,10 +42,11 @@ export function LibraryPage() {
 function AllRecords() {
   const [sort, setSort] = useState<string>("last_played");
   const [filter, setFilter] = useState("");
-  const { data } = useQuery({
+  const records = useQuery({
     queryKey: ["library", sort],
     queryFn: () => api<LibraryItem[]>(`/api/library?sort=${sort}`),
   });
+  const { data } = records;
   const needle = filter.trim().toLowerCase();
   const items = data?.filter((i) => !needle || `${i.title} ${i.artist}`.toLowerCase().includes(needle));
 
@@ -67,6 +69,7 @@ function AllRecords() {
           ))}
         </select>
       </div>
+      {!data && <QueryState query={records} what="your library" />}
       {items && (
         <p className="muted">
           {needle ? `${items.length} of ${data?.length} records` : `${items.length} records`}
@@ -82,11 +85,12 @@ function AllRecords() {
 }
 
 function ForgottenShelf() {
-  const { data } = useQuery({
+  const shelf = useQuery({
     queryKey: ["library", "forgotten"],
     queryFn: () => api<{ not_recently: LibraryItem[]; never: LibraryItem[] }>("/api/library/forgotten"),
   });
-  if (!data) return null;
+  const { data } = shelf;
+  if (!data) return <QueryState query={shelf} what="the forgotten shelf" />;
   return (
     <>
       <Divider color="var(--tomato)">Not played in a long time</Divider>

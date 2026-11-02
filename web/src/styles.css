@@ -81,6 +81,10 @@ strong { font-weight: 700; }
 .empty { padding: 3rem 0 1rem; }
 .empty h1 { margin-bottom: 0.5rem; }
 .loading { color: var(--ink-2); padding: 4rem 0; text-align: center; }
+.load-error { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 2rem 0; }
+.load-error p { margin: 0; }
+.load-error p:first-child { font-size: 1.25rem; font-weight: 750; }
+.load-error button { margin-top: 0.6rem; }
 
 /* Shell */
 

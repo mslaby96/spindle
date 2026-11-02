@@ -8,17 +8,26 @@ import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
 import { Divider } from "../components/Divider";
+import { QueryState } from "../components/QueryState";
 import { formatCountdown, formatElapsed, formatLength, formatTime, timeAgo } from "../format";
 import { useDevices } from "./DevicesPage";
 
 export function NowPlayingPage() {
-  const { data: playing } = useQuery({
+  const playingQuery = useQuery({
     queryKey: nowPlayingKey,
     queryFn: () => api<NowPlaying[]>("/api/now-playing"),
   });
   const { data: devices } = useDevices();
+  const playing = playingQuery.data;
 
-  if (!playing || playing.length === 0) {
+  if (!playing) {
+    return (
+      <section>
+        <QueryState query={playingQuery} what="what is on the stand" />
+      </section>
+    );
+  }
+  if (playing.length === 0) {
     const silent = devices && devices.length > 0 && devices.every((d) => !d.online);
     return (
       <section>

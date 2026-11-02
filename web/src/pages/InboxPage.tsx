@@ -5,6 +5,7 @@ import { api, type InboxCard } from "../api/client";
 import { inboxKey } from "../api/events";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
+import { QueryState } from "../components/QueryState";
 import { tabStyle } from "../colors";
 import { Rating, RatingStars } from "../components/RatingStars";
 import { formatDateTime, formatLength } from "../format";
@@ -15,8 +16,16 @@ export function useInbox() {
 
 
 export function InboxPage() {
-  const { data: cards } = useInbox();
-  if (!cards) return null;
+  const inbox = useInbox();
+  const cards = inbox.data;
+  if (!cards) {
+    return (
+      <section>
+        <h1>After listening</h1>
+        <QueryState query={inbox} what="your inbox" />
+      </section>
+    );
+  }
   return (
     <section>
       <h1>After listening</h1>

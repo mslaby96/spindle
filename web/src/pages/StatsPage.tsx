@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
 import { Divider } from "../components/Divider";
+import { QueryState } from "../components/QueryState";
 import { formatDayMonth, formatLength } from "../format";
 
 type Ranked = { name: string; value: number };
@@ -61,6 +62,7 @@ export function StatsPage() {
         </div>
       </div>
 
+      {!top.data && <QueryState query={top} what="your stats" />}
       {s && (
         <div className="tiles">
           <div className="tile-stat">
@@ -80,6 +82,7 @@ export function StatsPage() {
       )}
 
       {weeks.data && <WeeklyChart weeks={weeks.data} />}
+      {weeks.error && <QueryState query={weeks} what="the weekly chart" />}
 
       {top.data && top.data.albums.length === 0 && <p className="muted">No listens in this period.</p>}
       {top.data && top.data.albums.length > 0 && (

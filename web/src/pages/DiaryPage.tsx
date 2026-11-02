@@ -5,6 +5,7 @@ import { api, type DiaryEntry } from "../api/client";
 import { Cover } from "../components/Cover";
 import { dye } from "../colors";
 import { Divider } from "../components/Divider";
+import { QueryState } from "../components/QueryState";
 import { Rating } from "../components/RatingStars";
 import { formatLength, formatMonth, formatWeekday } from "../format";
 
@@ -27,6 +28,7 @@ export function DiaryPage() {
   return (
     <section>
       <h1>Diary</h1>
+      {!diary.data && <QueryState query={diary} what="your diary" />}
       {diary.isSuccess && entries.length === 0 && <p className="muted">No listens yet.</p>}
       <ul className="list diary">
         {entries.map((e) => {
