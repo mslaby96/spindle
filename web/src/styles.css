@@ -348,7 +348,10 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .stand-name { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin: 0; }
 .diagnostics { display: flex; flex-wrap: wrap; gap: 0 0.5rem; margin: 0.15rem 0 0; }
 .diagnostics span:not(:last-child)::after { content: " ·"; }
-.dbm { font-variant-numeric: tabular-nums; }
+.wifi { width: 1.4em; height: 1.4em; vertical-align: -0.35em; color: var(--ink); }
+.wifi .dot { fill: currentColor; }
+.wifi path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.wifi .off { opacity: 0.22; }
 .tile .sticker { position: absolute; top: -0.4rem; right: -0.3rem; }
 
 /* Diary */

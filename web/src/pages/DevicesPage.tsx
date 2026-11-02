@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Device } from "../api/client";
 import { devicesKey, pairedStandKey } from "../api/events";
 import { QueryState } from "../components/QueryState";
-import { formatCountdown, formatDateTime, formatDbm, formatUptime, signalStrength } from "../format";
+import { WifiSignal } from "../components/WifiSignal";
+import { formatCountdown, formatDateTime, formatUptime } from "../format";
 
 type Pairing = { code: string; expires_at: string };
 
@@ -316,11 +317,7 @@ function StandState({ device: d }: { device: Device }) {
 
 function Diagnostics({ device: d }: { device: Device }) {
   const parts = [
-    d.rssi !== undefined && (
-      <>
-        Wi-Fi {signalStrength(d.rssi)} <span className="dbm">{formatDbm(d.rssi)}</span>
-      </>
-    ),
+    d.rssi !== undefined && <WifiSignal rssi={d.rssi} />,
     d.reader_resets !== undefined && `${d.reader_resets} reader ${d.reader_resets === 1 ? "reset" : "resets"}`,
     d.uptime_sec !== undefined && `up ${formatUptime(d.uptime_sec)}`,
   ].filter(Boolean);
