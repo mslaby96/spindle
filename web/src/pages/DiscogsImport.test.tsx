@@ -91,3 +91,12 @@ describe("importing a Discogs collection", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("pressings you removed", () => {
+  it("are mentioned in the preview when the import leaves some out", async () => {
+    setup({ "POST /api/import/discogs/preview": () => [200, { ...summary, skipped_removed_pressings: 2 }] });
+    renderApp("/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Check my Discogs collection" }));
+    expect(await screen.findByText(/2 pressings you removed stay removed/)).toBeInTheDocument();
+  });
+});

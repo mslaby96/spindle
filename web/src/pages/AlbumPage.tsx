@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 
-import { api, type Album, type AlbumDetail, type DiaryEntry } from "../api/client";
+import { api, type Album, type AlbumDetail, type DiaryEntry, type Release } from "../api/client";
 import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
@@ -61,16 +61,7 @@ export function AlbumPage() {
         </>
       )}
 
-      {releases.length > 0 && (
-        <>
-          <Divider color={album.cover_color}>Your pressing</Divider>
-          {releases.map((r) => (
-            <p key={r.id} className="muted">
-              {formatPressing(r)}
-            </p>
-          ))}
-        </>
-      )}
+      {releases.length > 0 && <Pressings color={album.cover_color} releases={releases} onChanged={refresh} />}
 
       <Divider color={album.cover_color}>Listens</Divider>
       {history.length === 0 && <p className="muted">Not played yet.</p>}
@@ -338,5 +329,77 @@ function ListenReview({ entry, onDone }: { entry: DiaryEntry; onDone: (saved: bo
       </div>
       {save.error && <p className="error">{save.error.message}</p>}
     </div>
+  );
+}
+
+function Pressings({ color, releases, onChanged }: { color?: string; releases: Release[]; onChanged: () => void }) {
+  const owned = releases.filter((r) => !r.removed_at);
+  const removed = releases.filter((r) => r.removed_at);
+  return (
+    <>
+      <Divider color={color}>{owned.length > 1 ? "Your pressings" : "Your pressing"}</Divider>
+      {owned.length === 0 && <p className="muted">No pressing of this album is in your collection.</p>}
+      <ul className="list pressings">
+        {owned.map((r) => (
+          <PressingRow key={r.id} release={r} onChanged={onChanged} />
+        ))}
+      </ul>
+      {removed.length > 0 && (
+        <details className="removed-pressings">
+          <summary>Removed pressings ({removed.length})</summary>
+          <ul className="list pressings">
+            {removed.map((r) => (
+              <PressingRow key={r.id} release={r} onChanged={onChanged} />
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
+  );
+}
+
+function PressingRow({ release: r, onChanged }: { release: Release; onChanged: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const change = useMutation({
+    mutationFn: (action: "remove" | "restore") => api(`/api/pressings/${r.id}/${action}`, { method: "POST" }),
+    onSuccess: () => {
+      setConfirming(false);
+      onChanged();
+    },
+  });
+  return (
+    <li className="pressing">
+      <div className="row">
+        <div>
+          <p className="muted">{formatPressing(r)}</p>
+          <DiscogsLink kind="release" id={r.discogs_release_id} />
+        </div>
+        {r.removed_at ? (
+          <button className="link" onClick={() => change.mutate("restore")} disabled={change.isPending}>
+            Put back
+          </button>
+        ) : (
+          !confirming && (
+            <button className="link" onClick={() => setConfirming(true)}>
+              Remove
+            </button>
+          )
+        )}
+      </div>
+      {confirming && (
+        <div className="confirm">
+          <p>Remove this pressing from your collection? Its listens stay, and an import from Discogs won't add it back.</p>
+          <div className="choices">
+            <button onClick={() => change.mutate("remove")} disabled={change.isPending}>
+              Remove pressing
+            </button>
+            <button className="secondary" onClick={() => setConfirming(false)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+      {change.error && <p className="error">{change.error.message}</p>}
+    </li>
   );
 }

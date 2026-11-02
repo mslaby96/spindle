@@ -391,6 +391,12 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .discogs { font-size: 0.75rem; color: var(--ink-2); }
 .discogs:hover { color: var(--link); }
 .album-head .discogs { display: inline-block; margin-top: 0.4rem; }
+.pressings .pressing { padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
+.pressings .pressing p { margin: 0; }
+.pressing .confirm { margin-top: 0.6rem; padding-top: 0; border-top: 0; }
+.pressing .row > button { white-space: nowrap; }
+.removed-pressings { margin-top: 0.75rem; }
+.removed-pressings summary { cursor: pointer; color: var(--ink-2); font-weight: 650; padding: 0.5rem 0; }
 .review { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
 .toast {
   position: fixed;

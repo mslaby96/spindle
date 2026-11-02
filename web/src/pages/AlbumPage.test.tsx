@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -228,5 +228,80 @@ describe("rating any listen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("database is locked")).toBeInTheDocument();
     expect(screen.getByRole("radiogroup")).toBeInTheDocument();
+  });
+});
+
+describe("pressings you no longer own", () => {
+  const pressing = (id: number, country: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    album_id: 4,
+    discogs_release_id: 1000 + id,
+    title: "Kind of Blue",
+    country,
+    year: 1959,
+    label: "Columbia",
+    ...extra,
+  });
+
+  function setup(releases: () => unknown[], extra: Record<string, (body: unknown) => [number, unknown?]> = {}) {
+    return mockApi({
+      "GET /api/setup": () => [200, { needed: false }],
+      "GET /api/me": () => [200, me],
+      "GET /api/albums/4": () => [200, detail({ duration_status: "resolved" }, { releases: releases() })],
+      ...extra,
+    });
+  }
+
+  it("removes a pressing after saying what that means", async () => {
+    let removed = false;
+    const calls = setup(() => [pressing(1, "US"), pressing(2, "UK", removed ? { removed_at: "2026-11-03T10:00:00Z" } : {})], {
+      "POST /api/pressings/2/remove": () => {
+        removed = true;
+        return [204];
+      },
+    });
+    renderApp("/albums/4");
+    expect(await screen.findByRole("heading", { name: "Your pressings" })).toBeInTheDocument();
+    const uk = screen.getByText(/UK · 1959/).closest("li")!;
+    await userEvent.click(within(uk).getByRole("button", { name: "Remove" }));
+    expect(within(uk).getByText(/Its listens stay, and an import from Discogs won't add it back/)).toBeInTheDocument();
+    await userEvent.click(within(uk).getByRole("button", { name: "Remove pressing" }));
+    await waitFor(() => expect(calls.some((c) => c.key === "POST /api/pressings/2/remove")).toBe(true));
+    expect(await screen.findByText("Removed pressings (1)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your pressing" })).toBeInTheDocument();
+  });
+
+  it("keeps it when you change your mind", async () => {
+    const calls = setup(() => [pressing(1, "US")]);
+    renderApp("/albums/4");
+    const us = (await screen.findByText(/US · 1959/)).closest("li")!;
+    await userEvent.click(within(us).getByRole("button", { name: "Remove" }));
+    await userEvent.click(within(us).getByRole("button", { name: "Keep it" }));
+    expect(within(us).queryByText(/won't add it back/)).not.toBeInTheDocument();
+    expect(calls.some((c) => c.key.startsWith("POST /api/pressings"))).toBe(false);
+  });
+
+  it("puts a removed pressing back", async () => {
+    let removed = true;
+    const calls = setup(() => [pressing(2, "UK", removed ? { removed_at: "2026-11-03T10:00:00Z" } : {})], {
+      "POST /api/pressings/2/restore": () => {
+        removed = false;
+        return [204];
+      },
+    });
+    renderApp("/albums/4");
+    expect(await screen.findByText(/No pressing of this album is in your collection/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Removed pressings (1)"));
+    await userEvent.click(screen.getByRole("button", { name: "Put back" }));
+    await waitFor(() => expect(calls.some((c) => c.key === "POST /api/pressings/2/restore")).toBe(true));
+    expect(await screen.findByRole("heading", { name: "Your pressing" })).toBeInTheDocument();
+    expect(screen.queryByText(/Removed pressings/)).not.toBeInTheDocument();
+  });
+
+  it("credits Discogs next to each pressing", async () => {
+    setup(() => [pressing(1, "US")]);
+    renderApp("/albums/4");
+    const us = (await screen.findByText(/US · 1959/)).closest("li")!;
+    expect(within(us).getByRole("link", { name: "Data provided by Discogs" })).toHaveAttribute("href", "https://www.discogs.com/release/1001");
   });
 });

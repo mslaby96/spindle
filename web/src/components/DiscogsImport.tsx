@@ -68,6 +68,11 @@ function Preview({ summary: s, onStart, onCancel, busy }: { summary: ImportSumma
           {s.skipped_removed.join(", ")}.
         </p>
       )}
+      {s.skipped_removed_pressings > 0 && (
+        <p className="muted">
+          {plural(s.skipped_removed_pressings, "pressing you removed stays", "pressings you removed stay")} removed.
+        </p>
+      )}
       {nothing ? (
         <p className="muted">Nothing new to import.</p>
       ) : (
