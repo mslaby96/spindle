@@ -219,6 +219,8 @@ cd web && npm ci && npm test && npm run build
 python3 -m unittest discover -s firmware/tests -t firmware
 ```
 
+CI runs the same tests, with `go test -race`, plus `go vet`, `gofmt`, `govulncheck`, `npm audit`, a Docker build, and [crap4go](https://github.com/unclebob/crap4go): no function may reach a CRAP score of 10. Run that one locally with `crap4go --test-command "go test ./internal/..."` in `server/`.
+
 `npm run dev` in `web/` serves the app with hot reload and proxies `/api` to a server on port 8080 (`cd server && go run ./cmd/spindle`). `npm run build` writes into `server/internal/webui/dist`, which gets embedded in the binary.
 
 Album data comes from [Discogs](https://www.discogs.com/). Album lengths also come from [MusicBrainz](https://musicbrainz.org/) and, optionally, [Last.fm](https://www.last.fm/).
