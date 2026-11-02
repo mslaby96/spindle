@@ -1,0 +1,27 @@
+{
+  "pagination": {"page": 1, "pages": 2, "per_page": 100, "items": 3, "urls": {"next": "https://api.discogs.com/users/maciej_spins/collection/folders/0/releases?page=2&per_page=100"}},
+  "releases": [
+    {
+      "id": 1873013, "instance_id": 11, "folder_id": 1, "rating": 0, "date_added": "2024-03-01T10:00:00-08:00",
+      "basic_information": {
+        "id": 1873013, "master_id": 10362, "title": "The Dark Side Of The Moon", "year": 1973,
+        "thumb": "https://i.discogs.com/t1.jpg", "cover_image": "https://i.discogs.com/c1.jpg",
+        "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["LP", "Album", "Gatefold"]}],
+        "labels": [{"name": "Harvest", "catno": "SHVL 804"}, {"name": "EMI", "catno": "1E 064"}],
+        "artists": [{"name": "Pink Floyd", "anv": "", "join": ""}],
+        "genres": ["Rock"], "styles": ["Psychedelic Rock", "Prog Rock"]
+      }
+    },
+    {
+      "id": 5432101, "instance_id": 12, "folder_id": 1, "rating": 0, "date_added": "2024-03-02T10:00:00-08:00",
+      "basic_information": {
+        "id": 5432101, "master_id": 0, "title": "Live At The Corner (2)", "year": 0,
+        "thumb": "", "cover_image": "",
+        "formats": [{"name": "Vinyl", "qty": "2", "descriptions": ["LP"]}],
+        "labels": [{"name": "Not On Label (2)", "catno": "none"}],
+        "artists": [{"name": "The Locals (3)", "anv": "Locals", "join": "&"}, {"name": "Guest", "anv": "", "join": ""}],
+        "genres": ["Jazz"], "styles": []
+      }
+    }
+  ]
+}

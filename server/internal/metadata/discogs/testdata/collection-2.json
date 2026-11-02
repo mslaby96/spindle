@@ -1,0 +1,16 @@
+{
+  "pagination": {"page": 2, "pages": 2, "per_page": 100, "items": 3, "urls": {}},
+  "releases": [
+    {
+      "id": 1873014, "instance_id": 13, "folder_id": 1, "rating": 0, "date_added": "2024-03-03T10:00:00-08:00",
+      "basic_information": {
+        "id": 1873014, "master_id": 10362, "title": "The Dark Side Of The Moon", "year": 2016,
+        "thumb": "", "cover_image": "https://i.discogs.com/c3.jpg",
+        "formats": [{"name": "Vinyl", "qty": "1", "descriptions": ["LP", "Reissue", "180g"]}],
+        "labels": [{"name": "Pink Floyd Records", "catno": "PFRLP8"}],
+        "artists": [{"name": "Pink Floyd", "anv": "", "join": ""}],
+        "genres": ["Rock"], "styles": ["Prog Rock"]
+      }
+    }
+  ]
+}

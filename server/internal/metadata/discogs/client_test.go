@@ -338,3 +338,65 @@ func TestAnOversizedResponseIsRefused(t *testing.T) {
 		t.Fatal("decoded a response larger than the limit")
 	}
 }
+
+func serveCollection(t *testing.T, seen *[]string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.URL.Path+"?"+r.URL.RawQuery)
+		switch {
+		case r.URL.Path == "/oauth/identity":
+			w.Write(fixture(t, "identity.json"))
+		case r.URL.Path == "/users/maciej_spins/collection/folders/0/releases" && r.URL.Query().Get("page") == "1":
+			w.Write(fixture(t, "collection-1.json"))
+		case r.URL.Path == "/users/maciej_spins/collection/folders/0/releases" && r.URL.Query().Get("page") == "2":
+			w.Write(fixture(t, "collection-2.json"))
+		default:
+			http.NotFound(w, r)
+		}
+	}
+}
+
+func TestIdentityNamesTheTokensAccount(t *testing.T) {
+	var seen []string
+	c := newTestClient(t, serveCollection(t, &seen))
+	name, err := c.Identity(context.Background())
+	if err != nil || name != "maciej_spins" {
+		t.Fatalf("%q %v", name, err)
+	}
+}
+
+func TestCollectionReadsEveryPage(t *testing.T) {
+	var seen []string
+	c := newTestClient(t, serveCollection(t, &seen))
+	items, err := c.Collection(context.Background(), "maciej_spins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 3 || len(seen) != 2 || !strings.Contains(seen[0], "per_page=100") {
+		t.Fatalf("items %+v, requests %v", items, seen)
+	}
+	want := CollectionItem{
+		ReleaseID: 1873013, MasterID: 10362, Title: "The Dark Side Of The Moon", Artist: "Pink Floyd", Year: 1973,
+		Genres: []string{"Rock"}, Styles: []string{"Psychedelic Rock", "Prog Rock"},
+		Label: "Harvest", CatNo: "SHVL 804", Format: "Vinyl, LP, Album, Gatefold", CoverURL: "https://i.discogs.com/c1.jpg",
+	}
+	if got := items[0]; got.ReleaseID != want.ReleaseID || got.MasterID != want.MasterID || got.Title != want.Title ||
+		got.Artist != want.Artist || got.Year != want.Year || got.Label != want.Label || got.CatNo != want.CatNo ||
+		got.Format != want.Format || got.CoverURL != want.CoverURL || strings.Join(got.Styles, ",") != "Psychedelic Rock,Prog Rock" {
+		t.Fatalf("first item %+v", got)
+	}
+	standalone := items[1]
+	if standalone.MasterID != 0 || standalone.Title != "Live At The Corner" || standalone.Artist != "Locals & Guest" ||
+		standalone.Label != "Not On Label" || standalone.Year != 0 {
+		t.Fatalf("standalone %+v", standalone)
+	}
+	if items[2].Year != 2016 {
+		t.Fatalf("second page %+v", items[2])
+	}
+}
+
+func TestCollectionStopsAtTheFirstFailure(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+	if _, err := c.Collection(context.Background(), "maciej_spins"); err == nil {
+		t.Fatal("expected an error")
+	}
+}
