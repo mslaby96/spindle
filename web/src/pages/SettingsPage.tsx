@@ -81,6 +81,10 @@ export function SettingsPage() {
       <button className="secondary" onClick={logout}>
         Sign out
       </button>
+      <p className="muted small about">
+        This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a
+        trademark of Zink Media, LLC.
+      </p>
     </section>
   );
 }

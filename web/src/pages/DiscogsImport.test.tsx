@@ -80,4 +80,14 @@ describe("importing a Discogs collection", () => {
     expect(await screen.findByText(/Discogs is rate limiting/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check my Discogs collection" })).toBeInTheDocument();
   });
+
+  it("carries the notice Discogs asks for", async () => {
+    setup();
+    renderApp("/settings");
+    expect(
+      await screen.findByText(
+        "This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
