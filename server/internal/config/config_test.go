@@ -205,3 +205,10 @@ func TestSummarySaysWhetherCookiesAreSecure(t *testing.T) {
 		t.Errorf("%s", on.Summary())
 	}
 }
+
+func TestSummarySaysWhenBackupsAreOff(t *testing.T) {
+	c, _ := Load(env(map[string]string{"SPINDLE_BACKUP_EVERY": "off"}))
+	if !strings.Contains(c.Summary(), `backups="off"`) {
+		t.Fatalf("%s", c.Summary())
+	}
+}

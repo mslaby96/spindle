@@ -615,3 +615,14 @@ func TestASuccessIsNotCountedButEarlierFailuresStay(t *testing.T) {
 	}
 	l.Done("unknown")
 }
+
+func TestASuccessOnAFreshClientLeavesAllItsFreeAttempts(t *testing.T) {
+	l := NewLimiter()
+	l.Begin("1.2.3.4")
+	l.Done("1.2.3.4")
+	for i := 0; i <= freeAttempts; i++ {
+		if ok, _ := l.Begin("1.2.3.4"); !ok {
+			t.Fatalf("failure %d after one success was blocked", i+1)
+		}
+	}
+}
