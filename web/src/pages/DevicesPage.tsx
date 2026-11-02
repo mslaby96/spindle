@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type Device } from "../api/client";
 import { devicesKey, pairedStandKey } from "../api/events";
+import { QueryState } from "../components/QueryState";
 import { formatCountdown, formatDateTime, formatDbm, formatUptime, signalStrength } from "../format";
 
 type Pairing = { code: string; expires_at: string };
@@ -14,7 +15,8 @@ export function useDevices(refetchInterval?: number) {
 
 export function DevicesPage() {
   const queryClient = useQueryClient();
-  const { data: devices } = useDevices(30_000);
+  const stands = useDevices(30_000);
+  const devices = stands.data;
   const [name, setName] = useState("");
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function DevicesPage() {
           <button onClick={() => setToken(null)}>Done</button>
         </div>
       )}
+      {!devices && <QueryState query={stands} what="your stands" />}
       <ul className="list">
         {devices?.map((d) => (
           <StandRow key={d.id} device={d} onRemove={() => revoke.mutate(d.id)} />

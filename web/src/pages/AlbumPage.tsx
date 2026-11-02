@@ -7,6 +7,7 @@ import { AssignTag } from "../components/AssignTag";
 import { Cover } from "../components/Cover";
 import { tabStyle } from "../colors";
 import { Divider } from "../components/Divider";
+import { QueryState } from "../components/QueryState";
 import { Rating } from "../components/RatingStars";
 import { formatDate, formatDateTime, formatLength, formatPressing } from "../format";
 
@@ -14,14 +15,14 @@ export function AlbumPage() {
   const id = Number(useParams().id);
   const queryClient = useQueryClient();
   const key = ["album", id];
-  const { data, error } = useQuery({ queryKey: key, queryFn: () => api<AlbumDetail>(`/api/albums/${id}`) });
+  const detail = useQuery({ queryKey: key, queryFn: () => api<AlbumDetail>(`/api/albums/${id}`) });
+  const { data } = detail;
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: key });
     queryClient.invalidateQueries({ queryKey: ["library"] });
   };
 
-  if (error) return <p className="error">{error.message}</p>;
-  if (!data) return null;
+  if (!data) return <QueryState query={detail} what="this album" />;
   const { album, stats, releases, history, sleeves } = data;
 
   return (
