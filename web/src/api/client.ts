@@ -55,6 +55,8 @@ export type Device = {
   // The firmware this server has, when the stand runs another one.
   update_available?: string;
   update?: { version: string; state: "requested" | "installing" | "failed" };
+  // Joins the network the stand opens to change its Wi-Fi.
+  setup_wifi_password: string;
 };
 
 export const meKey = ["me"] as const;
