@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -288,4 +289,15 @@ func TestRunKeepsMakingBackups(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+func TestRestoreRefusesAnOversizedArchive(t *testing.T) {
+	old := maxRestoreBytes
+	maxRestoreBytes = 10
+	defer func() { maxRestoreBytes = old }()
+	dir := t.TempDir()
+	_, err := Restore(craftedArchive(t, map[string]string{"spindle.db": strings.Repeat("x", 11)}), dir)
+	if err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("%v", err)
+	}
 }

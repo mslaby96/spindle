@@ -27,6 +27,11 @@ const (
 	covers   = "covers"
 )
 
+// maxRestoreBytes caps what a restore unpacks, so a crafted archive can't fill the disk.
+var maxRestoreBytes int64 = 4 << 30
+
+var errTooLarge = errors.New("the backup is too large to restore: over 4 GiB unpacked")
+
 var ErrServerRunning = errors.New("spindle.db-wal is there, so the server looks like it is still running; stop it first")
 
 type Store struct {
@@ -252,6 +257,7 @@ func extract(archive, dir string) error {
 		return fmt.Errorf("not a Spindle backup: %w", err)
 	}
 	tr := tar.NewReader(gz)
+	left := maxRestoreBytes
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -263,25 +269,29 @@ func extract(archive, dir string) error {
 		if !allowed(h) {
 			return fmt.Errorf("not a Spindle backup: unexpected entry %q", h.Name)
 		}
-		if err := writeEntry(tr, filepath.Join(dir, filepath.FromSlash(h.Name))); err != nil {
+		n, err := writeEntry(io.LimitReader(tr, left+1), filepath.Join(dir, filepath.FromSlash(h.Name)))
+		if err != nil {
 			return err
+		}
+		if left -= n; left < 0 {
+			return errTooLarge
 		}
 	}
 }
 
-func writeEntry(r io.Reader, target string) error {
+func writeEntry(r io.Reader, target string) (int64, error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-		return err
+		return 0, err
 	}
 	out, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = io.Copy(out, r)
+	n, err := io.Copy(out, r)
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
-	return err
+	return n, err
 }
 
 func allowed(h *tar.Header) bool {

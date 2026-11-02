@@ -13,6 +13,9 @@ import (
 	"time"
 )
 
+// maxResponse caps what is read from the API; real answers are far smaller.
+const maxResponse = 4 << 20
+
 const DefaultBaseURL = "https://ws.audioscrobbler.com/2.0/"
 
 var ErrNoKey = errors.New("lastfm: no API key configured")
@@ -59,7 +62,7 @@ func (c *Client) AlbumLength(ctx context.Context, artist, album string) (time.Du
 		return 0, fmt.Errorf("lastfm: unexpected status %d", resp.StatusCode)
 	}
 
-	return albumLength(resp.Body)
+	return albumLength(io.LimitReader(resp.Body, maxResponse))
 }
 
 // albumLength reads an album.getInfo response. Anything short of a full tracklist with every length is "don't know".

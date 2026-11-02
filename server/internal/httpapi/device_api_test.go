@@ -337,3 +337,24 @@ func TestWiFiChangeCancelledBeforeTheStandAsked(t *testing.T) {
 		t.Fatalf("unknown stand: %d", resp.StatusCode)
 	}
 }
+
+func TestReportRefusesStrangeVersions(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	token := e.deviceToken(t, c)
+	for _, body := range []map[string]any{
+		{"uid": nil, "fw": strings.Repeat("9", 33), "seq": 1},
+		{"uid": nil, "fw": "<script>", "seq": 1},
+		{"uid": nil, "fw": "0.7.0", "seq": 1, "update_failed": "0.8.0 bad"},
+	} {
+		resp := do(t, e.client(t), "POST", e.http.URL+"/api/device/v1/report", body, "Authorization", "Bearer "+token)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%v: %d", body, resp.StatusCode)
+		}
+	}
+	ok := do(t, e.client(t), "POST", e.http.URL+"/api/device/v1/report",
+		map[string]any{"uid": nil, "fw": "0.7.0-rc.1+b2", "seq": 1, "update_failed": "unknown"}, "Authorization", "Bearer "+token)
+	if ok.StatusCode != http.StatusOK {
+		t.Fatalf("a normal version: %d", ok.StatusCode)
+	}
+}

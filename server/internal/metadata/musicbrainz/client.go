@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
+
+// maxResponse caps what is read from the API; real answers are far smaller.
+const maxResponse = 4 << 20
 
 const DefaultBaseURL = "https://musicbrainz.org/ws/2"
 
@@ -76,7 +80,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	case resp.StatusCode != http.StatusOK:
 		return fmt.Errorf("musicbrainz: unexpected status %d", resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(out)
 }
 
 type Medium struct {

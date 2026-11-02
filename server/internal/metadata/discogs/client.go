@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// maxResponse caps what is read from the API; real answers are far smaller.
+const maxResponse = 4 << 20
+
 const (
 	DefaultBaseURL = "https://api.discogs.com"
 	maxImageBytes  = 8 << 20
@@ -88,7 +91,7 @@ func (c *Client) fetch(ctx context.Context, u string, out any) (time.Duration, e
 	if err := statusError(resp.StatusCode); err != nil {
 		return retryAfter(resp.Header), err
 	}
-	return 0, json.NewDecoder(resp.Body).Decode(out)
+	return 0, json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(out)
 }
 
 func statusError(code int) error {

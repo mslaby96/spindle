@@ -14,7 +14,11 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-const maxSide = 4000
+const (
+	maxSide = 4000
+	// maxPixels keeps decoding a cover to a few dozen megabytes; real covers are a fraction of this.
+	maxPixels = 12_000_000
+)
 
 var ErrTooLarge = errors.New("cover image is too large")
 
@@ -28,7 +32,7 @@ func (s *Store) Save(albumID int64, data []byte) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("cover: %w", err)
 	}
-	if cfg.Width > maxSide || cfg.Height > maxSide {
+	if cfg.Width > maxSide || cfg.Height > maxSide || cfg.Width*cfg.Height > maxPixels {
 		return "", "", ErrTooLarge
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))

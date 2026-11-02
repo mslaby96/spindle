@@ -329,3 +329,12 @@ func TestPrimaryImage(t *testing.T) {
 		}
 	}
 }
+
+func TestAnOversizedResponseIsRefused(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":1,"title":"` + strings.Repeat("x", maxResponse) + `"}`))
+	})
+	if _, err := c.Master(context.Background(), 1); err == nil {
+		t.Fatal("decoded a response larger than the limit")
+	}
+}

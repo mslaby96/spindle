@@ -111,3 +111,10 @@ func TestFailedRequestKeepsTheKeyOutOfTheError(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+func TestAnOversizedResponseIsRefused(t *testing.T) {
+	c, _ := newClient(t, `{"album":{"tracks":{"track":[{"duration":100}]}},"pad":"`+strings.Repeat("x", maxResponse)+`"}`, 200)
+	if _, err := c.AlbumLength(context.Background(), "a", "b"); err == nil {
+		t.Fatal("decoded a response larger than the limit")
+	}
+}

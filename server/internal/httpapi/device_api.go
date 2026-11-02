@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -78,6 +79,10 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "uid must be 4 to 10 bytes of hex")
 		return
 	}
+	if !versionPattern.MatchString(req.FW) || (req.UpdateFailed != "" && !versionPattern.MatchString(req.UpdateFailed)) {
+		writeError(w, http.StatusBadRequest, "fw and update_failed must be versions like 0.7.0")
+		return
+	}
 	resp, err := s.observe(r.Context(), dev, req, uid)
 	if err != nil {
 		s.internal(w, err)
@@ -85,6 +90,9 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+// versionPattern is what a firmware version may look like; the app shows it, so nothing else is stored.
+var versionPattern = regexp.MustCompile(`^[0-9A-Za-z._+-]{1,32}$`)
 
 func reportedUID(raw *string) (string, bool) {
 	if raw == nil {

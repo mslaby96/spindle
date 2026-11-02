@@ -196,3 +196,12 @@ func TestColorReadsAStoredCover(t *testing.T) {
 		t.Fatal("junk accepted")
 	}
 }
+
+func TestSaveRejectsImagesWithTooManyPixels(t *testing.T) {
+	s := &Store{Dir: t.TempDir()}
+	// both sides are within maxSide, but decoding it would take far more memory than any cover needs
+	big := encode(t, image.NewGray(image.Rect(0, 0, 3500, 3500)))
+	if _, _, err := s.Save(1, big); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("%v", err)
+	}
+}

@@ -255,3 +255,12 @@ func TestEscapesQuotes(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+func TestAnOversizedResponseIsRefused(t *testing.T) {
+	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"releases":[],"pad":"` + strings.Repeat("x", maxResponse) + `"}`))
+	})
+	if _, err := c.AlbumLength(context.Background(), "a", "b", 0); err == nil {
+		t.Fatal("decoded a response larger than the limit")
+	}
+}
