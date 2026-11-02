@@ -19,12 +19,12 @@ You need Docker and a free [Discogs personal access token](https://www.discogs.c
 ```sh
 git clone https://github.com/mslaby96/spindle.git
 cd spindle/deploy
-cp .env.example .env    # put your Discogs token in here
+cp .env.example .env && chmod 600 .env    # put your Discogs token in here
 docker compose up -d
 docker compose logs spindle | grep "setup code"
 ```
 
-Open http://localhost:8080 and create your account with the setup code from the log. The code is only printed while there is no account yet.
+Open http://localhost:8080 and create your account with the setup code from the log. The code is only printed while there is no account yet and works for an hour; restart Spindle for a new one. Create your account before you make Spindle reachable from the internet.
 
 Port 8080 taken? Run `SPINDLE_PORT=8090 docker compose up -d`.
 
@@ -39,7 +39,8 @@ All settings are environment variables, usually set in `deploy/.env`.
 | `SPINDLE_TZ` | system | Time zone for weekly stats, e.g. `Europe/Warsaw` |
 | `SPINDLE_MQTT_URL` | | e.g. `mqtt://192.168.1.5:1883`, enables Home Assistant |
 | `SPINDLE_MQTT_USERNAME`, `SPINDLE_MQTT_PASSWORD` | | Broker credentials |
-| `SPINDLE_SECURE_COOKIES` | `false` | Set to `true` when Spindle sits behind HTTPS |
+| `SPINDLE_SECURE_COOKIES` | `false` | The login cookie is marked secure whenever the browser comes over HTTPS; `true` marks it so always |
+| `SPINDLE_TRUSTED_PROXIES` | | Addresses or networks of your reverse proxy, e.g. `172.16.0.0/12`, so Spindle sees the real client and that it used HTTPS |
 | `SPINDLE_ABSENCE_TOLERANCE` | `90s` | How long a sleeve can be off the stand without ending the listen |
 | `SPINDLE_MIN_DURATION` | `5m` | Shorter listens are ignored |
 | `SPINDLE_LONG_FACTOR` | `1.3` | Listens longer than this × the album length need confirming |
@@ -55,6 +56,12 @@ All settings are environment variables, usually set in `deploy/.env`.
 Forgot your password? `docker compose exec -it spindle /spindle reset-password <username>`
 
 Cover colours look off after an update? `docker compose exec spindle /spindle recolor-covers` picks them again from the stored covers.
+
+### Reaching Spindle from outside
+
+Put Spindle behind a reverse proxy that does HTTPS, such as Caddy, and list the proxy in `SPINDLE_TRUSTED_PROXIES`. Without that, Spindle sees every visitor as the proxy, so one person mistyping a password slows down logins for everyone, and it can't tell that the browser used HTTPS. With it, the login cookie only travels over HTTPS and browsers are told to stick to HTTPS.
+
+The stand talks plain HTTP, so give it the server's address on your home network, not the public one.
 
 ### Backups
 
