@@ -46,6 +46,8 @@ type Release struct {
 	Label     string `json:"label,omitempty"`
 	CatNo     string `json:"catno,omitempty"`
 	Format    string `json:"format,omitempty"`
+	// RemovedAt is set once the pressing left the collection; listens of it keep saying which pressing it was.
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
 }
 
 type Service struct {
@@ -84,6 +86,13 @@ func (s *Service) SaveMaster(ctx context.Context, userID, masterID int64) (Album
 // releases without one become an album of their own.
 func (s *Service) SaveRelease(ctx context.Context, userID, releaseID int64) (Album, Release, error) {
 	if r, err := s.releaseBy(ctx, userID, releaseID); err == nil {
+		if r.RemovedAt != nil {
+			// picking a pressing that was removed means it is back in the collection
+			if err := s.RestorePressing(ctx, userID, r.ID); err != nil {
+				return Album{}, Release{}, err
+			}
+			r.RemovedAt = nil
+		}
 		a, err := s.Album(ctx, userID, r.AlbumID)
 		a, err = s.keep(ctx, a, err)
 		return a, r, err
@@ -219,11 +228,11 @@ func (s *Service) albumBy(ctx context.Context, userID int64, column string, valu
 func (s *Service) releaseBy(ctx context.Context, userID, discogsID int64) (Release, error) {
 	var r Release
 	var country, label, catno, format sql.NullString
-	var year sql.NullInt64
+	var year, removed sql.NullInt64
 	err := s.DB.R.QueryRowContext(ctx,
-		`SELECT id, album_id, discogs_release_id, title, country, year, label, catno, format
+		`SELECT id, album_id, discogs_release_id, title, country, year, label, catno, format, removed_at
 		 FROM releases WHERE user_id = ? AND discogs_release_id = ?`, userID, discogsID).
-		Scan(&r.ID, &r.AlbumID, &r.DiscogsID, &r.Title, &country, &year, &label, &catno, &format)
+		Scan(&r.ID, &r.AlbumID, &r.DiscogsID, &r.Title, &country, &year, &label, &catno, &format, &removed)
 	if err != nil {
 		return Release{}, err
 	}
@@ -231,6 +240,10 @@ func (s *Service) releaseBy(ctx context.Context, userID, discogsID int64) (Relea
 	if year.Valid {
 		y := int(year.Int64)
 		r.Year = &y
+	}
+	if removed.Valid {
+		t := time.Unix(removed.Int64, 0).UTC()
+		r.RemovedAt = &t
 	}
 	return r, nil
 }

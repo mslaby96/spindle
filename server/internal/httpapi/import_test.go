@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mslaby96/spindle/server/internal/catalog"
 )
@@ -50,5 +51,43 @@ func TestDiscogsImportFromPreviewToLibrary(t *testing.T) {
 	json.NewDecoder(do(t, c, "POST", e.http.URL+"/api/import/discogs/preview", nil).Body).Decode(&again)
 	if again.NewAlbums != 0 || again.AlreadyInLibrary != 3 {
 		t.Fatalf("preview after the import: %+v", again)
+	}
+}
+
+func TestAPressingCanBeRemovedAndRestored(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	do(t, c, "POST", e.http.URL+"/api/import/discogs", nil)
+	var rel catalog.Release
+	for range 200 {
+		if r, err := e.srv.Catalog.ReleaseByDiscogsID(t.Context(), 1, 1873014); err == nil {
+			rel = r
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if rel.ID == 0 {
+		t.Fatal("the import never added the pressing")
+	}
+	url := e.http.URL + "/api/pressings/" + jsonNumber(rel.ID)
+	if resp := do(t, c, "POST", url+"/remove", nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove: %d", resp.StatusCode)
+	}
+	var detail struct{ Releases []catalog.Release }
+	json.NewDecoder(do(t, c, "GET", e.http.URL+"/api/albums/"+jsonNumber(rel.AlbumID), nil).Body).Decode(&detail)
+	removed := 0
+	for _, r := range detail.Releases {
+		if r.RemovedAt != nil {
+			removed++
+		}
+	}
+	if removed != 1 {
+		t.Fatalf("album detail %+v", detail.Releases)
+	}
+	if resp := do(t, c, "POST", url+"/restore", nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("restore: %d", resp.StatusCode)
+	}
+	if resp := do(t, c, "POST", e.http.URL+"/api/pressings/99999/remove", nil); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown pressing: %d", resp.StatusCode)
 	}
 }

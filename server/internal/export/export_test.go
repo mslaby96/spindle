@@ -127,3 +127,16 @@ func TestCSVCellsCannotRunAsFormulas(t *testing.T) {
 		t.Errorf("harmless note changed: %q", rows[2][7])
 	}
 }
+
+func TestARemovedPressingIsMarkedInTheExport(t *testing.T) {
+	d := fixture(t)
+	d.W.Exec(`UPDATE releases SET removed_at = 1772000000`)
+	e, err := Build(context.Background(), d, 1, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := e.Albums[0].Pressings[0]
+	if p.RemovedAt == nil || p.RemovedAt.Unix() != 1772000000 {
+		t.Fatalf("%+v", p)
+	}
+}

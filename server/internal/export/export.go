@@ -48,6 +48,8 @@ type Pressing struct {
 	Label            string `json:"label,omitempty"`
 	CatNo            string `json:"catno,omitempty"`
 	Format           string `json:"format,omitempty"`
+	// RemovedAt is set for a pressing taken out of the collection.
+	RemovedAt *time.Time `json:"removed_from_collection_at,omitempty"`
 }
 
 type Listen struct {
@@ -115,19 +117,20 @@ func albums(ctx context.Context, d *db.DB, userID int64) ([]Album, error) {
 
 func details(ctx context.Context, d *db.DB, userID int64, a *Album) error {
 	rows, err := d.R.QueryContext(ctx, `SELECT discogs_release_id, title, coalesce(country, ''), year, coalesce(label, ''),
-		coalesce(catno, ''), coalesce(format, '') FROM releases WHERE user_id = ? AND album_id = ? ORDER BY id`, userID, a.ID)
+		coalesce(catno, ''), coalesce(format, ''), removed_at FROM releases WHERE user_id = ? AND album_id = ? ORDER BY id`,
+		userID, a.ID)
 	if err != nil {
 		return err
 	}
 	a.Pressings = []Pressing{}
 	for rows.Next() {
 		var p Pressing
-		var year sql.NullInt64
-		if err := rows.Scan(&p.DiscogsReleaseID, &p.Title, &p.Country, &year, &p.Label, &p.CatNo, &p.Format); err != nil {
+		var year, removed sql.NullInt64
+		if err := rows.Scan(&p.DiscogsReleaseID, &p.Title, &p.Country, &year, &p.Label, &p.CatNo, &p.Format, &removed); err != nil {
 			rows.Close()
 			return err
 		}
-		p.Year = intPtr(year)
+		p.Year, p.RemovedAt = intPtr(year), timePtr(removed)
 		a.Pressings = append(a.Pressings, p)
 	}
 	rows.Close()

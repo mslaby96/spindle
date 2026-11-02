@@ -105,6 +105,8 @@ func New(d Deps) *Server {
 	s.mux.Handle("POST /api/albums/{id}/remove", s.user(s.removeAlbum))
 	s.mux.Handle("POST /api/albums/{id}/restore", s.user(s.restoreAlbum))
 	s.mux.Handle("DELETE /api/albums/{id}", s.user(s.deleteAlbum))
+	s.mux.Handle("POST /api/pressings/{id}/remove", s.user(s.removePressing))
+	s.mux.Handle("POST /api/pressings/{id}/restore", s.user(s.restorePressing))
 
 	s.mux.Handle("GET /api/catalog/mode", s.user(fetch(s, s.Mode.State)))
 	s.mux.Handle("PUT /api/catalog/mode", s.user(s.setCatalogMode))

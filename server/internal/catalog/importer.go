@@ -58,8 +58,9 @@ type library struct {
 	// masters and standalone hold albums by Discogs master id, and by release id for albums without a master.
 	masters    map[int64]libAlbum
 	standalone map[int64]libAlbum
-	// releases are the Discogs pressings already in the library.
+	// releases are the Discogs pressings already in the library, removed the ones taken out of the collection.
 	releases map[int64]bool
+	removed  map[int64]bool
 }
 
 type libAlbum struct {
@@ -85,6 +86,8 @@ type importPlan struct {
 	pressings []pressing
 	have      int
 	removed   []string
+	// removedPressings counts pressings taken out of the collection in Spindle that Discogs still lists.
+	removedPressings int
 }
 
 // ImportSummary says what an import does, or did.
@@ -94,6 +97,8 @@ type ImportSummary struct {
 	NewPressings     int      `json:"new_pressings"`
 	AlreadyInLibrary int      `json:"already_in_library"`
 	SkippedRemoved   []string `json:"skipped_removed"`
+	// SkippedRemovedPressings are pressings removed in Spindle that stay out.
+	SkippedRemovedPressings int `json:"skipped_removed_pressings"`
 }
 
 // plan decides what a collection adds to the library. It only ever adds: pressings already there are counted, and
@@ -104,6 +109,10 @@ func plan(items []discogs.CollectionItem, lib library) importPlan {
 	grouped := map[int64]int{}
 	skipped := map[int64]bool{}
 	for _, it := range items {
+		if lib.removed[it.ReleaseID] {
+			p.removedPressings++
+			continue
+		}
 		if seen[it.ReleaseID] || lib.releases[it.ReleaseID] {
 			p.have++
 			continue
@@ -147,7 +156,7 @@ func (p *importPlan) group(key int64, it discogs.CollectionItem, grouped map[int
 
 func (p importPlan) summary() ImportSummary {
 	s := ImportSummary{Found: p.found, NewAlbums: len(p.newAlbums), NewPressings: len(p.pressings),
-		AlreadyInLibrary: p.have, SkippedRemoved: p.removed}
+		AlreadyInLibrary: p.have, SkippedRemoved: p.removed, SkippedRemovedPressings: p.removedPressings}
 	for _, a := range p.newAlbums {
 		s.NewPressings += len(a.items)
 	}
@@ -308,21 +317,28 @@ func (s *Service) insertPressing(ctx context.Context, userID, albumID int64, it 
 
 // library reads what an import needs to know about the user's albums.
 func (s *Service) library(ctx context.Context, userID int64) (library, error) {
-	lib := library{masters: map[int64]libAlbum{}, standalone: map[int64]libAlbum{}, releases: map[int64]bool{}}
+	lib := library{masters: map[int64]libAlbum{}, standalone: map[int64]libAlbum{}, releases: map[int64]bool{},
+		removed: map[int64]bool{}}
 	if err := s.libraryAlbums(ctx, userID, lib); err != nil {
 		return library{}, err
 	}
-	ids, err := s.DB.R.QueryContext(ctx, `SELECT discogs_release_id FROM releases WHERE user_id = ?`, userID)
+	ids, err := s.DB.R.QueryContext(ctx,
+		`SELECT discogs_release_id, removed_at IS NOT NULL FROM releases WHERE user_id = ?`, userID)
 	if err != nil {
 		return library{}, err
 	}
 	defer ids.Close()
 	for ids.Next() {
 		var id int64
-		if err := ids.Scan(&id); err != nil {
+		var removed bool
+		if err := ids.Scan(&id, &removed); err != nil {
 			return library{}, err
 		}
-		lib.releases[id] = true
+		if removed {
+			lib.removed[id] = true
+		} else {
+			lib.releases[id] = true
+		}
 	}
 	return lib, ids.Err()
 }

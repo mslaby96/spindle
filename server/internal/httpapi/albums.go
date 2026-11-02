@@ -77,3 +77,11 @@ func albumErr(err error) error {
 	}
 	return err
 }
+
+func (s *Server) removePressing(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Catalog.RemovePressing)
+}
+
+func (s *Server) restorePressing(w http.ResponseWriter, r *http.Request) {
+	s.act(w, r, s.Catalog.RestorePressing)
+}
