@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,5 +106,24 @@ func TestDiaryCSV(t *testing.T) {
 				t.Fatalf("row %d: %q, want %q", i, rows[i], want[i])
 			}
 		}
+	}
+}
+
+func TestCSVCellsCannotRunAsFormulas(t *testing.T) {
+	e := Export{
+		Albums: []Album{{ID: 1, Artist: "@SUM(1+1)", Title: `=HYPERLINK("http://evil","x")`}},
+		Listens: []Listen{{AlbumID: 1, Stand: "+cmd", Note: "-2+3", StartedAt: time.Now()},
+			{AlbumID: 1, Stand: "\tTab", Note: "fine - really", StartedAt: time.Now()}},
+	}
+	var buf bytes.Buffer
+	WriteCSV(&buf, e, time.UTC)
+	rows, _ := csv.NewReader(&buf).ReadAll()
+	for _, cell := range []string{rows[1][1], rows[1][2], rows[1][7], rows[1][9], rows[2][9]} {
+		if !strings.HasPrefix(cell, "'") {
+			t.Errorf("%q could run as a formula", cell)
+		}
+	}
+	if rows[2][7] != "fine - really" {
+		t.Errorf("harmless note changed: %q", rows[2][7])
 	}
 }

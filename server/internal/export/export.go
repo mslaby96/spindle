@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
@@ -172,12 +173,22 @@ func WriteCSV(w io.Writer, e Export, loc *time.Location) error {
 	for _, l := range e.Listens {
 		a := byID[l.AlbumID]
 		cw.Write([]string{
-			l.StartedAt.In(loc).Format("2006-01-02 15:04"), a.Artist, a.Title, optional(a.Year),
-			strconv.FormatInt((l.ListenedSec+30)/60, 10), strconv.Itoa(l.Plays), stars(l.Rating), l.Note, yesNo(l.Confirmed), l.Stand,
+			l.StartedAt.In(loc).Format("2006-01-02 15:04"), text(a.Artist), text(a.Title), optional(a.Year),
+			strconv.FormatInt((l.ListenedSec+30)/60, 10), strconv.Itoa(l.Plays), stars(l.Rating), text(l.Note),
+			yesNo(l.Confirmed), text(l.Stand),
 		})
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// text keeps a cell that a spreadsheet would read as a formula as plain text. Titles come from Discogs, which anyone
+// can edit, so this guards against more than the user's own notes.
+func text(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
 }
 
 func texts(ctx context.Context, d *db.DB, query string, args ...any) ([]string, error) {

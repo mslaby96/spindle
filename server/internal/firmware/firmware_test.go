@@ -33,7 +33,7 @@ func TestLoadTakesTheStandsCode(t *testing.T) {
 	for _, f := range b.Files {
 		paths = append(paths, f.Path)
 	}
-	want := []string{"app/runner.py", "app/version.py", "lib/mfrc522.py", "main.py", "ota.py"}
+	want := []string{"app/runner.py", "app/version.py", "lib/mfrc522.py"}
 	if len(paths) != len(want) {
 		t.Fatalf("files %v", paths)
 	}
@@ -42,18 +42,16 @@ func TestLoadTakesTheStandsCode(t *testing.T) {
 			t.Fatalf("files %v", paths)
 		}
 	}
-	sum := sha256.Sum256([]byte("import ota\n"))
-	main := b.Files[3]
-	if main.Size != 11 || main.SHA256 != hex.EncodeToString(sum[:]) {
-		t.Fatalf("main.py %+v", main)
-	}
-	if data, ok := b.File("main.py"); !ok || string(data) != "import ota\n" {
-		t.Fatalf("file %q %v", data, ok)
+	sum := sha256.Sum256([]byte("class MFRC522: pass\n"))
+	driver := b.Files[2]
+	if driver.Size != 20 || driver.SHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("lib/mfrc522.py %+v", driver)
 	}
 	if data, ok := b.File("app/runner.py"); !ok || string(data) != "def run(): pass\n" {
 		t.Fatalf("first file %q %v", data, ok)
 	}
-	for _, p := range []string{"oled.py", "tests/main.py", "config.json", "tests/test_ota.py", "nope.py", ""} {
+	// main.py and ota.py roll a bad update back, so they are never handed out
+	for _, p := range []string{"main.py", "ota.py", "oled.py", "tests/main.py", "config.json", "tests/test_ota.py", "nope.py", ""} {
 		if _, ok := b.File(p); ok {
 			t.Errorf("%q is served", p)
 		}
@@ -68,7 +66,7 @@ func TestNothingBundled(t *testing.T) {
 }
 
 func TestBundleWithoutAVersionIsAnError(t *testing.T) {
-	if _, err := Load(fstest.MapFS{"main.py": {Data: []byte("x")}}); err == nil {
+	if _, err := Load(fstest.MapFS{"app/runner.py": {Data: []byte("x")}}); err == nil {
 		t.Fatal("loaded firmware without a version")
 	}
 }

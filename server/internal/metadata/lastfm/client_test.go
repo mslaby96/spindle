@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,5 +100,14 @@ func TestNewClientTimesOut(t *testing.T) {
 func TestNoKey(t *testing.T) {
 	if _, err := New("", "x").AlbumLength(context.Background(), "a", "b"); !errors.Is(err, ErrNoKey) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestFailedRequestKeepsTheKeyOutOfTheError(t *testing.T) {
+	c := New("key123", "Spindle/test")
+	c.BaseURL = "http://127.0.0.1:1/"
+	_, err := c.AlbumLength(context.Background(), "a", "b")
+	if err == nil || strings.Contains(err.Error(), "key123") {
+		t.Fatalf("error %v", err)
 	}
 }

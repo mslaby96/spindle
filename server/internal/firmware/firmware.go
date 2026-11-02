@@ -41,7 +41,8 @@ func Embedded() (*Bundle, error) {
 	return Load(sub)
 }
 
-// Load takes the files a stand runs: main.py and ota.py, and the Python files in app/ and lib/.
+// Load takes the Python files in app/ and lib/. main.py and ota.py, which roll a bad update back, stay as they were
+// installed over USB.
 func Load(fsys fs.FS) (*Bundle, error) {
 	b := &Bundle{Files: []File{}}
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
@@ -80,7 +81,7 @@ func standFile(p string) bool {
 	if path.Ext(name) != ".py" {
 		return false
 	}
-	return dir == "app/" || dir == "lib/" || (dir == "" && (name == "main.py" || name == "ota.py"))
+	return dir == "app/" || dir == "lib/"
 }
 
 func (b *Bundle) File(p string) ([]byte, bool) {

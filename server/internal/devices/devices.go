@@ -3,6 +3,7 @@ package devices
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -18,7 +19,8 @@ const (
 	// OfflineAfter is three missed heartbeats of an empty stand.
 	OfflineAfter = 90 * time.Second
 	columns      = `id, user_id, name, coalesce(fw_version, ''), last_seen_at, created_at, rssi, reader_resets, uptime_sec,
-		wifi_change_requested_at IS NOT NULL, coalesce(update_target, ''), coalesce(update_state, '')`
+		wifi_change_requested_at IS NOT NULL, coalesce(update_target, ''), coalesce(update_state, ''),
+		token_hash`
 )
 
 var (
@@ -44,6 +46,8 @@ type Device struct {
 	// UpdateAvailable is the firmware this server has when the stand runs another one.
 	UpdateAvailable string  `json:"update_available,omitempty"`
 	Update          *Update `json:"update,omitempty"`
+	// SetupWiFiPassword joins the network a paired stand opens to change its Wi-Fi.
+	SetupWiFiPassword string `json:"setup_wifi_password"`
 }
 
 // Report is what a stand says about itself each time it reports.
@@ -193,9 +197,9 @@ func (s *Store) scan(r scanner) (Device, error) {
 	var d Device
 	var lastSeen, rssi, resets, uptime sql.NullInt64
 	var created int64
-	var target, state string
+	var target, state, tokenHash string
 	if err := r.Scan(&d.ID, &d.UserID, &d.Name, &d.FWVersion, &lastSeen, &created, &rssi, &resets, &uptime,
-		&d.WiFiChangePending, &target, &state); err != nil {
+		&d.WiFiChangePending, &target, &state, &tokenHash); err != nil {
 		return Device{}, err
 	}
 	d.CreatedAt = time.Unix(created, 0).UTC()
@@ -211,7 +215,21 @@ func (s *Store) scan(r scanner) (Device, error) {
 	if state != "" {
 		d.Update = &Update{Version: target, State: state}
 	}
+	d.SetupWiFiPassword = setupPassword(tokenHash)
 	return d, nil
+}
+
+const setupPasswordChars = "abcdefghjkmnpqrstuvwxyz23456789"
+
+// setupPassword is worked out from the stored token hash; the stand gets the same from its token, see the firmware's
+// portal.setup_password.
+func setupPassword(tokenHash string) string {
+	digest := sha256.Sum256([]byte("spindle-setup-wifi:" + tokenHash))
+	out := make([]byte, 12)
+	for i := range out {
+		out[i] = setupPasswordChars[int(digest[i])%len(setupPasswordChars)]
+	}
+	return string(out)
 }
 
 func intPtr(v sql.NullInt64) *int {

@@ -47,6 +47,10 @@ func (c *Client) AlbumLength(ctx context.Context, artist, album string) (time.Du
 	}
 	req.Header.Set("User-Agent", c.UserAgent)
 	resp, err := c.HTTP.Do(req)
+	if uerr, ok := errors.AsType[*url.Error](err); ok {
+		// the URL carries the API key, so only the cause goes into the error and on to the logs
+		err = fmt.Errorf("lastfm: %s request failed: %w", uerr.Op, uerr.Err)
+	}
 	if err != nil {
 		return 0, err
 	}

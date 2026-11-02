@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/db"
+	"github.com/mslaby96/spindle/server/internal/secrets"
 )
 
 func newStore(t *testing.T) (*Store, int64, int64) {
@@ -204,5 +205,18 @@ func TestWiFiChangeCanBeCancelled(t *testing.T) {
 	}
 	if taken, _ := s.TakeWiFiChange(ctx, dev.ID); taken {
 		t.Fatal("cancelled change handed over")
+	}
+}
+
+func TestTheSetupNetworkPasswordMatchesTheStands(t *testing.T) {
+	// the stand works out the same password from its token; the firmware's tests use the same example
+	if got := setupPassword(secrets.Hash("spd_example")); got != "d97zws8agpqh" {
+		t.Fatalf("%q", got)
+	}
+	s, userA, _ := newStore(t)
+	_, token, _ := s.Create(context.Background(), userA, "Stand")
+	list, _ := s.List(context.Background(), userA)
+	if list[0].SetupWiFiPassword != setupPassword(secrets.Hash(token)) {
+		t.Fatalf("%+v", list[0])
 	}
 }

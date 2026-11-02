@@ -368,6 +368,7 @@ func TestPublisherShowsEachStand(t *testing.T) {
 	mu.Unlock()
 	eventually(t, "diagnostics refreshed", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return !strings.Contains(s, "rssi") })
 
+	h.ha.cm.Publish(ctx, &paho.Publish{Topic: StandInstallTopic(1, 7), Payload: []byte("reboot"), QoS: 1})
 	h.ha.cm.Publish(ctx, &paho.Publish{Topic: StandInstallTopic(1, 7), Payload: []byte("install"), QoS: 1})
 	select {
 	case got := <-h.installs:
@@ -377,11 +378,35 @@ func TestPublisherShowsEachStand(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Install from Home Assistant never arrived")
 	}
+	select {
+	case got := <-h.installs:
+		t.Fatalf("an install from an odd message: %v", got)
+	case <-time.After(200 * time.Millisecond):
+	}
 	eventually(t, "update state", func() bool { s, _ := h.ha.last(StandUpdateTopic(1, 7)); return strings.Contains(s, `"0.4.0"`) })
 
 	h.bus.Publish(events.Event{Type: devices.EventRemoved, UserID: 1, Data: devices.Removed{ID: 7}})
 	eventually(t, "stand removed", func() bool { s, ok := h.ha.last(discovery); return ok && s == "" })
 	if s, _ := h.ha.last(StandTopic(1, 7)); s != "" {
 		t.Fatalf("removed stand keeps its state %q", s)
+	}
+}
+
+func TestOnlyAFreshInstallPressCounts(t *testing.T) {
+	press := &paho.Publish{Topic: StandInstallTopic(1, 7), Payload: []byte("install")}
+	if user, stand, ok := installRequest(press); !ok || user != 1 || stand != 7 {
+		t.Fatalf("press: %d %d %v", user, stand, ok)
+	}
+	// the broker replays a retained message on every reconnect, flagged as retained
+	replayed := *press
+	replayed.Retain = true
+	odd := *press
+	odd.Payload = []byte("reboot")
+	other := *press
+	other.Topic = "homeassistant/status"
+	for _, p := range []*paho.Publish{&replayed, &odd, &other} {
+		if _, _, ok := installRequest(p); ok {
+			t.Errorf("%+v counted as an install", p)
+		}
 	}
 }

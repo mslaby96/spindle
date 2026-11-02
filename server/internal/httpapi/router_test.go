@@ -63,7 +63,7 @@ func newEnv(t *testing.T) *testEnv {
 	engine := &sessions.Engine{DB: d, Tags: catalogSvc, Bus: bus, Cfg: cfg.Sessions, Now: time.Now, Durations: resolver}
 	router := &presence.Router{Mode: mode, Catalog: mode, Sessions: engine, Tolerance: cfg.Sessions.AbsenceTolerance}
 	bundle, err := firmware.Load(fstest.MapFS{
-		"main.py":        {Data: []byte("import ota\n")},
+		"app/runner.py":  {Data: []byte("def run(): pass\n")},
 		"app/version.py": {Data: []byte(`VERSION = "` + testFirmware + `"` + "\n")},
 	})
 	if err != nil {

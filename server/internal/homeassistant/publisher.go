@@ -156,7 +156,7 @@ func (p *Publisher) clientConfig(ctx context.Context, u *url.URL, resync func())
 					if pr.Packet.Topic == haStatus && string(pr.Packet.Payload) == "online" {
 						resync()
 					}
-					if user, stand, ok := installTarget(pr.Packet.Topic); ok {
+					if user, stand, ok := installRequest(pr.Packet); ok {
 						go p.install(ctx, user, stand)
 					}
 					return true, nil
@@ -164,6 +164,15 @@ func (p *Publisher) clientConfig(ctx context.Context, u *url.URL, resync func())
 			},
 		},
 	}
+}
+
+// installRequest tells a press of Install in Home Assistant from other messages. A retained one would come back on every
+// reconnect, so it doesn't count.
+func installRequest(p *paho.Publish) (userID, standID int64, ok bool) {
+	if p.Retain || string(p.Payload) != "install" {
+		return 0, 0, false
+	}
+	return installTarget(p.Topic)
 }
 
 func (p *Publisher) install(ctx context.Context, userID, standID int64) {
