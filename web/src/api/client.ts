@@ -78,6 +78,24 @@ export type Album = {
   removed_at?: string;
 };
 
+export type ImportSummary = {
+  found: number;
+  new_albums: number;
+  new_pressings: number;
+  already_in_library: number;
+  // Titles of albums removed from the collection in Spindle, which the import leaves out.
+  skipped_removed: string[];
+};
+
+// Done and total count new albums, which is what takes time.
+export type ImportProgress = {
+  state: "idle" | "running" | "done" | "failed";
+  done: number;
+  total: number;
+  summary?: ImportSummary;
+  error?: string;
+};
+
 export type Release = {
   id: number;
   album_id: number;

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { meKey, type Album, type CatalogMode, type Device, type Tag } from "./client";
+import { meKey, type Album, type CatalogMode, type Device, type ImportProgress, type Tag } from "./client";
 
 export type NowPlaying = {
   device_id: number;
@@ -21,6 +21,8 @@ export const unassignedKey = ["tags", "unassigned"] as const;
 export const inboxKey = ["inbox"] as const;
 export const devicesKey = ["devices"] as const;
 export const pairedStandKey = ["paired-stand"] as const;
+export const discogsImportKey = ["import", "discogs"] as const;
+export const untaggedKey = ["library", "untagged"] as const;
 
 const RETRY_MS = 3000;
 
@@ -43,9 +45,14 @@ export function applyDeviceRemoved(queryClient: QueryClient, removed: { id: numb
   queryClient.setQueryData<Device[]>(devicesKey, (prev) => prev?.filter((d) => d.id !== removed.id));
 }
 
+export function applyImportProgress(queryClient: QueryClient, progress: ImportProgress) {
+  queryClient.setQueryData(discogsImportKey, progress);
+  if (progress.state === "done") queryClient.invalidateQueries({ queryKey: ["library"] });
+}
+
 // Events missed while the stream was down are not replayed, so everything they feed is fetched again.
 function catchUp(queryClient: QueryClient) {
-  for (const queryKey of [nowPlayingKey, inboxKey, recentListensKey, catalogModeKey, unassignedKey, devicesKey]) {
+  for (const queryKey of [nowPlayingKey, inboxKey, recentListensKey, catalogModeKey, unassignedKey, devicesKey, discogsImportKey]) {
     queryClient.invalidateQueries({ queryKey });
   }
 }
@@ -94,6 +101,7 @@ export function useLiveEvents() {
       });
       on<Device>("device_status", (device) => applyDeviceStatus(queryClient, device));
       on<{ id: number }>("device_removed", (removed) => applyDeviceRemoved(queryClient, removed));
+      on<ImportProgress>("discogs_import", (progress) => applyImportProgress(queryClient, progress));
       source.onopen = () => {
         if (opened) catchUp(queryClient);
         opened = true;
