@@ -250,6 +250,7 @@ func TestRejectsNonJSON(t *testing.T) {
 	e := newEnv(t)
 	req, _ := http.NewRequest("POST", e.http.URL+"/api/login", strings.NewReader("username=a&password=b"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(intentHeader, "1")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

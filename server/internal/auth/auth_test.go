@@ -158,15 +158,102 @@ func TestRememberedSessionSlides(t *testing.T) {
 	ctx := context.Background()
 	id := setupUser(t, s)
 	token, _, _ := s.CreateSession(ctx, id, true)
-	for i := 0; i < 3; i++ {
-		c.advance(300 * 24 * time.Hour)
+	for day := 20; day <= 160; day += 20 {
+		c.advance(20 * 24 * time.Hour)
 		if _, err := s.Lookup(ctx, token); err != nil {
-			t.Fatalf("use %d after 300 days: %v", i, err)
+			t.Fatalf("used every 20 days, day %d: %v", day, err)
 		}
 	}
+	other, _, _ := s.CreateSession(ctx, id, true)
 	c.advance(RememberIdle + time.Second)
+	if _, err := s.Lookup(ctx, other); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("after a month unused: %v", err)
+	}
+}
+
+func TestEvenAUsedSessionEndsAtItsMaximumAge(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	id := setupUser(t, s)
+	token, sess, _ := s.CreateSession(ctx, id, true)
+	if !sess.ExpiresAt.Equal(c.t.Add(RememberIdle)) {
+		t.Fatalf("a remembered session first expires at %v", sess.ExpiresAt)
+	}
+	for used := time.Duration(0); used < MaxSessionAge-24*time.Hour; used += 24 * time.Hour {
+		c.advance(24 * time.Hour)
+		got, err := s.Lookup(ctx, token)
+		if err != nil {
+			t.Fatalf("used daily, day %d: %v", used/(24*time.Hour), err)
+		}
+		if got.ExpiresAt.After(c.t.Add(MaxSessionAge)) {
+			t.Fatalf("slid past its maximum age: %v", got.ExpiresAt)
+		}
+	}
+	c.advance(48 * time.Hour)
 	if _, err := s.Lookup(ctx, token); !errors.Is(err, ErrNoSession) {
-		t.Fatalf("after a year idle: %v", err)
+		t.Fatalf("after its maximum age: %v", err)
+	}
+}
+
+func TestPurgeDropsExpiredSessions(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	id := setupUser(t, s)
+	s.CreateSession(ctx, id, false)
+	c.advance(SessionIdle + time.Second)
+	live, _, _ := s.CreateSession(ctx, id, false)
+	if err := s.Purge(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	s.db.R.QueryRow(`SELECT count(*) FROM login_sessions`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("%d sessions left", n)
+	}
+	if _, err := s.Lookup(ctx, live); err != nil {
+		t.Fatalf("live session purged: %v", err)
+	}
+}
+
+func TestSetupCodeExpires(t *testing.T) {
+	s, c := newService(t)
+	ctx := context.Background()
+	code, _ := s.PrepareSetup(ctx)
+	c.advance(SetupCodeLife)
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); !errors.Is(err, ErrSetupCodeExpired) {
+		t.Fatalf("old code: %v", err)
+	}
+	code, _ = s.PrepareSetup(ctx)
+	if _, err := s.CompleteSetup(ctx, code, "maciej", "correct horse"); err != nil {
+		t.Fatalf("a new code: %v", err)
+	}
+}
+
+func TestBusyHashingGivesUpInsteadOfQueueingForEver(t *testing.T) {
+	old := hashWait
+	hashWait = 20 * time.Millisecond
+	defer func() { hashWait = old }()
+	for i := 0; i < cap(hashing); i++ {
+		hashing <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(hashing); i++ {
+			<-hashing
+		}
+	}()
+	if _, err := VerifyPassword(dummyHash, "x"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("verify while busy: %v", err)
+	}
+	if _, err := HashPassword("correct horse"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("hash while busy: %v", err)
+	}
+}
+
+func TestResetPasswordTrimsTheUsername(t *testing.T) {
+	s, _ := newService(t)
+	setupUser(t, s)
+	if err := s.ResetPassword(context.Background(), " maciej ", "new password"); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -316,8 +403,8 @@ func TestSetupRequiresUsernameAndStrongPassword(t *testing.T) {
 	s, _ := newService(t)
 	ctx := context.Background()
 	code, _ := s.PrepareSetup(ctx)
-	if _, err := s.CompleteSetup(ctx, code, "  ", "correct horse"); err == nil {
-		t.Error("blank username accepted")
+	if _, err := s.CompleteSetup(ctx, code, "  ", "correct horse"); !errors.Is(err, ErrNoUsername) {
+		t.Errorf("blank username: %v", err)
 	}
 	if _, err := s.CompleteSetup(ctx, code, "maciej", "short"); !errors.Is(err, ErrWeakPassword) {
 		t.Errorf("weak password: %v", err)

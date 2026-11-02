@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/mslaby96/spindle/server/internal/auth"
 	"github.com/mslaby96/spindle/server/internal/backup"
 	"github.com/mslaby96/spindle/server/internal/catalog"
@@ -133,6 +135,11 @@ func serve(cfg *config.Config, log *slog.Logger) error {
 	deviceStore.Firmware, deviceStore.Notify = bundle.Version, announce
 	watcher := &devices.Watcher{Store: deviceStore, Publish: announce}
 	go watcher.Run(ctx, 5*time.Second)
+	go every(ctx, time.Hour, func() {
+		if err := authSvc.Purge(ctx); err != nil {
+			log.Warn("purge expired sessions", "err", err)
+		}
+	})
 	if cfg.Backup.Every > 0 {
 		backups := &backup.Store{DB: d, DataDir: cfg.DataDir, Dir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Now: localNow(cfg)}
 		go backups.Run(ctx, cfg.Backup.Every, func(path string, err error) {
@@ -288,15 +295,42 @@ func resetPassword(cfg *config.Config, args []string) error {
 	defer d.Close()
 
 	fmt.Fprint(os.Stderr, "New password: ")
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil && line == "" {
+	password, err := readPassword()
+	if err != nil {
 		return err
 	}
-	if err := auth.New(d).ResetPassword(ctx, args[0], strings.TrimRight(line, "\r\n")); err != nil {
+	if err := auth.New(d).ResetPassword(ctx, args[0], password); err != nil {
 		return err
 	}
 	fmt.Fprintln(os.Stderr, "Password changed. All sessions were logged out.")
 	return nil
+}
+
+func every(ctx context.Context, interval time.Duration, do func()) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			do()
+		}
+	}
+}
+
+// readPassword doesn't echo what is typed at a terminal, and still takes a password piped in, e.g. through docker exec.
+func readPassword() (string, error) {
+	if fd := int(os.Stdin.Fd()); term.IsTerminal(fd) {
+		b, err := term.ReadPassword(fd)
+		fmt.Fprintln(os.Stderr)
+		return string(b), err
+	}
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 // localNow names backups in the owner's time zone, which a container doesn't know about by itself.

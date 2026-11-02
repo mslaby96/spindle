@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	SessionIdle       = 7 * 24 * time.Hour
-	RememberIdle      = 365 * 24 * time.Hour
+	SessionIdle  = 7 * 24 * time.Hour
+	RememberIdle = 30 * 24 * time.Hour
+	// MaxSessionAge ends a session this long after logging in, however often it is used.
+	MaxSessionAge = 180 * 24 * time.Hour
+	// SetupCodeLife is how long the code printed at the first start works; a restart prints a new one.
+	SetupCodeLife     = time.Hour
 	touchGranularity  = time.Minute
 	setupCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 )
@@ -28,6 +32,8 @@ var (
 	ErrSetupDone          = errors.New("setup already completed")
 	ErrInvalidSetupCode   = errors.New("invalid setup code")
 	ErrNoSession          = errors.New("no valid session")
+	ErrSetupCodeExpired   = errors.New("the setup code has run out, restart Spindle to get a new one")
+	ErrNoUsername         = errors.New("username is required")
 )
 
 type Service struct {
@@ -36,6 +42,7 @@ type Service struct {
 
 	mu        sync.Mutex
 	setupHash []byte
+	setupAt   time.Time
 }
 
 func New(d *db.DB) *Service {
@@ -64,7 +71,7 @@ func (s *Service) PrepareSetup(ctx context.Context) (string, error) {
 	}
 	h := sha256.Sum256(code)
 	s.mu.Lock()
-	s.setupHash = h[:]
+	s.setupHash, s.setupAt = h[:], s.Now()
 	s.mu.Unlock()
 	return string(code), nil
 }
@@ -79,9 +86,12 @@ func (s *Service) CompleteSetup(ctx context.Context, code, username, password st
 	if subtle.ConstantTimeCompare(h[:], s.setupHash) != 1 {
 		return 0, ErrInvalidSetupCode
 	}
+	if s.Now().Sub(s.setupAt) >= SetupCodeLife {
+		return 0, ErrSetupCodeExpired
+	}
 	username = strings.TrimSpace(username)
 	if username == "" {
-		return 0, errors.New("username is required")
+		return 0, ErrNoUsername
 	}
 	hash, err := HashPassword(password)
 	if err != nil {
@@ -152,7 +162,7 @@ func (s *Service) CreateSession(ctx context.Context, userID int64, persistent bo
 		return "", Session{}, err
 	}
 	now := s.Now()
-	exp := now.Add(idleFor(persistent))
+	exp := expiry(now, now, persistent)
 	_, err = s.db.W.ExecContext(ctx,
 		`INSERT INTO login_sessions (id, user_id, persistent, created_at, last_used_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		id, userID, persistent, now.Unix(), now.Unix(), exp.Unix())
@@ -166,10 +176,10 @@ func (s *Service) CreateSession(ctx context.Context, userID int64, persistent bo
 func (s *Service) Lookup(ctx context.Context, token string) (Session, error) {
 	id := secrets.Hash(token)
 	var sess Session
-	var lastUsed, expires int64
+	var created, lastUsed, expires int64
 	err := s.db.R.QueryRowContext(ctx,
-		`SELECT user_id, persistent, last_used_at, expires_at FROM login_sessions WHERE id = ?`, id).
-		Scan(&sess.UserID, &sess.Persistent, &lastUsed, &expires)
+		`SELECT user_id, persistent, created_at, last_used_at, expires_at FROM login_sessions WHERE id = ?`, id).
+		Scan(&sess.UserID, &sess.Persistent, &created, &lastUsed, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrNoSession
 	}
@@ -183,7 +193,7 @@ func (s *Service) Lookup(ctx context.Context, token string) (Session, error) {
 	}
 	sess.ExpiresAt = time.Unix(expires, 0)
 	if now.Sub(time.Unix(lastUsed, 0)) >= touchGranularity {
-		sess.ExpiresAt = now.Add(idleFor(sess.Persistent))
+		sess.ExpiresAt = expiry(time.Unix(created, 0), now, sess.Persistent)
 		_, err = s.db.W.ExecContext(ctx, `UPDATE login_sessions SET last_used_at = ?, expires_at = ? WHERE id = ?`,
 			now.Unix(), sess.ExpiresAt.Unix(), id)
 		if err != nil {
@@ -191,6 +201,21 @@ func (s *Service) Lookup(ctx context.Context, token string) (Session, error) {
 		}
 	}
 	return sess, nil
+}
+
+// expiry slides a session forward by its idle limit, but never past its maximum age.
+func expiry(created, now time.Time, persistent bool) time.Time {
+	exp := now.Add(idleFor(persistent))
+	if limit := created.Add(MaxSessionAge); exp.After(limit) {
+		return limit
+	}
+	return exp
+}
+
+// Purge deletes sessions that have expired; others are only removed when someone presents them.
+func (s *Service) Purge(ctx context.Context) error {
+	_, err := s.db.W.ExecContext(ctx, `DELETE FROM login_sessions WHERE expires_at <= ?`, s.Now().Unix())
+	return err
 }
 
 func (s *Service) DeleteSession(ctx context.Context, token string) error {
@@ -215,7 +240,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, current, nex
 
 func (s *Service) ResetPassword(ctx context.Context, username, next string) error {
 	var id int64
-	err := s.db.R.QueryRowContext(ctx, `SELECT id FROM users WHERE username = ?`, username).Scan(&id)
+	err := s.db.R.QueryRowContext(ctx, `SELECT id FROM users WHERE username = ?`, strings.TrimSpace(username)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.New("no such user")
 	}

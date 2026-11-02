@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -19,15 +20,28 @@ const (
 	MinPassword  = 8
 )
 
-var ErrWeakPassword = fmt.Errorf("password must be at least %d characters", MinPassword)
+var (
+	ErrWeakPassword = fmt.Errorf("password must be at least %d characters", MinPassword)
+	ErrBusy         = errors.New("too many logins at once, try again in a moment")
+)
 
-// hashing limits how many Argon2 computations (19 MiB each) run at once.
-var hashing = make(chan struct{}, 4)
+// hashing limits how many Argon2 computations (19 MiB each) run at once. A request waits at most hashWait for a turn,
+// so a flood of logins gets turned away instead of piling up behind each other.
+var (
+	hashing  = make(chan struct{}, 4)
+	hashWait = 5 * time.Second
+)
 
-func argonKey(pw, salt []byte, t, m uint32, p uint8, n uint32) []byte {
-	hashing <- struct{}{}
+func argonKey(pw, salt []byte, t, m uint32, p uint8, n uint32) ([]byte, error) {
+	wait := time.NewTimer(hashWait)
+	defer wait.Stop()
+	select {
+	case hashing <- struct{}{}:
+	case <-wait.C:
+		return nil, ErrBusy
+	}
 	defer func() { <-hashing }()
-	return argon2.IDKey(pw, salt, t, m, p, n)
+	return argon2.IDKey(pw, salt, t, m, p, n), nil
 }
 
 func HashPassword(pw string) (string, error) {
@@ -38,7 +52,10 @@ func HashPassword(pw string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argonKey([]byte(pw), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key, err := argonKey([]byte(pw), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	if err != nil {
+		return "", err
+	}
 	enc := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads, enc.EncodeToString(salt), enc.EncodeToString(key)), nil
@@ -64,6 +81,9 @@ func VerifyPassword(encoded, pw string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	got := argonKey([]byte(pw), salt, t, m, p, uint32(len(want)))
+	got, err := argonKey([]byte(pw), salt, t, m, p, uint32(len(want)))
+	if err != nil {
+		return false, err
+	}
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

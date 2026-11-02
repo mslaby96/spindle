@@ -75,7 +75,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if !decode(w, r, &req) || !s.allow(w, r, s.limiter, s.client(r).key) {
+	if !s.intended(w, r) || !decode(w, r, &req) || !s.allow(w, r, s.limiter, s.client(r).key) {
 		return
 	}
 	id, err := s.Auth.CompleteSetup(r.Context(), req.Code, req.Username, req.Password)
@@ -96,7 +96,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Remember bool   `json:"remember"`
 	}
-	if !decode(w, r, &req) {
+	if !s.intended(w, r) || !decode(w, r, &req) {
 		return
 	}
 	account := "user:" + strings.ToLower(strings.TrimSpace(req.Username))
@@ -112,15 +112,31 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	// not buy more guesses at another
 	s.accounts.Reset(account)
 	s.limiter.Done(s.client(r).key)
+	// the session this browser had before is replaced, not left valid next to the new one
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if err := s.Auth.DeleteSession(r.Context(), c.Value); err != nil {
+			s.internal(w, err)
+			return
+		}
+	}
 	if !s.startSession(w, r, id, req.Remember) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+// intended refuses a request without the intent header. Login and setup need it too, so another site can't log a
+// visitor into an account of its choosing.
+func (s *Server) intended(w http.ResponseWriter, r *http.Request) bool {
 	if !hasIntent(r) {
 		writeError(w, http.StatusForbidden, "missing "+intentHeader+" header")
+		return false
+	}
+	return true
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if !s.intended(w, r) {
 		return
 	}
 	if c, err := r.Cookie(sessionCookie); err == nil {

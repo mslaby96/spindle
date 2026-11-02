@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -84,5 +85,46 @@ func TestCookiesAreSecureOverHTTPS(t *testing.T) {
 	plain := do(t, e.client(t), "POST", e.http.URL+"/api/login", map[string]string{"username": "maciej", "password": "correct horse"})
 	if c := plain.Header.Get("Set-Cookie"); strings.Contains(c, "Secure") || plain.Header.Get("Strict-Transport-Security") != "" {
 		t.Fatalf("plain http on the LAN: cookie %s, HSTS %q", c, plain.Header.Get("Strict-Transport-Security"))
+	}
+}
+
+func TestLoginAndSetupNeedTheIntentHeader(t *testing.T) {
+	e := newEnv(t)
+	for _, path := range []string{"/api/setup", "/api/login"} {
+		req, _ := http.NewRequest("POST", e.http.URL+path, strings.NewReader(`{"username":"maciej","password":"correct horse","code":"`+e.code+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := e.client(t).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s without the header: %d", path, resp.StatusCode)
+		}
+	}
+	if needed, _ := e.srv.Auth.SetupNeeded(t.Context()); !needed {
+		t.Fatal("setup went through without the header")
+	}
+}
+
+func TestLoggingInAgainEndsTheOldSession(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	u, _ := url.Parse(e.http.URL)
+	old := c.Jar.Cookies(u)[0].Value
+	do(t, c, "POST", e.http.URL+"/api/login", map[string]string{"username": "maciej", "password": "correct horse"})
+	if _, err := e.srv.Auth.Lookup(t.Context(), old); err == nil {
+		t.Fatal("the session from before the new login still works")
+	}
+	if resp := do(t, c, "GET", e.http.URL+"/api/me", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("new session: %d", resp.StatusCode)
+	}
+}
+
+func TestBlankUsernameIsABadRequest(t *testing.T) {
+	e := newEnv(t)
+	resp := do(t, e.client(t), "POST", e.http.URL+"/api/setup", map[string]string{"code": e.code, "username": " ", "password": "correct horse"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("%d", resp.StatusCode)
 	}
 }
