@@ -78,7 +78,3 @@ export function formatUptime(seconds: number) {
   }
   return `${Math.floor(seconds / 86_400)} days`;
 }
-
-export function formatDbm(rssi: number) {
-  return `${rssi < 0 ? "−" : ""}${Math.abs(rssi)} dBm`;
-}

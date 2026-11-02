@@ -40,8 +40,8 @@ describe("stand status", () => {
     setup([stand({ rssi: -58, reader_resets: 2, uptime_sec: 3 * 3600 + 12 * 60 })]);
     const r = within(await row("Living room"));
     expect(r.getByText("Online")).toBeInTheDocument();
-    expect(r.getByText(/Wi-Fi strong/)).toBeInTheDocument();
-    expect(r.getByText("−58 dBm")).toBeInTheDocument();
+    expect(r.getByRole("img", { name: "Wi-Fi signal: strong (3 of 3)" })).toBeInTheDocument();
+    expect(r.queryByText(/dBm/)).not.toBeInTheDocument();
     expect(r.getByText("2 reader resets")).toBeInTheDocument();
     expect(r.getByText("up 3 h 12 min")).toBeInTheDocument();
     expect(r.queryByText(/last known/)).not.toBeInTheDocument();
@@ -52,7 +52,7 @@ describe("stand status", () => {
     const r = within(await row("Living room"));
     expect(r.getByText("Offline")).toBeInTheDocument();
     expect(r.getByText(/^Offline since Thu 29 Oct, \d\d:18/)).toBeInTheDocument();
-    expect(r.getByText(/Wi-Fi weak/)).toBeInTheDocument();
+    expect(r.getByRole("img", { name: "Wi-Fi signal: weak (1 of 3)" })).toBeInTheDocument();
     expect(r.getByText("1 reader reset")).toBeInTheDocument();
     expect(r.getByText(/last known/)).toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("stand status", () => {
     setup([stand({ reader_resets: 0 })]);
     const r = within(await row("Living room"));
     expect(r.getByText("0 reader resets")).toBeInTheDocument();
-    expect(r.queryByText(/Wi-Fi (strong|ok|weak)/)).not.toBeInTheDocument();
+    expect(r.queryByRole("img", { name: /Wi-Fi signal/ })).not.toBeInTheDocument();
     expect(r.queryByText(/^up /)).not.toBeInTheDocument();
   });
 
@@ -264,5 +264,21 @@ describe("the stand's setup network password", () => {
     await userEvent.click(r.getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith("d97zws8agpqh");
     expect(await r.findByText("Copied")).toBeInTheDocument();
+  });
+});
+
+describe("the Wi-Fi signal icon", () => {
+  it.each([
+    [-50, "strong (3 of 3)", 3],
+    [-67, "strong (3 of 3)", 3],
+    [-68, "ok (2 of 3)", 2],
+    [-80, "ok (2 of 3)", 2],
+    [-81, "weak (1 of 3)", 1],
+  ])("shows %i dBm as %s", async (rssi, label, lit) => {
+    setup([stand({ rssi })]);
+    const r = within(await row("Living room"));
+    const icon = r.getByRole("img", { name: `Wi-Fi signal: ${label}` });
+    expect(icon.querySelectorAll(".on")).toHaveLength(lit);
+    expect(icon.querySelector("title")?.textContent).toBe(`Wi-Fi signal: ${label}`);
   });
 });
