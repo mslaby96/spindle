@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -160,7 +160,7 @@ describe("wrong album on a sleeve", () => {
   });
 });
 
-describe("rating any listen", () => {
+describe("editing a listen", () => {
   const listen = (over: Record<string, unknown> = {}) => ({
     session_id: 11,
     album_id: 4,
@@ -174,60 +174,93 @@ describe("rating any listen", () => {
     ...over,
   });
 
-  function setup(history: unknown[], review: (body: unknown) => [number, unknown?] = () => [204]) {
+  function setup(history: unknown[], save: (body: unknown) => [number, unknown?] = () => [204]) {
     return mockApi({
       "GET /api/setup": () => [200, { needed: false }],
       "GET /api/me": () => [200, me],
       "GET /api/albums/4": () => [200, detail({ duration_status: "resolved" }, { history })],
-      "PUT /api/sessions/11/review": review,
+      "PUT /api/sessions/11": save,
     });
   }
+  const saved = (calls: { key: string; body: unknown }[]) => calls.find((c) => c.key === "PUT /api/sessions/11")?.body;
 
-  it("rates a listen that left the inbox without a rating", async () => {
+  it("has one Edit for rating, note and times", async () => {
+    setup([listen({ rating: 9, note: "rainy evening" })]);
+    renderApp("/albums/4");
+    await screen.findByRole("button", { name: "Edit" });
+    expect(screen.queryByRole("button", { name: /Edit time|Change rating|^Rate$/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("radio", { name: "4.5 stars" })).toBeChecked();
+    expect(screen.getByLabelText("Note")).toHaveValue("rainy evening");
+    expect(screen.getByLabelText("Started")).toBeInTheDocument();
+    expect(screen.getByLabelText("Minutes listened")).toHaveValue(46);
+  });
+
+  it("saves rating, note and length in one go", async () => {
     const calls = setup([listen()]);
     renderApp("/albums/4");
-    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await userEvent.click(screen.getByRole("radio", { name: "4 stars" }));
     await userEvent.type(screen.getByLabelText("Note"), "side B again");
+    await userEvent.clear(screen.getByLabelText("Minutes listened"));
+    await userEvent.type(screen.getByLabelText("Minutes listened"), "50");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(calls.find((c) => c.key === "PUT /api/sessions/11/review")?.body).toEqual({ rating: 8, note: "side B again" }),
+      expect(saved(calls)).toEqual({
+        started_at: "2026-03-14T20:00:00.000Z",
+        ended_at: "2026-03-14T20:50:00.000Z",
+        review: { rating: 8, note: "side B again" },
+      }),
     );
     await waitFor(() => expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument());
   });
 
-  it("starts from what the listen has and keeps the rating when only the note changes", async () => {
+  it("sends back what wasn't touched, and clears a rating that was taken away", async () => {
     const calls = setup([listen({ rating: 9, note: "rainy evening" })]);
     renderApp("/albums/4");
-    await userEvent.click(await screen.findByRole("button", { name: "Change rating or note" }));
-    expect(screen.getByRole("radio", { name: "4.5 stars" })).toBeChecked();
-    const note = screen.getByLabelText("Note");
-    expect(note).toHaveValue("rainy evening");
-    await userEvent.clear(note);
-    await userEvent.type(note, "rainy night");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("radio", { name: "4.5 stars" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(calls.find((c) => c.key === "PUT /api/sessions/11/review")?.body).toEqual({ rating: 9, note: "rainy night" }),
-    );
+    await waitFor(() => expect(saved(calls)).toEqual({ review: { rating: null, note: "rainy evening" } }));
+  });
+
+  it("leaves the times alone when only the note changes", async () => {
+    const calls = setup([listen({ listened_sec: 2435, rating: 6 })]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.type(screen.getByLabelText("Note"), "forgot it on the stand");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saved(calls)).toEqual({ review: { rating: 6, note: "forgot it on the stand" } }));
+  });
+
+  it("sends both times once either of them changes", async () => {
+    const calls = setup([listen()]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const started = screen.getByLabelText("Started") as HTMLInputElement;
+    fireEvent.change(started, { target: { value: "2026-03-14T18:30" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saved(calls)).toHaveProperty("started_at"));
+    const body = saved(calls) as { started_at: string; ended_at: string };
+    expect(new Date(body.ended_at).getTime() - new Date(body.started_at).getTime()).toBe(46 * 60_000);
+  });
+
+  it("keeps the form open with the reason when the server refuses", async () => {
+    setup([listen()], () => [400, { error: "the listen must end after it starts and not in the future" }]);
+    renderApp("/albums/4");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("the listen must end after it starts and not in the future")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup")).toBeInTheDocument();
   });
 
   it("can be put away without saving", async () => {
     const calls = setup([listen()]);
     renderApp("/albums/4");
-    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
-    expect(calls.some((c) => c.key === "PUT /api/sessions/11/review")).toBe(false);
-  });
-
-  it("shows why the rating couldn't be saved", async () => {
-    setup([listen()], () => [500, { error: "database is locked" }]);
-    renderApp("/albums/4");
-    await userEvent.click(await screen.findByRole("button", { name: "Rate" }));
-    await userEvent.click(screen.getByRole("radio", { name: "3 stars" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("database is locked")).toBeInTheDocument();
-    expect(screen.getByRole("radiogroup")).toBeInTheDocument();
+    expect(saved(calls)).toBeUndefined();
   });
 });
 

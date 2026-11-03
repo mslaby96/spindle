@@ -216,23 +216,6 @@ function toLocalInput(iso: string) {
 
 function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
-  const [start, setStart] = useState(toLocalInput(entry.started_at));
-  const [minutes, setMinutes] = useState(String(Math.round(entry.listened_sec / 60)));
-  const edit = useMutation({
-    mutationFn: () => {
-      const started = new Date(start);
-      const ended = new Date(started.getTime() + Number(minutes) * 60_000);
-      return api(`/api/sessions/${entry.session_id}`, {
-        method: "PUT",
-        body: { started_at: started.toISOString(), ended_at: ended.toISOString() },
-      });
-    },
-    onSuccess: () => {
-      setEditing(false);
-      onChanged();
-    },
-  });
   const remove = useMutation({
     mutationFn: () => api(`/api/sessions/${entry.session_id}`, { method: "DELETE" }),
     onSuccess: onChanged,
@@ -240,77 +223,76 @@ function HistoryRow({ entry, onChanged }: { entry: DiaryEntry; onChanged: () => 
 
   return (
     <li className="card">
-      {editing ? (
-        <form
-          className="row inline"
-          onSubmit={(e) => {
-            e.preventDefault();
-            edit.mutate();
-          }}
-        >
-          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Started" />
-          <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-label="Minutes listened" />
-          <span className="muted">min</span>
-          <button disabled={edit.isPending}>Save</button>
-          <button type="button" className="link" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-        </form>
-      ) : (
-        <div className="row">
-          <div>
-            <p>
-              {formatDateTime(entry.started_at)} · {formatLength(entry.listened_sec)}
-              {entry.plays > 1 && ` · played ${entry.plays}×`}
-              {!entry.duration_confirmed && (
-                <>
-                  {" "}
-                  <span className="sticker">Unconfirmed</span>
-                </>
-              )}
-              {entry.rating !== undefined && <> · <Rating value={entry.rating} /></>}
-            </p>
-            {entry.note && <p className="muted">{entry.note}</p>}
-          </div>
-          <div className="actions">
-            {!reviewing && (
-              <button className="link" onClick={() => setReviewing(true)}>
-                {entry.rating !== undefined || entry.note ? "Change rating or note" : "Rate"}
-              </button>
+      <div className="row">
+        <div>
+          <p>
+            {formatDateTime(entry.started_at)} · {formatLength(entry.listened_sec)}
+            {entry.plays > 1 && ` · played ${entry.plays}×`}
+            {!entry.duration_confirmed && (
+              <>
+                {" "}
+                <span className="sticker">Unconfirmed</span>
+              </>
             )}
+            {entry.rating !== undefined && <> · <Rating value={entry.rating} /></>}
+          </p>
+          {entry.note && <p className="muted">{entry.note}</p>}
+        </div>
+        {!editing && (
+          <div className="actions">
             <button className="link" onClick={() => setEditing(true)}>
-              Edit time
+              Edit
             </button>
             <button className="link" onClick={() => confirm("Delete this listen?") && remove.mutate()}>
               Delete
             </button>
           </div>
-        </div>
-      )}
-      {reviewing && (
-        <ListenReview
+        )}
+      </div>
+      {editing && (
+        <ListenEditor
           entry={entry}
           onDone={(saved) => {
-            setReviewing(false);
+            setEditing(false);
             if (saved) onChanged();
           }}
         />
       )}
-      {(edit.error ?? remove.error) && <p className="error">{(edit.error ?? remove.error)!.message}</p>}
+      {remove.error && <p className="error">{remove.error.message}</p>}
     </li>
   );
 }
 
-// The inbox asks right after a listen; this is for any listen later, including ones skipped there.
-function ListenReview({ entry, onDone }: { entry: DiaryEntry; onDone: (saved: boolean) => void }) {
+// One form for everything about a listen; the server checks it all before changing anything.
+function ListenEditor({ entry, onDone }: { entry: DiaryEntry; onDone: (saved: boolean) => void }) {
   const [rating, setRating] = useState<number | undefined>(entry.rating);
   const [note, setNote] = useState(entry.note ?? "");
+  const [initialStart] = useState(() => toLocalInput(entry.started_at));
+  const [initialMinutes] = useState(() => String(Math.round(entry.listened_sec / 60)));
+  const [start, setStart] = useState(initialStart);
+  const [minutes, setMinutes] = useState(initialMinutes);
   const save = useMutation({
-    mutationFn: () => api(`/api/sessions/${entry.session_id}/review`, { method: "PUT", body: { rating, note } }),
+    mutationFn: () => {
+      // The shown length is rounded, and a listen's span can be longer than what counted, so times
+      // only go back when the user changed them.
+      const body: Record<string, unknown> = { review: { rating: rating ?? null, note } };
+      if (start !== initialStart || minutes !== initialMinutes) {
+        const started = new Date(start);
+        body.started_at = started.toISOString();
+        body.ended_at = new Date(started.getTime() + Number(minutes) * 60_000).toISOString();
+      }
+      return api(`/api/sessions/${entry.session_id}`, { method: "PUT", body });
+    },
     onSuccess: () => onDone(true),
   });
   return (
-    <div className="review">
+    <form
+      className="review"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
       <RatingStars value={rating} onChange={setRating} />
       <textarea
         placeholder="A note about this listen (optional)"
@@ -319,16 +301,24 @@ function ListenReview({ entry, onDone }: { entry: DiaryEntry; onDone: (saved: bo
         rows={2}
         aria-label="Note"
       />
+      <div className="when">
+        <label>
+          Started
+          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
+        </label>
+        <label>
+          Minutes listened
+          <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        </label>
+      </div>
       <div className="choices">
-        <button onClick={() => save.mutate()} disabled={save.isPending}>
-          Save
-        </button>
-        <button className="secondary" onClick={() => onDone(false)}>
+        <button disabled={save.isPending}>Save</button>
+        <button type="button" className="secondary" onClick={() => onDone(false)}>
           Cancel
         </button>
       </div>
       {save.error && <p className="error">{save.error.message}</p>}
-    </div>
+    </form>
   );
 }
 
