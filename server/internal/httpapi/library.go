@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -84,35 +85,58 @@ func (s *Server) albumPage(ctx context.Context, user, id int64) (p albumPage, er
 	return p, err
 }
 
+// listenEdit corrects a listen. Times and review are each optional, so changing a note leaves the times exactly as
+// they were.
+type listenEdit struct {
+	StartedAt *time.Time `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at"`
+	Review    *struct {
+		Rating *int   `json:"rating"`
+		Note   string `json:"note"`
+	} `json:"review"`
+}
+
+var errBadEdit = errors.New("send started_at with ended_at, a review, or both")
+
+func (e listenEdit) times() bool { return e.StartedAt != nil || e.EndedAt != nil }
+
+// check refuses an edit before anything is written, so a refused edit changes nothing.
+func (e listenEdit) check() error {
+	if (e.times() && (e.StartedAt == nil || e.EndedAt == nil)) || (!e.times() && e.Review == nil) {
+		return errBadEdit
+	}
+	if e.Review != nil {
+		return inbox.CheckRating(e.Review.Rating)
+	}
+	return nil
+}
+
 func (s *Server) editSession(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
-	var req struct {
-		StartedAt time.Time `json:"started_at"`
-		EndedAt   time.Time `json:"ended_at"`
-		// Review, when sent, sets the rating and note in the same edit.
-		Review *struct {
-			Rating *int   `json:"rating"`
-			Note   string `json:"note"`
-		} `json:"review"`
-	}
+	var req listenEdit
 	if !decode(w, r, &req) {
 		return
 	}
-	// both halves are checked before either is written, so a refused edit changes nothing
-	if req.Review != nil {
-		if err := inbox.CheckRating(req.Review.Rating); err != nil {
-			s.fail(w, err)
-			return
+	if err := req.check(); err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.noContent(w, s.applyEdit(r.Context(), userID(r), id, req))
+}
+
+func (s *Server) applyEdit(ctx context.Context, user, id int64, e listenEdit) error {
+	if e.times() {
+		if err := s.Sessions.Edit(ctx, user, id, *e.StartedAt, *e.EndedAt); err != nil {
+			return err
 		}
 	}
-	err := s.Sessions.Edit(r.Context(), userID(r), id, req.StartedAt, req.EndedAt)
-	if err == nil && req.Review != nil {
-		err = s.Inbox.Review(r.Context(), userID(r), id, req.Review.Rating, req.Review.Note)
+	if e.Review == nil {
+		return nil
 	}
-	s.noContent(w, err)
+	return s.Inbox.Review(ctx, user, id, e.Review.Rating, e.Review.Note)
 }
 
 func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request) {

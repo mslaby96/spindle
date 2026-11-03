@@ -31,6 +31,7 @@ var knownErrors = []struct {
 	{auth.ErrNoUsername, http.StatusBadRequest, ""},
 	{auth.ErrBusy, http.StatusServiceUnavailable, ""},
 	{errAlbumNotFound, http.StatusNotFound, ""},
+	{errBadEdit, http.StatusBadRequest, ""},
 	{devices.ErrNotFound, http.StatusNotFound, ""},
 	{devices.ErrNoName, http.StatusBadRequest, ""},
 	{devices.ErrInvalidCode, http.StatusForbidden, ""},

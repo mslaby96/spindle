@@ -149,3 +149,26 @@ func TestOneEditChangesTimesRatingAndNote(t *testing.T) {
 		t.Fatalf("times only: %d %v", listened, *rating)
 	}
 }
+
+func TestEditingOnlyTheReviewLeavesTheTimesAlone(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	id := e.listen(t, "counted", 40)
+	e.srv.DB.W.Exec(`UPDATE sessions SET listened_sec = 2435, ended_at = 3435 WHERE id = ?`, id)
+	url := e.http.URL + "/api/sessions/" + strconv.FormatInt(id, 10)
+	if resp := do(t, c, "PUT", url, map[string]any{"review": map[string]any{"rating": 6, "note": "warm"}}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("review only: %d", resp.StatusCode)
+	}
+	var listened, ended int
+	var rating int
+	e.srv.DB.R.QueryRow(`SELECT listened_sec, ended_at, rating FROM sessions WHERE id = ?`, id).Scan(&listened, &ended, &rating)
+	if listened != 2435 || ended != 3435 || rating != 6 {
+		t.Fatalf("listened %d, ended %d, rating %d", listened, ended, rating)
+	}
+	if resp := do(t, c, "PUT", url, map[string]any{"started_at": time.Unix(1000, 0)}); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a start without an end: %d", resp.StatusCode)
+	}
+	if resp := do(t, c, "PUT", url, map[string]any{}); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("nothing to change: %d", resp.StatusCode)
+	}
+}
