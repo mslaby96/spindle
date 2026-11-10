@@ -109,29 +109,34 @@ func plan(items []discogs.CollectionItem, lib library) importPlan {
 	grouped := map[int64]int{}
 	skipped := map[int64]bool{}
 	for _, it := range items {
-		if lib.removed[it.ReleaseID] {
-			p.removedPressings++
-			continue
-		}
-		if seen[it.ReleaseID] || lib.releases[it.ReleaseID] {
-			p.have++
-			continue
-		}
-		seen[it.ReleaseID] = true
-		key, existing, ok := lib.albumFor(it)
 		switch {
-		case ok && existing.removed:
-			if !skipped[existing.id] {
-				skipped[existing.id] = true
-				p.removed = append(p.removed, existing.title)
-			}
-		case ok:
-			p.pressings = append(p.pressings, pressing{albumID: existing.id, item: it})
+		case lib.removed[it.ReleaseID]:
+			p.removedPressings++
+		case seen[it.ReleaseID] || lib.releases[it.ReleaseID]:
+			p.have++
 		default:
-			p.group(key, it, grouped)
+			seen[it.ReleaseID] = true
+			p.place(it, lib, grouped, skipped)
 		}
 	}
 	return p
+}
+
+// place puts a pressing new to the library with the album it belongs to: one already there, one removed from the
+// collection, whose title is noted once, or a new album shared with its other pressings.
+func (p *importPlan) place(it discogs.CollectionItem, lib library, grouped map[int64]int, skipped map[int64]bool) {
+	key, existing, ok := lib.albumFor(it)
+	switch {
+	case ok && existing.removed:
+		if !skipped[existing.id] {
+			skipped[existing.id] = true
+			p.removed = append(p.removed, existing.title)
+		}
+	case ok:
+		p.pressings = append(p.pressings, pressing{albumID: existing.id, item: it})
+	default:
+		p.group(key, it, grouped)
+	}
 }
 
 // albumFor finds the album a pressing belongs to, and the key that groups new pressings of the same album: the
