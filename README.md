@@ -36,7 +36,7 @@ Port 8080 taken? Run `SPINDLE_PORT=8090 docker compose up -d`.
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/mslaby96/spindle/main/deploy/proxmox/spindle-lxc.sh)"
 ```
 
-It asks for your Discogs token, prints the address and the setup code, and needs no Docker. Add `--restore spindle-backup-….tar.gz` to start from a backup of another Spindle, and see `--help` for the container's id, size, storage and a static address. Give the container a fixed address, since a stand keeps the server's address it was set up with.
+It opens with a menu: default settings, advanced settings (container id, size, storage, bridge, a fixed address, starting at boot and a backup to start from), or updating an existing Spindle. It asks for your Discogs token without showing it, prints the address and the setup code at the end, and needs no Docker. `--yes` skips the menus and takes the defaults, for scripts. Add `--restore spindle-backup-….tar.gz` to start from a backup of another Spindle, and see `--help` for the container's id, size, storage and a static address. Give the container a fixed address, since a stand keeps the server's address it was set up with.
 
 To update later, run it again with `--update <container id>`: it backs up first, then puts the newest Spindle in. Settings live in `/etc/spindle/spindle.env` inside the container. For backups on another disk, mount it at `/var/lib/spindle/backups` (for example `pct set <id> -mp0 /mnt/nas/spindle,mp=/var/lib/spindle/backups`).
 

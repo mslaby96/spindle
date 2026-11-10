@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Spindle in a Proxmox LXC container. Run it in the Proxmox host's shell:
 #
-#   spindle-lxc.sh                         create a container and start Spindle in it
-#   spindle-lxc.sh --restore FILE          the same, starting from a Spindle backup
+#   spindle-lxc.sh                         menus: default or advanced settings, or update
+#   spindle-lxc.sh --yes                   create a container with the defaults, no questions
+#   spindle-lxc.sh --restore FILE          start from a Spindle backup
 #   spindle-lxc.sh --update ID             put the newest Spindle into container ID
 #
 # Options: --id N  --hostname NAME  --storage NAME  --template-storage NAME  --bridge NAME
@@ -16,13 +17,13 @@ bin=/opt/spindle/spindle
 env_file=/etc/spindle/spindle.env
 
 id="" hostname=spindle storage=local-lvm template_storage=local bridge=vmbr0 ip=dhcp gw=""
-disk=4 memory=512 cores=1 binary="" url="" restore="" update="" yes=""
+disk=4 memory=512 cores=1 onboot=1 binary="" url="" restore="" update="" yes="" token="" asked=""
 
 say() { printf '\033[1m%s\033[0m\n' "$*" >&2; }
 die() { printf 'spindle-lxc: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
 	exit "${1:-0}"
 }
 
@@ -66,6 +67,83 @@ fetch() {
 }
 
 in_ct() { pct exec "$id" -- "$@"; }
+
+# wt shows a whiptail dialog and prints what was chosen or typed; a cancel ends the script.
+wt() { whiptail --backtitle "Spindle" "$@" 3>&1 1>&2 2>&3 || die "cancelled, nothing was created"; }
+
+ask() { wt --title "$1" --inputbox "$2" 10 70 "$3"; }
+
+menus() {
+	local choice
+	choice="$(wt --title "Spindle" --menu "How do you want to set it up?" 14 64 3 \
+		default "Default settings" advanced "Advanced settings" update "Update an existing Spindle")"
+	case "$choice" in
+	update) update="$(pick_container)"; return ;;
+	advanced) advanced ;;
+	esac
+	id="${id:-$(pvesh get /cluster/nextid)}"
+	token="$(whiptail --backtitle "Spindle" --title "Discogs" --passwordbox \
+		"Your Discogs personal access token, from discogs.com/settings/developers. Leave it empty to add it later." \
+		10 70 3>&1 1>&2 2>&3 || true)"
+	asked=1
+	whiptail --backtitle "Spindle" --title "Ready" --yesno "$(summary)" 18 70 || die "stopped, nothing was created"
+	yes=1
+}
+
+advanced() {
+	id="$(ask "Container" "Container id" "$(pvesh get /cluster/nextid)")"
+	hostname="$(ask "Container" "Hostname" "$hostname")"
+	disk="$(ask "Container" "Disk size in GB" "$disk")"
+	cores="$(ask "Container" "CPU cores" "$cores")"
+	memory="$(ask "Container" "Memory in MB" "$memory")"
+	storage="$(pick "Storage" "Where the container's disk goes" "$(storages)")"
+	bridge="$(pick "Network" "The bridge the container joins" "$(bridges)")"
+	if [ "$(wt --title "Network" --menu "Address" 12 64 2 dhcp "From DHCP" static "A fixed address")" = static ]; then
+		ip="$(ask "Network" "Address with prefix length, e.g. 192.168.1.50/24" "")"
+		gw="$(ask "Network" "Gateway" "")"
+	fi
+	if whiptail --backtitle "Spindle" --title "Container" --yesno "Start Spindle when the server starts?" 8 60; then
+		onboot=1
+	else
+		onboot=0
+	fi
+	restore="$(whiptail --backtitle "Spindle" --title "Backup" --inputbox \
+		"Path to a Spindle backup to start from, on this host. Leave it empty to start fresh." 10 70 "$restore" 3>&1 1>&2 2>&3 || true)"
+}
+
+# pick offers the lines of a list, "name description", as a menu.
+pick() {
+	local title="$1" text="$2" list="$3" items=()
+	while read -r name rest; do
+		[ -n "$name" ] && items+=("$name" "${rest:- }")
+	done <<< "$list"
+	[ ${#items[@]} -gt 0 ] || die "found no choices for $title"
+	wt --title "$title" --menu "$text" 16 64 6 "${items[@]}"
+}
+
+storages() { pvesm status -content rootdir | awk 'NR > 1 {print $1, $2}'; }
+
+bridges() { ip -o link show type bridge | awk -F': ' '{print $2, "bridge"}'; }
+
+pick_container() {
+	local list
+	list="$(pvesh get /cluster/resources --type vm --output-format json | python3 -c '
+import json, sys
+for r in json.load(sys.stdin):
+    if r.get("type") == "lxc" and "spindle" in (r.get("tags") or "").split(";"):
+        print(r["vmid"], r.get("name", ""))
+')"
+	[ -n "$list" ] || die "no container tagged spindle was found"
+	pick "Update" "Which Spindle should get the newest version?" "$list"
+}
+
+summary() {
+	printf 'Container %s, %s\n%s core(s), %s MB memory, %s GB on %s\nNetwork: %s, %s%s\nStart at boot: %s\n' \
+		"$id" "$hostname" "$cores" "$memory" "$disk" "$storage" "$bridge" "$ip" "${gw:+, gateway $gw}" \
+		"$([ "$onboot" = 1 ] && echo yes || echo no)"
+	[ -n "$restore" ] && printf 'Starting from the backup %s\n' "$restore"
+	[ -n "$token" ] && printf 'Discogs token: set\n' || printf 'Discogs token: add it later\n'
+}
 
 # as_spindle runs a Spindle command with its configuration, the way the service does.
 as_spindle() { in_ct runuser -u spindle -- sh -c "set -a; . $env_file; exec $bin $*"; }
@@ -151,17 +229,17 @@ confirm() {
 }
 
 create() {
-	local file tmpl token work net
+	local file tmpl work net
 	id="${id:-$(pvesh get /cluster/nextid)}"
 	confirm
 	file="$(fetch)"
-	token="$(ask_token)"
+	[ -n "$asked" ] || token="$(ask_token)"
 	tmpl="$(template)"
 	net="name=eth0,bridge=$bridge,ip=$ip${gw:+,gw=$gw}"
 
 	say "Creating container $id"
 	pct create "$id" "$tmpl" --hostname "$hostname" --cores "$cores" --memory "$memory" --swap 256 \
-		--rootfs "$storage:$disk" --net0 "$net" --unprivileged 1 --features nesting=1 --onboot 1 \
+		--rootfs "$storage:$disk" --net0 "$net" --unprivileged 1 --features nesting=1 --onboot "$onboot" \
 		--timezone host --tags spindle > /dev/null
 	pct start "$id"
 	wait_for "the container" in_ct true
@@ -217,6 +295,7 @@ upgrade() {
 main() {
 	parse "$@"
 	command -v pveversion > /dev/null || die "run this in the shell of a Proxmox host"
+	if [ -z "$yes" ] && [ -z "$update" ]; then menus; fi
 	if [ -n "$update" ]; then upgrade; else create; fi
 }
 
