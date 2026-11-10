@@ -11,3 +11,4 @@
 __pycache__/
 *.tsbuildinfo
 /deploy/backups/
+/release/
