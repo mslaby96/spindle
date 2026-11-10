@@ -145,7 +145,7 @@ rm -rf "$work"
 
 # the menus: advanced settings, every question answered
 setup
-printf 'advanced\n130\nvinyl\n8\n2\n1024\nfast\nvmbr1\nstatic\n192.168.1.70/24\n192.168.1.1\nNO\n\nYES\n' > "$work/answers"
+printf 'advanced\n130\nvinyl\n8\n2\n1024\nfast\nvmbr1\nstatic\n192.168.1.70/24\n192.168.1.1\nNO\n\n\nYES\n' > "$work/answers"
 run --binary "$work/spindle-linux-amd64" < /dev/null
 expect "lists the storages to choose from" "--menu .*local-lvm.*fast" "$work/dialogs.log"
 expect "lists the bridges to choose from" "--menu .*vmbr0.*vmbr1" "$work/dialogs.log"
