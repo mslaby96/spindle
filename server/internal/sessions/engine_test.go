@@ -955,3 +955,24 @@ func TestAWrongLengthAnswerThatMakesNoSense(t *testing.T) {
 		t.Errorf("answered twice: %v", err)
 	}
 }
+
+func TestAWrongLengthAnswerTellsTheInboxAndTakesUpToSixHours(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(18))
+	v.play(t, tagA, 44*time.Minute)
+	v.remove(t)
+	for len(v.events) > 0 {
+		<-v.events
+	}
+	if err := v.e.CorrectLength(context.Background(), 1, v.only(t).ID, 6*time.Hour); err != nil {
+		t.Fatalf("six hours: %v", err)
+	}
+	select {
+	case ev := <-v.events:
+		if ev.Type != EventInboxChanged {
+			t.Fatalf("event %+v", ev)
+		}
+	default:
+		t.Fatal("the inbox was not told")
+	}
+}
