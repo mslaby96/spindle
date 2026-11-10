@@ -13,6 +13,8 @@ type Track struct {
 	Type     string `json:"type_"`
 	Title    string `json:"title"`
 	Duration string `json:"duration"`
+	// SubTracks are the parts of an "index" track, such as the movements of a suite.
+	SubTracks []Track `json:"sub_tracks,omitempty"`
 }
 
 type Image struct {

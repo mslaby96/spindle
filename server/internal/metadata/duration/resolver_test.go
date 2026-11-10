@@ -427,3 +427,14 @@ func TestEnqueueLaterGivesUpWhenStopped(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 }
+
+func TestAFailedRecheckKeepsTheLengthItHad(t *testing.T) {
+	e := newEnv(t)
+	e.r.DB.W.Exec(`UPDATE albums SET duration_status = 'pending', duration_sec = 2627, duration_source = 'discogs_release'`)
+	e.dc.err = errors.New("Discogs is rate limiting requests")
+	e.mb.err = errors.New("connection refused")
+	e.resolve(t)
+	if status, secs, source := e.album(t); status != StatusFailed || secs == nil || *secs != 2627 || source == nil {
+		t.Fatalf("after a failed re-check: %s %v %v", status, secs, source)
+	}
+}
