@@ -6,7 +6,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$root/release"
 bundle="$root/server/internal/firmware/bundle"
 
-cleanup() { rm -rf "$bundle/app" "$bundle/lib"; }
+cleanup() { rm -rf "${bundle:?}/app" "${bundle:?}/lib"; }
 trap cleanup EXIT
 
 (cd "$root/web" && npm ci --silent && npm run build --silent)

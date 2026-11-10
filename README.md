@@ -28,6 +28,22 @@ Open http://localhost:8080 and create your account with the setup code from the 
 
 Port 8080 taken? Run `SPINDLE_PORT=8090 docker compose up -d`.
 
+### On Proxmox
+
+`deploy/proxmox/spindle-lxc.sh` makes Spindle its own LXC container: an unprivileged Debian 12 container with Spindle running as a service, started at boot. Run it in the Proxmox host's shell:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/mslaby96/spindle/main/deploy/proxmox/spindle-lxc.sh)"
+```
+
+It asks for your Discogs token, prints the address and the setup code, and needs no Docker. Add `--restore spindle-backup-….tar.gz` to start from a backup of another Spindle, and see `--help` for the container's id, size, storage and a static address. Give the container a fixed address, since a stand keeps the server's address it was set up with.
+
+To update later, run it again with `--update <container id>`: it backs up first, then puts the newest Spindle in. Settings live in `/etc/spindle/spindle.env` inside the container. For backups on another disk, mount it at `/var/lib/spindle/backups` (for example `pct set <id> -mp0 /mnt/nas/spindle,mp=/var/lib/spindle/backups`).
+
+### Without Docker
+
+Spindle is a single file. `deploy/build-release.sh` builds it for Linux into `release/`. Run it with `spindle serve` and the settings below as environment variables; `deploy/proxmox/spindle-lxc.sh` shows a systemd service for it.
+
 ### Configuration
 
 All settings are environment variables, usually set in `deploy/.env`.

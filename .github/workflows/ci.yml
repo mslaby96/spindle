@@ -58,9 +58,16 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -s firmware/tests -t firmware
 
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: shellcheck -x deploy/proxmox/spindle-lxc.sh deploy/proxmox/test.sh deploy/build-release.sh
+      - run: bash deploy/proxmox/test.sh
+
   image:
     runs-on: ubuntu-latest
-    needs: [server, web, firmware]
+    needs: [server, web, firmware, scripts]
     steps:
       - uses: actions/checkout@v5
       - run: docker build -f deploy/Dockerfile -t spindle:ci .
