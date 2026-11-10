@@ -21,7 +21,7 @@ case "$tool \$1" in
 	"pct push") cp "\$3" "$work/pushed/\$(basename "\$4")" ;;
 	"pct exec")
 		case "\$*" in
-			*"hostname -I"*) echo "192.168.20.50 " ;;
+			*"hostname -I"*) echo "192.168.1.50 " ;;
 			*journalctl*) echo 'msg="no account yet" code=K7F29QX2AB' ;;
 		esac ;;
 esac
@@ -68,16 +68,16 @@ expect "enables and starts it" "pct exec 105 -- systemctl enable --now spindle"
 expect "writes the Discogs token into the config" "SPINDLE_DISCOGS_TOKEN=tok123" "$work/pushed/spindle.env"
 expect "keeps the data in /var/lib/spindle" "SPINDLE_DATA_DIR=/var/lib/spindle" "$work/pushed/spindle.env"
 expect "runs as its own user" "User=spindle" "$work/pushed/spindle.service"
-expect "tells where to open it" "http://192.168.20.50:8080" "$work/out.txt"
+expect "tells where to open it" "http://192.168.1.50:8080" "$work/out.txt"
 expect "shows the setup code" "K7F29QX2AB" "$work/out.txt"
 refuse "never prints the token" "tok123" "$work/out.txt"
 rm -rf "$work"
 
 # a static address and other sizes
 setup
-printf '\n' | run --yes --binary "$work/spindle-linux-amd64" --id 120 --ip 192.168.20.60/24 --gw 192.168.20.1 --storage fast --memory 1024
+printf '\n' | run --yes --binary "$work/spindle-linux-amd64" --id 120 --ip 192.168.1.60/24 --gw 192.168.1.1 --storage fast --memory 1024
 expect "takes the given id and storage" "pct create 120 .*--rootfs fast:4"
-expect "uses the static address" "ip=192.168.20.60/24,gw=192.168.20.1"
+expect "uses the static address" "ip=192.168.1.60/24,gw=192.168.1.1"
 expect "takes the memory" "--memory 1024"
 refuse "a token left empty is not written" "SPINDLE_DISCOGS_TOKEN=." "$work/pushed/spindle.env"
 rm -rf "$work"
