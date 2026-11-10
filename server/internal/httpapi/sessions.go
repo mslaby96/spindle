@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/mslaby96/spindle/server/internal/sessions"
 )
@@ -22,12 +23,21 @@ func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Resolution sessions.Resolution `json:"resolution"`
+		// AlbumLengthSec goes with the answer "wrong_length": the whole album was heard and this is its real length.
+		AlbumLengthSec int64 `json:"album_length_sec"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
+	if req.Resolution == resolutionWrongLength {
+		length := time.Duration(req.AlbumLengthSec) * time.Second
+		s.noContent(w, s.Sessions.CorrectLength(r.Context(), userID(r), id, length))
+		return
+	}
 	s.noContent(w, s.Sessions.Resolve(r.Context(), userID(r), id, req.Resolution))
 }
+
+const resolutionWrongLength = "wrong_length"
 
 func (s *Server) reviewSession(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
