@@ -2,6 +2,8 @@ module github.com/mslaby96/spindle/server
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/mochi-mqtt/server/v2 v2.7.9
