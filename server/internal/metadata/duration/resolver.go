@@ -258,9 +258,14 @@ func (r *Resolver) store(ctx context.Context, albumID int64, status string, d *t
 	if d != nil {
 		secs, src = int64(d.Round(time.Second)/time.Second), source
 	}
-	_, err := r.DB.W.ExecContext(ctx,
-		`UPDATE albums SET duration_status = ?, duration_sec = ?, duration_source = ?
-		 WHERE id = ? AND duration_status != 'manual'`, status, secs, src, albumID)
+	query := `UPDATE albums SET duration_status = ?, duration_sec = ?, duration_source = ?
+		 WHERE id = ? AND duration_status != 'manual'`
+	args := []any{status, secs, src, albumID}
+	if status == StatusFailed {
+		// a lookup that failed knows nothing new, so a length found before stays until a retry does better
+		query, args = `UPDATE albums SET duration_status = ? WHERE id = ? AND duration_status != 'manual'`, []any{status, albumID}
+	}
+	_, err := r.DB.W.ExecContext(ctx, query, args...)
 	if err != nil {
 		r.Log.Error("store album length", "album", albumID, "err", err)
 	}
