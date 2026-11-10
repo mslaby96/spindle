@@ -37,7 +37,10 @@ func Tracklist(tracks []discogs.Track) (time.Duration, int, bool) {
 			continue
 		}
 		count++
-		complete = complete && ok
+		if !ok {
+			complete = false
+			continue
+		}
 		total += d
 	}
 	return total, count, complete && count > 0
