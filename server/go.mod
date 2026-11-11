@@ -2,7 +2,7 @@ module github.com/mslaby96/spindle/server
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/eclipse/paho.golang v0.23.0

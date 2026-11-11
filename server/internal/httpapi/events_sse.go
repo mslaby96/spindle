@@ -15,6 +15,9 @@ var sseHeartbeat = 15 * time.Second
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	rc.SetWriteDeadline(time.Time{})
+	// subscribe before saying connected, so nothing sent once the app thinks it is listening gets lost
+	ch, cancel := s.Bus.Subscribe(userID(r))
+	defer cancel()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -25,8 +28,6 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch, cancel := s.Bus.Subscribe(userID(r))
-	defer cancel()
 	tick := time.NewTicker(sseHeartbeat)
 	defer tick.Stop()
 
