@@ -46,6 +46,7 @@ var knownErrors = []struct {
 	{sessions.ErrSleeveOnStand, http.StatusConflict, ""},
 	{sessions.ErrUnknownResolution, http.StatusBadRequest, ""},
 	{sessions.ErrInvalidTimes, http.StatusBadRequest, ""},
+	{sessions.ErrInvalidLength, http.StatusBadRequest, ""},
 	{inbox.ErrNotFound, http.StatusNotFound, ""},
 	{inbox.ErrInvalidRating, http.StatusBadRequest, ""},
 	{stats.ErrBadQuery, http.StatusBadRequest, ""},

@@ -377,6 +377,8 @@ section .narrow { margin: 0 0 1.5rem; padding: 0; }
 .thumb-xl { width: 6rem; height: 6rem; border-radius: 0.25rem; }
 .confirm { display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); }
 .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.length-answer { display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+.length-answer input { width: 7rem; }
 .import, .import-preview { display: flex; flex-direction: column; gap: 0.6rem; }
 .import p { margin: 0; }
 .import progress { width: 100%; height: 6px; appearance: none; border: 0; border-radius: 3px; background: var(--sunk); overflow: hidden; }

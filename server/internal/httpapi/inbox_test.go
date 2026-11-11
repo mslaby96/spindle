@@ -92,3 +92,37 @@ func TestInboxIsolatedBetweenUsers(t *testing.T) {
 		t.Fatalf("other user sees %+v", cards)
 	}
 }
+
+func TestAnsweringThatTheAlbumLengthIsWrong(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	e.srv.DB.W.Exec(`INSERT OR IGNORE INTO devices (id, user_id, name, token_hash, created_at) VALUES (1, 1, 'stand', 'x', 1)`)
+	e.srv.DB.W.Exec(`INSERT OR IGNORE INTO albums (id, user_id, discogs_master_id, title, artist, duration_sec, duration_status, created_at)
+		VALUES (1, 1, 1, 'Wish You Were Here', 'Pink Floyd', 1077, 'resolved', 1)`)
+	long := e.listen(t, "pending_confirmation", 44)
+	url := e.http.URL + "/api/sessions/" + strconv.FormatInt(long, 10) + "/resolve"
+
+	for _, body := range []map[string]any{
+		{"resolution": "wrong_length"},
+		{"resolution": "wrong_length", "album_length_sec": 0},
+		{"resolution": "wrong_length", "album_length_sec": 7 * 3600},
+	} {
+		if resp := do(t, c, "POST", url, body); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%v: %d", body, resp.StatusCode)
+		}
+	}
+	stream := openStream(t, c, e.http.URL+"/api/events")
+	if resp := do(t, c, "POST", url, map[string]any{"resolution": "wrong_length", "album_length_sec": 2640}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("answer: %d", resp.StatusCode)
+	}
+	if ev, ok := nextNamed(t, stream, "inbox_changed"); !ok {
+		t.Fatalf("no inbox_changed: %+v", ev)
+	}
+	var secs int
+	var state string
+	e.srv.DB.R.QueryRow(`SELECT duration_sec FROM albums WHERE id = 1`).Scan(&secs)
+	e.srv.DB.R.QueryRow(`SELECT state FROM sessions WHERE id = ?`, long).Scan(&state)
+	if secs != 2640 || state != "counted" {
+		t.Fatalf("album %d s, listen %s", secs, state)
+	}
+}

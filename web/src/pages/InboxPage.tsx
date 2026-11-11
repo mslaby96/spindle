@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type InboxCard } from "../api/client";
@@ -148,6 +148,17 @@ function ListenCard({ card, questionHidden, defer, notify }: CardProps) {
       { key: `${session.id}:question`, commit: () => api(`/api/sessions/${session.id}/resolve`, { body: { resolution } }) },
       `${album?.title}: ${answers[resolution]}`,
     );
+  // The whole album was played and its stored length is what's wrong: the answer carries the real length.
+  const resolveLength = (minutes: number) =>
+    defer(
+      {
+        key: `${session.id}:question`,
+        commit: () =>
+          api(`/api/sessions/${session.id}/resolve`, { body: { resolution: "wrong_length", album_length_sec: minutes * 60 } }),
+      },
+      `${album?.title}: the album is ${minutes} min`,
+    );
+  const [fixingLength, setFixingLength] = useState(false);
   const error = review.error;
 
   if (!album) {
@@ -201,17 +212,31 @@ function ListenCard({ card, questionHidden, defer, notify }: CardProps) {
             The sleeve stayed on the stand for {formatLength(session.listened_sec)}
             {album.length_sec ? `, the album is ${formatLength(album.length_sec)}` : ""}. What happened?
           </p>
-          <div className="choices">
-            <button className="secondary" onClick={() => resolve("forgot")}>
-              I forgot to take it off
-            </button>
-            <button className="secondary" onClick={() => resolve("repeated")}>
-              I played it several times
-            </button>
-            <button className="secondary" onClick={() => resolve("longer")}>
-              I listened longer
-            </button>
-          </div>
+          {fixingLength ? (
+            <AlbumLengthAnswer
+              initialMinutes={Math.round(session.listened_sec / 60)}
+              onSave={(minutes) => {
+                setFixingLength(false);
+                resolveLength(minutes);
+              }}
+              onBack={() => setFixingLength(false)}
+            />
+          ) : (
+            <div className="choices">
+              <button className="secondary" onClick={() => resolve("forgot")}>
+                I forgot to take it off
+              </button>
+              <button className="secondary" onClick={() => resolve("repeated")}>
+                I played it several times
+              </button>
+              <button className="secondary" onClick={() => resolve("longer")}>
+                I listened longer
+              </button>
+              <button className="secondary" onClick={() => setFixingLength(true)}>
+                I listened to the whole album, its length is wrong
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -237,5 +262,36 @@ function ListenCard({ card, questionHidden, defer, notify }: CardProps) {
       </div>
       {error && <p className="error">{error.message}</p>}
     </article>
+  );
+}
+
+const maxAlbumMinutes = 6 * 60;
+
+function AlbumLengthAnswer({ initialMinutes, onSave, onBack }: { initialMinutes: number; onSave: (minutes: number) => void; onBack: () => void }) {
+  const id = useId();
+  const [minutes, setMinutes] = useState(String(initialMinutes));
+  const value = Number(minutes);
+  const valid = minutes.trim() !== "" && Number.isInteger(value) && value >= 1 && value <= maxAlbumMinutes;
+  return (
+    <form
+      className="length-answer"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onSave(value);
+      }}
+    >
+      <label htmlFor={id}>How long is the album?</label>
+      <span className="row inline">
+        <input id={id} type="number" min={1} max={maxAlbumMinutes} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        <span className="muted">min</span>
+      </span>
+      <p className="muted small">This listen counts as one full play, and the album keeps this length.</p>
+      <div className="choices">
+        <button disabled={!valid}>Save length</button>
+        <button type="button" className="secondary" onClick={onBack}>
+          Back
+        </button>
+      </div>
+    </form>
   );
 }

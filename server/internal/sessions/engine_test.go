@@ -884,3 +884,95 @@ func TestEndingWhenNothingIsPlaying(t *testing.T) {
 		t.Fatalf("someone else's stand: %v", err)
 	}
 }
+
+func TestTheWholeAlbumWithAWrongLength(t *testing.T) {
+	v := newEnv(t)
+	album := v.album(t, tagA, minutes(18))
+	for _, m := range []int{44, 30, 120} {
+		v.play(t, tagA, time.Duration(m)*time.Minute)
+		v.remove(t)
+		v.clock.advance(time.Hour)
+	}
+	list := v.sessions(t)
+	for _, s := range list {
+		if s.State != StatePendingConfirmation {
+			t.Fatalf("before: %+v", s)
+		}
+	}
+	whole := list[len(list)-1]
+	for _, s := range list {
+		if s.ListenedSec/60 >= 44 && s.ListenedSec/60 < 50 {
+			whole = s
+		}
+	}
+	if err := v.e.CorrectLength(context.Background(), 1, whole.ID, 44*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var secs int64
+	var status, source string
+	v.e.DB.R.QueryRow(`SELECT duration_sec, duration_status, duration_source FROM albums WHERE id = ?`, album).Scan(&secs, &status, &source)
+	if secs != 44*60 || status != "manual" || source != "manual" {
+		t.Fatalf("album: %d %s %s", secs, status, source)
+	}
+	for _, s := range v.sessions(t) {
+		minutes := s.ListenedSec / 60
+		switch {
+		case s.ID == whole.ID:
+			if s.State != StateCounted || s.PlayCount != 1 || !s.DurationConfirmed {
+				t.Errorf("the listen that was answered: %+v", s)
+			}
+		case minutes < 50:
+			if s.State != StateCounted {
+				t.Errorf("a %d min listen that now fits is still waiting: %+v", minutes, s)
+			}
+		default:
+			if s.State != StatePendingConfirmation {
+				t.Errorf("a %d min listen that is still too long was counted: %+v", minutes, s)
+			}
+		}
+	}
+}
+
+func TestAWrongLengthAnswerThatMakesNoSense(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(18))
+	v.play(t, tagA, 44*time.Minute)
+	v.remove(t)
+	s := v.only(t)
+	for _, bad := range []time.Duration{0, -time.Minute, 7 * time.Hour} {
+		if err := v.e.CorrectLength(context.Background(), 1, s.ID, bad); !errors.Is(err, ErrInvalidLength) {
+			t.Errorf("%v: %v", bad, err)
+		}
+	}
+	if err := v.e.CorrectLength(context.Background(), 2, s.ID, 44*time.Minute); !errors.Is(err, ErrNotFound) {
+		t.Errorf("someone else's listen: %v", err)
+	}
+	if got := v.only(t); got.State != StatePendingConfirmation {
+		t.Fatalf("a refused answer changed the listen: %+v", got)
+	}
+	v.e.CorrectLength(context.Background(), 1, s.ID, 44*time.Minute)
+	if err := v.e.CorrectLength(context.Background(), 1, s.ID, 44*time.Minute); !errors.Is(err, ErrNotPending) {
+		t.Errorf("answered twice: %v", err)
+	}
+}
+
+func TestAWrongLengthAnswerTellsTheInboxAndTakesUpToSixHours(t *testing.T) {
+	v := newEnv(t)
+	v.album(t, tagA, minutes(18))
+	v.play(t, tagA, 44*time.Minute)
+	v.remove(t)
+	for len(v.events) > 0 {
+		<-v.events
+	}
+	if err := v.e.CorrectLength(context.Background(), 1, v.only(t).ID, 6*time.Hour); err != nil {
+		t.Fatalf("six hours: %v", err)
+	}
+	select {
+	case ev := <-v.events:
+		if ev.Type != EventInboxChanged {
+			t.Fatalf("event %+v", ev)
+		}
+	default:
+		t.Fatal("the inbox was not told")
+	}
+}

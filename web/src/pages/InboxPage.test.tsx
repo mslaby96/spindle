@@ -76,6 +76,51 @@ describe("inbox", () => {
     );
   });
 
+  it("takes the album's real length when the whole album was played", async () => {
+    const user = withClock();
+    const calls = setup([{ uid: "04A1", album, session: session({ state: "pending_confirmation", listened_sec: 2650, duration_confirmed: false }) }], {
+      "POST /api/sessions/7/resolve": () => [204],
+    });
+    renderApp("/inbox");
+    await user.click(await screen.findByRole("button", { name: "I listened to the whole album, its length is wrong" }));
+    const length = screen.getByLabelText("How long is the album?");
+    expect(length).toHaveValue(44);
+    await user.clear(length);
+    await user.type(length, "45");
+    await user.click(screen.getByRole("button", { name: "Save length" }));
+    expect(screen.queryByText(/stayed on the stand/)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Kind of Blue: the album is 45 min");
+    undoWindow();
+    await waitFor(() =>
+      expect(calls.find((c) => c.key === "POST /api/sessions/7/resolve")?.body).toEqual({ resolution: "wrong_length", album_length_sec: 2700 }),
+    );
+  });
+
+  it("goes back to the answers without saving a length", async () => {
+    const user = withClock();
+    const calls = setup([{ uid: "04A1", album, session: session({ state: "pending_confirmation", listened_sec: 2650, duration_confirmed: false }) }]);
+    renderApp("/inbox");
+    await user.click(await screen.findByRole("button", { name: "I listened to the whole album, its length is wrong" }));
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("button", { name: "I forgot to take it off" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("How long is the album?")).not.toBeInTheDocument();
+    undoWindow();
+    expect(calls.some((c) => c.key === "POST /api/sessions/7/resolve")).toBe(false);
+  });
+
+  it("only saves a length between a minute and six hours", async () => {
+    const user = withClock();
+    setup([{ uid: "04A1", album, session: session({ state: "pending_confirmation", listened_sec: 2650, duration_confirmed: false }) }]);
+    renderApp("/inbox");
+    await user.click(await screen.findByRole("button", { name: "I listened to the whole album, its length is wrong" }));
+    const length = screen.getByLabelText("How long is the album?");
+    for (const [value, ok] of [["0", false], ["361", false], ["360", true], ["1", true], ["", false]] as const) {
+      await user.clear(length);
+      if (value) await user.type(length, value);
+      expect(screen.getByRole("button", { name: "Save length" }), value || "empty")[ok ? "toBeEnabled" : "toBeDisabled"]();
+    }
+  });
+
   it("rates a listen in half stars with a note", async () => {
     const calls = setup([{ uid: "04A1", album, session: session({}) }], { "PUT /api/sessions/7/review": () => [204] });
     renderApp("/inbox");
