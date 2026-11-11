@@ -358,8 +358,12 @@ func TestPublisherShowsEachStand(t *testing.T) {
 	eventually(t, "stand discovery", func() bool { s, _ := h.ha.last(discovery); return strings.Contains(s, "Living room") })
 	eventually(t, "stand online", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return strings.Contains(s, `"ON"`) })
 
+	// as on a real server, the stand list says offline too by the time the event goes out, so a refresh in between
+	// doesn't put it back online
+	mu.Lock()
+	stand.Online = false
 	offline := stand
-	offline.Online = false
+	mu.Unlock()
 	h.bus.Publish(events.Event{Type: devices.EventStatus, UserID: 1, Data: offline})
 	eventually(t, "stand offline", func() bool { s, _ := h.ha.last(StandTopic(1, 7)); return strings.Contains(s, `"OFF"`) })
 
