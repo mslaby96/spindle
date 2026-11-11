@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mslaby96/spindle/server/internal/devices"
+	"github.com/mslaby96/spindle/server/internal/events"
 )
 
 func (e *testEnv) deviceToken(t *testing.T, c *http.Client) string {
@@ -356,5 +357,17 @@ func TestReportRefusesStrangeVersions(t *testing.T) {
 		map[string]any{"uid": nil, "fw": "0.7.0-rc.1+b2", "seq": 1, "update_failed": "unknown"}, "Authorization", "Bearer "+token)
 	if ok.StatusCode != http.StatusOK {
 		t.Fatalf("a normal version: %d", ok.StatusCode)
+	}
+}
+
+func TestAnEventRightAfterConnectingIsNotLost(t *testing.T) {
+	e := newEnv(t)
+	c := e.loggedIn(t)
+	for i := 0; i < 30; i++ {
+		stream := openStream(t, c, e.http.URL+"/api/events")
+		e.srv.Bus.Publish(events.Event{Type: "ping_test", UserID: 1})
+		if _, ok := nextNamed(t, stream, "ping_test"); !ok {
+			t.Fatalf("connection %d missed the event sent right after it said connected", i+1)
+		}
 	}
 }
